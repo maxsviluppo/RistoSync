@@ -1,0 +1,5 @@
+{
+  "name": "RistoSync AI",
+  "description": "A synchronized restaurant management system separating Kitchen (16:9) and Waiter (9:16) workflows with AI assistance.",
+  "requestFramePermissions": []
+}
