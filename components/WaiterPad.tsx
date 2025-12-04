@@ -31,8 +31,8 @@ const SwipeableCartItem: React.FC<SwipeableItemProps> = ({ item, index, onEdit, 
     const [hasInteracted, setHasInteracted] = useState(false);
     const [isAnimating, setIsAnimating] = useState(false);
 
-    // Threshold to trigger action
-    const THRESHOLD = 80;
+    // Threshold to trigger action (Reduced for compact feel)
+    const THRESHOLD = 60;
 
     const handleTouchStart = (e: React.TouchEvent) => {
         setHasInteracted(true);
@@ -107,61 +107,60 @@ const SwipeableCartItem: React.FC<SwipeableItemProps> = ({ item, index, onEdit, 
 
     return (
         <div 
-            className={`relative h-24 rounded-2xl overflow-hidden mb-3 select-none transition-colors duration-200 ${getBgColor()}`}
+            className={`relative h-20 rounded-2xl overflow-hidden mb-2 select-none transition-colors duration-200 ${getBgColor()}`}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
         >
             {/* Background Actions Layer */}
-            <div className="absolute inset-0 flex justify-between items-center px-6 text-white font-black">
+            <div className="absolute inset-0 flex justify-between items-center px-5 text-white font-black">
                 {/* Left Action (Reveal on swipe Right - EDIT) */}
                 <div className={`flex items-center gap-2 transition-all duration-300 ${isAnimating ? 'animate-fade-edit' : (offsetX > 30 ? 'opacity-100 scale-100' : 'opacity-0 scale-90')}`}>
-                    <Edit2 size={28} /> 
-                    <span className="text-sm uppercase tracking-widest">Modifica</span>
+                    <Edit2 size={22} /> 
+                    <span className="text-xs uppercase tracking-widest">Modifica</span>
                 </div>
 
                 {/* Right Action (Reveal on swipe Left - DELETE) */}
                 <div className={`flex items-center gap-2 transition-all duration-300 ${isAnimating ? 'animate-fade-delete' : (offsetX < -30 ? 'opacity-100 scale-100' : 'opacity-0 scale-90')}`}>
-                    <span className="text-sm uppercase tracking-widest">Elimina</span>
-                    <Trash2 size={28} />
+                    <span className="text-xs uppercase tracking-widest">Elimina</span>
+                    <Trash2 size={22} />
                 </div>
             </div>
 
             {/* Foreground Content Layer */}
             <div 
                 ref={containerRef}
-                className={`absolute inset-0 bg-slate-800 p-4 flex flex-col justify-center border border-slate-700 shadow-md ${isAnimating ? 'animate-card-swipe' : ''}`}
+                className={`absolute inset-0 bg-slate-800 px-4 flex flex-col justify-center border border-slate-700 shadow-md ${isAnimating ? 'animate-card-swipe' : ''}`}
                 style={{ 
                     transform: isAnimating ? undefined : `translateX(${offsetX}px)`,
                     transition: isDragging ? 'none' : 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)'
                 }}
             >
-                 <div className="flex justify-between items-start">
-                    <div className="flex gap-3 items-center">
-                        <span className="bg-slate-700 text-slate-200 font-bold w-8 h-8 flex items-center justify-center rounded-lg text-sm shadow-inner">
+                 <div className="flex justify-between items-center">
+                    <div className="flex gap-3 items-center w-full">
+                        <span className="bg-slate-700 text-slate-200 font-bold w-8 h-8 flex items-center justify-center rounded-lg text-sm shadow-inner shrink-0">
                             {item.quantity}
                         </span>
-                        <div>
-                            <span className="font-bold text-white text-lg block leading-none mb-1">{item.menuItem.name}</span>
-                            <span className="font-mono text-orange-400 text-sm">€{(item.menuItem.price * item.quantity).toFixed(2)}</span>
+                        <div className="flex-1 min-w-0">
+                            <span className="font-bold text-white text-base block leading-tight truncate">{item.menuItem.name}</span>
+                            {item.notes && (
+                                <p className="text-[10px] text-slate-400 mt-1 italic pl-2 border-l-2 border-slate-600 truncate">
+                                    {item.notes}
+                                </p>
+                            )}
                         </div>
                     </div>
                 </div>
-                {item.notes && (
-                    <p className="text-xs text-slate-400 mt-2 italic pl-2 border-l-2 border-slate-600 truncate">
-                        {item.notes}
-                    </p>
-                )}
             </div>
             
             {/* Visual Hint Arrows (Only visible when stationary and first item) */}
             {offsetX === 0 && !hasInteracted && isFirst && !isAnimating && (
                 <>
-                    <div className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-600/30 animate-pulse">
-                        <ChevronDown className="rotate-90" size={16} />
+                    <div className="absolute left-1 top-1/2 -translate-y-1/2 text-slate-600/30 animate-pulse">
+                        <ChevronDown className="rotate-90" size={12} />
                     </div>
-                    <div className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-600/30 animate-pulse">
-                        <ChevronDown className="-rotate-90" size={16} />
+                    <div className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-600/30 animate-pulse">
+                        <ChevronDown className="-rotate-90" size={12} />
                     </div>
                 </>
             )}
@@ -403,12 +402,12 @@ const WaiterPad: React.FC = () => {
       
       {/* Styles for Animations */}
       <style>{`
-        /* Card Movement (Wider range: 100px) */
+        /* Card Movement (Reduced range: 50px) */
         @keyframes swipe-card {
             0%, 100% { transform: translateX(0); }
-            20%, 30% { transform: translateX(100px); } /* Right (Edit) */
+            20%, 30% { transform: translateX(50px); } /* Right (Edit) */
             50% { transform: translateX(0); }
-            70%, 80% { transform: translateX(-100px); } /* Left (Delete) */
+            70%, 80% { transform: translateX(-50px); } /* Left (Delete) */
         }
         
         /* Background Color Change */
