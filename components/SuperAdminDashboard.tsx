@@ -52,11 +52,11 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     };
     
     const copySQL = () => {
-        const sql = `-- 1. RESET PULIZIA
+        const sql = `-- 1. PULIZIA REGOLE VECCHIE
 drop policy if exists "Super Admin View All" on public.profiles;
 drop policy if exists "Super Admin Update All" on public.profiles;
 
--- 2. REGOLE CORRETTE (Usa auth.jwt() per vedere tutti)
+-- 2. REGOLE CORRETTE (Usa auth.jwt() per vedere TUTTI)
 create policy "Super Admin View All" on public.profiles for select using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );
 create policy "Super Admin Update All" on public.profiles for update using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );`;
         navigator.clipboard.writeText(sql);

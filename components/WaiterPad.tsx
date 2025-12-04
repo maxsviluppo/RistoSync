@@ -338,7 +338,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
           });
       });
       
-      // If we found specific new items ready, notify!
+      // If we found specific items ready, notify!
       if (newlyReadyItems.length > 0) {
           playWaiterNotification();
           // Show the first item name + "and X others" if multiple
