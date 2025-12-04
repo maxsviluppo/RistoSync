@@ -1,9 +1,13 @@
-import { Order, OrderStatus, OrderItem } from '../types';
+import { Order, OrderStatus, OrderItem, MenuItem } from '../types';
+import { MENU_ITEMS as DEFAULT_MENU_ITEMS } from '../constants';
 
 const STORAGE_KEY = 'ristosync_orders';
 const TABLES_COUNT_KEY = 'ristosync_table_count';
 const WAITER_KEY = 'ristosync_waiter_name';
+const MENU_KEY = 'ristosync_menu_items';
+const SETTINGS_NOTIFICATIONS_KEY = 'ristosync_settings_notifications';
 
+// --- ORDER MANAGEMENT ---
 export const getOrders = (): Order[] => {
   const data = localStorage.getItem(STORAGE_KEY);
   return data ? JSON.parse(data) : [];
@@ -27,23 +31,19 @@ export const updateOrderStatus = (orderId: string, status: OrderStatus) => {
   saveOrders(newOrders);
 };
 
-// Update items of an existing pending order (Edit Mode)
 export const updateOrderItems = (orderId: string, newItems: OrderItem[]) => {
     const orders = getOrders();
     const newOrders = orders.map(o => {
         if (o.id === orderId) {
-            return { ...o, items: newItems, timestamp: Date.now() }; // Update timestamp to indicate modification
+            return { ...o, items: newItems, timestamp: Date.now() }; 
         }
         return o;
     });
     saveOrders(newOrders);
 };
 
-// Modified: Only removes orders that are explicitly deleted or we want to purge history
-// In a real app, this would be "End of Day"
 export const clearHistory = () => {
   const orders = getOrders();
-  // Keep only pending, cooking, and ready orders (Delete 'Served')
   const activeOrders = orders.filter(o => o.status !== OrderStatus.DELIVERED);
   saveOrders(activeOrders);
 };
@@ -53,10 +53,10 @@ export const nukeAllData = () => {
     window.dispatchEvent(new Event('local-storage-update'));
 };
 
-// --- Dynamic Table Count Management ---
+// --- DYNAMIC TABLE COUNT ---
 export const getTableCount = (): number => {
     const count = localStorage.getItem(TABLES_COUNT_KEY);
-    return count ? parseInt(count, 10) : 12; // Default to 12 tables
+    return count ? parseInt(count, 10) : 12; 
 };
 
 export const saveTableCount = (count: number) => {
@@ -64,7 +64,7 @@ export const saveTableCount = (count: number) => {
     window.dispatchEvent(new Event('local-storage-update'));
 };
 
-// --- Waiter Session Management ---
+// --- WAITER SESSION ---
 export const getWaiterName = (): string | null => {
     return localStorage.getItem(WAITER_KEY);
 };
@@ -75,4 +75,55 @@ export const saveWaiterName = (name: string) => {
 
 export const logoutWaiter = () => {
     localStorage.removeItem(WAITER_KEY);
+};
+
+// --- MENU MANAGEMENT (NEW) ---
+export const getMenuItems = (): MenuItem[] => {
+    const data = localStorage.getItem(MENU_KEY);
+    if (data) {
+        return JSON.parse(data);
+    } else {
+        // Initialize with defaults if empty
+        localStorage.setItem(MENU_KEY, JSON.stringify(DEFAULT_MENU_ITEMS));
+        return DEFAULT_MENU_ITEMS;
+    }
+};
+
+export const saveMenuItems = (items: MenuItem[]) => {
+    localStorage.setItem(MENU_KEY, JSON.stringify(items));
+    window.dispatchEvent(new Event('local-menu-update'));
+};
+
+export const addMenuItem = (item: MenuItem) => {
+    const items = getMenuItems();
+    items.push(item);
+    saveMenuItems(items);
+};
+
+export const updateMenuItem = (updatedItem: MenuItem) => {
+    const items = getMenuItems();
+    const newItems = items.map(i => i.id === updatedItem.id ? updatedItem : i);
+    saveMenuItems(newItems);
+};
+
+export const deleteMenuItem = (id: string) => {
+    const items = getMenuItems();
+    const newItems = items.filter(i => i.id !== id);
+    saveMenuItems(newItems);
+};
+
+// --- SETTINGS (NOTIFICATIONS) ---
+export interface NotificationSettings {
+    kitchenSound: boolean;
+    waiterSound: boolean;
+    pushEnabled: boolean;
+}
+
+export const getNotificationSettings = (): NotificationSettings => {
+    const data = localStorage.getItem(SETTINGS_NOTIFICATIONS_KEY);
+    return data ? JSON.parse(data) : { kitchenSound: true, waiterSound: true, pushEnabled: false };
+};
+
+export const saveNotificationSettings = (settings: NotificationSettings) => {
+    localStorage.setItem(SETTINGS_NOTIFICATIONS_KEY, JSON.stringify(settings));
 };

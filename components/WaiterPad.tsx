@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Category, MenuItem, Order, OrderItem, OrderStatus } from '../types';
-import { MENU_ITEMS } from '../constants';
-import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, getWaiterName, logoutWaiter } from '../services/storageService';
+import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, getWaiterName, logoutWaiter, getMenuItems } from '../services/storageService';
 import { askChefAI } from '../services/geminiService';
 import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home } from 'lucide-react';
 
@@ -179,6 +178,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const [isSending, setIsSending] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null); // Track if we are editing an existing order
   const [waiterName, setWaiterName] = useState<string>('');
+  const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   
   // Sheet Drag State
   const [sheetHeight, setSheetHeight] = useState(80); // Default collapsed height in px
@@ -239,21 +239,28 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       // Load Waiter Name
       const name = getWaiterName();
       if (name) setWaiterName(name);
+
+      // Load Menu from Storage (Dynamic)
+      setMenuItems(getMenuItems());
   };
 
   useEffect(() => {
     loadData();
 
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'ristosync_orders' || e.key === 'ristosync_table_count') loadData();
+      if (e.key === 'ristosync_orders' || e.key === 'ristosync_table_count' || e.key === 'ristosync_menu_items') loadData();
     };
     const handleLocalUpdate = () => loadData();
+    const handleMenuUpdate = () => loadData();
 
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('local-storage-update', handleLocalUpdate);
+    window.addEventListener('local-menu-update', handleMenuUpdate);
+
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('local-storage-update', handleLocalUpdate);
+      window.removeEventListener('local-menu-update', handleMenuUpdate);
     };
   }, [table]); 
 
@@ -585,7 +592,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
           </div>
 
           <div className="px-4 space-y-3 pt-1">
-              {MENU_ITEMS.filter(i => i.category === selectedCategory).map(item => {
+              {menuItems.filter(i => i.category === selectedCategory).map(item => {
                   const isEditing = editingItemId === item.id;
                   const isPopping = justAddedId === item.id;
                   
