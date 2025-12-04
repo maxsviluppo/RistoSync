@@ -107,7 +107,7 @@ const SwipeableCartItem: React.FC<SwipeableItemProps> = ({ item, index, onEdit, 
 
     return (
         <div 
-            className={`relative h-20 rounded-2xl overflow-hidden mb-2 select-none transition-colors duration-200 ${getBgColor()}`}
+            className={`relative h-[72px] rounded-2xl overflow-hidden mb-2 select-none transition-colors duration-200 ${getBgColor()}`}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
@@ -363,6 +363,7 @@ const WaiterPad: React.FC = () => {
       setIsSending(false);
       setSheetHeight(80);
       loadExistingOrders(); 
+      setTable('');
     }, 500);
   };
 
@@ -400,6 +401,11 @@ const WaiterPad: React.FC = () => {
   return (
     <div className="flex flex-col h-screen bg-slate-900 text-slate-100 max-w-md mx-auto shadow-2xl overflow-hidden relative border-x border-slate-800 font-sans selection:bg-orange-500 selection:text-white">
       
+      {/* Background Watermark */}
+      <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden flex items-center justify-center">
+         <ChefHat size={400} className="text-white opacity-[0.03] transform -rotate-12 translate-x-20 translate-y-10" />
+      </div>
+
       {/* Styles for Animations */}
       <style>{`
         /* Card Movement (Reduced range: 50px) */
@@ -455,7 +461,7 @@ const WaiterPad: React.FC = () => {
       `}</style>
 
       {/* --- HEADER --- */}
-      <div className="bg-slate-900 pt-5 pb-2 px-5 z-40 flex justify-between items-center sticky top-0 border-b border-white/5">
+      <div className="bg-slate-900 pt-5 pb-2 px-5 z-40 flex justify-between items-center sticky top-0 border-b border-white/5 bg-opacity-95 backdrop-blur-sm">
         <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/20 border border-orange-400/30 transform -rotate-3">
                 <Utensils size={18} className="text-white" />
@@ -500,7 +506,7 @@ const WaiterPad: React.FC = () => {
       </div>
 
       {/* --- MENU GRID --- */}
-      <div className="flex-1 overflow-y-auto pb-48 relative scroll-smooth">
+      <div className="flex-1 overflow-y-auto pb-48 relative scroll-smooth z-10">
           
           <div className="sticky top-0 z-30 pt-2 pb-4 bg-gradient-to-b from-slate-900 via-slate-900/95 to-transparent">
             <div className="flex px-4 gap-3 overflow-x-auto no-scrollbar scroll-smooth snap-x snap-mandatory">
@@ -511,9 +517,9 @@ const WaiterPad: React.FC = () => {
                             key={cat}
                             onClick={() => setSelectedCategory(cat)}
                             className={`
-                                flex flex-row items-center justify-center gap-2 py-2.5 px-4 rounded-full transition-all duration-300 snap-center shrink-0 border
+                                flex flex-row items-center justify-center gap-2 py-2.5 px-4 rounded-lg transition-all duration-300 snap-center shrink-0 border
                                 ${isActive 
-                                    ? 'bg-orange-500 border-orange-400 text-white shadow-lg shadow-orange-500/25 scale-105 font-bold' 
+                                    ? 'bg-orange-500 border-orange-400 text-white shadow-lg shadow-orange-500/25 font-bold' 
                                     : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200'}
                             `}
                         >
@@ -527,7 +533,7 @@ const WaiterPad: React.FC = () => {
             </div>
           </div>
 
-          <div className="px-4 space-y-4 pt-1">
+          <div className="px-4 space-y-3 pt-1">
               {MENU_ITEMS.filter(i => i.category === selectedCategory).map(item => {
                   const isEditing = editingItemId === item.id;
                   const isPopping = justAddedId === item.id;
@@ -536,7 +542,7 @@ const WaiterPad: React.FC = () => {
                     <div 
                         key={item.id} 
                         className={`
-                            group relative overflow-hidden transition-all duration-300 rounded-[2rem] border
+                            group relative overflow-hidden transition-all duration-300 rounded-[1.5rem] border
                             ${isEditing 
                                 ? 'bg-slate-800 border-orange-500/50 shadow-[0_0_30px_rgba(249,115,22,0.15)] ring-1 ring-orange-500/30' 
                                 : isPopping
@@ -545,18 +551,25 @@ const WaiterPad: React.FC = () => {
                             }
                         `}
                     >
-                      <div className="p-5">
+                      <div className="p-4">
                           <div className="flex justify-between items-start gap-4">
                               <div className="flex-1 z-10">
-                                  <div className="flex items-center gap-2 mb-2">
-                                      <h3 className="font-bold text-white text-lg leading-tight tracking-tight shadow-black drop-shadow-md">{item.name}</h3>
+                                  <div className="flex items-center gap-2 mb-1">
+                                      <h3 className="font-bold text-white text-base leading-tight tracking-tight shadow-black drop-shadow-md">{item.name}</h3>
                                   </div>
                                   {!isEditing && (
                                     <>
-                                        <p className="text-slate-300 text-xs leading-relaxed mb-5 pr-2 line-clamp-2 font-medium">{item.description}</p>
-                                        <div className="flex items-center gap-3">
-                                            <span className="font-mono font-bold text-orange-400 text-xl">€{item.price.toFixed(2)}</span>
-                                            <button onClick={(e) => { e.stopPropagation(); openAiFor(item); }} className="text-slate-400 hover:text-orange-400 transition-colors flex items-center gap-1 text-[10px] font-bold bg-slate-900/40 px-2.5 py-1.5 rounded-lg border border-white/5 uppercase tracking-wide">
+                                        <p className="text-slate-300 text-[10px] leading-relaxed mb-3 pr-2 line-clamp-2 font-medium">{item.description}</p>
+                                        <div className="flex items-center justify-between pr-2">
+                                            {/* Table Number Display (Replaces Price) */}
+                                            <div className="flex items-center gap-2 bg-slate-900/40 px-3 py-1.5 rounded-lg border border-white/5 backdrop-blur-sm">
+                                                <span className="text-[9px] font-black text-white uppercase tracking-wider">TAVOLO</span>
+                                                <span className={`text-sm font-black ${table ? 'text-orange-500' : 'text-orange-500/50'}`}>
+                                                    {table || '?'}
+                                                </span>
+                                            </div>
+
+                                            <button onClick={(e) => { e.stopPropagation(); openAiFor(item); }} className="text-slate-400 hover:text-orange-400 transition-colors flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide">
                                                 <Search size={10} /> Info
                                             </button>
                                         </div>
@@ -567,52 +580,52 @@ const WaiterPad: React.FC = () => {
                               {!isEditing && (
                                   <button
                                     onClick={() => startEditing(item)}
-                                    className="flex-shrink-0 w-12 h-12 rounded-2xl bg-orange-500 text-white flex items-center justify-center shadow-lg shadow-orange-500/20 active:scale-95 transition-transform z-20 hover:bg-orange-400"
+                                    className="flex-shrink-0 w-10 h-10 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-lg shadow-orange-500/20 active:scale-95 transition-transform z-20 hover:bg-orange-400 mt-1"
                                   >
-                                    <Plus size={24} strokeWidth={3} />
+                                    <Plus size={20} strokeWidth={3} />
                                   </button>
                               )}
                           </div>
 
                           {/* --- INLINE EDITING BLOCK --- */}
                           {isEditing && (
-                              <div className="mt-4 bg-white rounded-xl p-4 animate-slide-up shadow-inner">
-                                  <div className="flex items-center justify-between mb-4">
-                                      <label className="text-slate-500 text-xs font-bold uppercase tracking-wider">Quantità</label>
-                                      <div className="flex items-center gap-3 bg-slate-100 rounded-lg p-1">
-                                          <button onClick={() => setEditQty(Math.max(1, editQty - 1))} className="w-8 h-8 flex items-center justify-center bg-white rounded shadow-sm text-slate-600 active:scale-95">
-                                              <Minus size={16} />
+                              <div className="mt-3 bg-white rounded-xl p-3 animate-slide-up shadow-inner">
+                                  <div className="flex items-center justify-between mb-3">
+                                      <label className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Quantità</label>
+                                      <div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1">
+                                          <button onClick={() => setEditQty(Math.max(1, editQty - 1))} className="w-7 h-7 flex items-center justify-center bg-white rounded shadow-sm text-slate-600 active:scale-95">
+                                              <Minus size={14} />
                                           </button>
-                                          <span className="font-bold text-slate-800 w-4 text-center text-lg">{editQty}</span>
-                                          <button onClick={() => setEditQty(editQty + 1)} className="w-8 h-8 flex items-center justify-center bg-white rounded shadow-sm text-slate-600 active:scale-95">
-                                              <Plus size={16} />
+                                          <span className="font-bold text-slate-800 w-4 text-center text-base">{editQty}</span>
+                                          <button onClick={() => setEditQty(editQty + 1)} className="w-7 h-7 flex items-center justify-center bg-white rounded shadow-sm text-slate-600 active:scale-95">
+                                              <Plus size={14} />
                                           </button>
                                       </div>
                                   </div>
 
-                                  <div className="mb-4">
-                                      <label className="text-slate-500 text-xs font-bold uppercase tracking-wider mb-1 block">Note Cucina</label>
+                                  <div className="mb-3">
+                                      <label className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1 block">Note Cucina</label>
                                       <input 
                                           type="text"
                                           value={editNotes}
                                           onChange={(e) => setEditNotes(e.target.value)}
-                                          placeholder="Es. Ben cotto, no cipolla..."
-                                          className="w-full bg-slate-100 border-none rounded-lg px-3 py-2 text-slate-800 text-sm focus:ring-2 focus:ring-orange-200 outline-none"
+                                          placeholder="Es. Ben cotto..."
+                                          className="w-full bg-slate-100 border-none rounded-lg px-3 py-2 text-slate-800 text-xs focus:ring-2 focus:ring-orange-200 outline-none"
                                       />
                                   </div>
 
                                   <div className="flex gap-2">
                                       <button 
                                         onClick={cancelEditing}
-                                        className="flex-1 py-3 rounded-lg border border-slate-200 text-slate-500 font-bold text-sm hover:bg-slate-50 transition-colors"
+                                        className="flex-1 py-2.5 rounded-lg border border-slate-200 text-slate-500 font-bold text-xs hover:bg-slate-50 transition-colors"
                                       >
                                           Annulla
                                       </button>
                                       <button 
                                         onClick={() => confirmItem(item)}
-                                        className="flex-[2] py-3 rounded-lg bg-orange-500 text-white font-bold text-sm hover:bg-orange-600 shadow-md shadow-orange-200 flex items-center justify-center gap-2"
+                                        className="flex-[2] py-2.5 rounded-lg bg-orange-500 text-white font-bold text-xs hover:bg-orange-600 shadow-md shadow-orange-200 flex items-center justify-center gap-2"
                                       >
-                                          <Check size={18} /> Conferma €{(item.price * editQty).toFixed(2)}
+                                          <Check size={16} /> Conferma
                                       </button>
                                   </div>
                               </div>
