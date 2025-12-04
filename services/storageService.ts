@@ -1,6 +1,7 @@
-import { Order, OrderStatus } from '../types';
+import { Order, OrderStatus, OrderItem } from '../types';
 
 const STORAGE_KEY = 'ristosync_orders';
+const TABLES_COUNT_KEY = 'ristosync_table_count';
 
 export const getOrders = (): Order[] => {
   const data = localStorage.getItem(STORAGE_KEY);
@@ -25,6 +26,18 @@ export const updateOrderStatus = (orderId: string, status: OrderStatus) => {
   saveOrders(newOrders);
 };
 
+// Update items of an existing pending order (Edit Mode)
+export const updateOrderItems = (orderId: string, newItems: OrderItem[]) => {
+    const orders = getOrders();
+    const newOrders = orders.map(o => {
+        if (o.id === orderId) {
+            return { ...o, items: newItems, timestamp: Date.now() }; // Update timestamp to indicate modification
+        }
+        return o;
+    });
+    saveOrders(newOrders);
+};
+
 // Modified: Only removes orders that are explicitly deleted or we want to purge history
 // In a real app, this would be "End of Day"
 export const clearHistory = () => {
@@ -37,4 +50,15 @@ export const clearHistory = () => {
 export const nukeAllData = () => {
     localStorage.removeItem(STORAGE_KEY);
     window.dispatchEvent(new Event('local-storage-update'));
-}
+};
+
+// --- Dynamic Table Count Management ---
+export const getTableCount = (): number => {
+    const count = localStorage.getItem(TABLES_COUNT_KEY);
+    return count ? parseInt(count, 10) : 12; // Default to 12 tables
+};
+
+export const saveTableCount = (count: number) => {
+    localStorage.setItem(TABLES_COUNT_KEY, count.toString());
+    window.dispatchEvent(new Event('local-storage-update'));
+};

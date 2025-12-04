@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Category, MenuItem, Order, OrderItem, OrderStatus } from '../types';
 import { MENU_ITEMS } from '../constants';
-import { addOrder, getOrders } from '../services/storageService';
+import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems } from '../services/storageService';
 import { askChefAI } from '../services/geminiService';
-import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users } from 'lucide-react';
+import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save } from 'lucide-react';
 
 // --- CONSTANTS ---
 const CATEGORY_ORDER = [
@@ -13,9 +13,6 @@ const CATEGORY_ORDER = [
     Category.DOLCI,
     Category.BEVANDE
 ];
-
-// Define available tables (Simulated layout)
-const RESTAURANT_TABLES = Array.from({ length: 12 }, (_, i) => (i + 1).toString());
 
 // --- SUB-COMPONENT: Swipeable Cart Item ---
 interface SwipeableItemProps {
@@ -177,6 +174,7 @@ const WaiterPad: React.FC = () => {
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category>(Category.ANTIPASTI);
   const [isSending, setIsSending] = useState(false);
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null); // Track if we are editing an existing order
   
   // Sheet Drag State
   const [sheetHeight, setSheetHeight] = useState(80); // Default collapsed height in px
@@ -208,10 +206,16 @@ const WaiterPad: React.FC = () => {
   const [tableManagerOpen, setTableManagerOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [existingOrders, setExistingOrders] = useState<Order[]>([]);
-  const [allRestaurantOrders, setAllRestaurantOrders] = useState<Order[]>([]); // For table map overview
+  const [allRestaurantOrders, setAllRestaurantOrders] = useState<Order[]>([]);
+  
+  // Dynamic Table Count
+  const [totalTables, setTotalTables] = useState(12);
+  const [isSettingTables, setIsSettingTables] = useState(false);
+  const [tempTableCount, setTempTableCount] = useState(12);
 
-  // --- Listen for updates from Kitchen to keep history fresh ---
-  const loadOrdersData = () => {
+  // --- Listen for updates ---
+  const loadData = () => {
+      // Load orders
       const allOrders = getOrders();
       setAllRestaurantOrders(allOrders);
       
@@ -223,15 +227,18 @@ const WaiterPad: React.FC = () => {
       } else {
           setExistingOrders([]);
       }
+
+      // Load Config
+      setTotalTables(getTableCount());
   };
 
   useEffect(() => {
-    loadOrdersData();
+    loadData();
 
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'ristosync_orders') loadOrdersData();
+      if (e.key === 'ristosync_orders' || e.key === 'ristosync_table_count') loadData();
     };
-    const handleLocalUpdate = () => loadOrdersData();
+    const handleLocalUpdate = () => loadData();
 
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('local-storage-update', handleLocalUpdate);
@@ -242,7 +249,6 @@ const WaiterPad: React.FC = () => {
   }, [table]); 
 
   // --- Sorting Logic for Cart ---
-  // Sort items based on the predefined CATEGORY_ORDER
   const sortedCart = [...cart].sort((a, b) => {
       const idxA = CATEGORY_ORDER.indexOf(a.menuItem.category);
       const idxB = CATEGORY_ORDER.indexOf(b.menuItem.category);
@@ -259,7 +265,7 @@ const WaiterPad: React.FC = () => {
   const handleSheetTouchMove = (e: React.TouchEvent) => {
     if (!isDraggingSheet) return;
     const currentY = e.touches[0].clientY;
-    const diff = dragStartY.current - currentY; // Moving up is positive diff
+    const diff = dragStartY.current - currentY; 
     
     const newHeight = Math.max(80, Math.min(window.innerHeight * 0.9, startHeight.current + diff));
     setSheetHeight(newHeight);
@@ -267,12 +273,11 @@ const WaiterPad: React.FC = () => {
 
   const handleSheetTouchEnd = () => {
     setIsDraggingSheet(false);
-    // Snap logic
     const threshold = window.innerHeight * 0.4;
     if (sheetHeight > threshold) {
-        setSheetHeight(window.innerHeight * 0.85); // Expand
+        setSheetHeight(window.innerHeight * 0.85); 
     } else {
-        setSheetHeight(80); // Collapse
+        setSheetHeight(80); 
     }
   };
 
@@ -281,6 +286,26 @@ const WaiterPad: React.FC = () => {
           setSheetHeight(80);
       } else {
           setSheetHeight(window.innerHeight * 0.85);
+      }
+  };
+
+  // --- Table Selection & Order Recovery ---
+  const handleSelectTable = (tId: string) => {
+      setTable(tId);
+      setTableManagerOpen(false);
+
+      // Check if there is an active PENDING order for this table
+      const pendingOrder = allRestaurantOrders.find(o => o.tableNumber === tId && o.status === OrderStatus.PENDING);
+      
+      if (pendingOrder) {
+          // RECOVERY MODE: Load existing items into cart for editing
+          setCart(pendingOrder.items);
+          setEditingOrderId(pendingOrder.id);
+          // Auto-expand sheet to show we recovered something? Maybe not, too intrusive.
+      } else {
+          // INTEGRATION MODE: Clean cart for new additions
+          setCart([]);
+          setEditingOrderId(null);
       }
   };
 
@@ -299,6 +324,7 @@ const WaiterPad: React.FC = () => {
 
   const confirmItem = (item: MenuItem) => {
       setCart(prev => {
+        // If we have exact same item with same notes, merge quantity
         const existingIndex = prev.findIndex(i => i.menuItem.id === item.id && i.notes === editNotes);
         
         if (existingIndex >= 0) {
@@ -312,10 +338,8 @@ const WaiterPad: React.FC = () => {
       
       setEditingItemId(null);
       
-      // Trigger Animations
       setJustAddedId(item.id);
       setTimeout(() => setJustAddedId(null), 600);
-      
       setCartBump(true);
       setTimeout(() => setCartBump(false), 300);
   };
@@ -337,18 +361,14 @@ const WaiterPad: React.FC = () => {
 
   const editCartItem = (index: number) => {
      const itemToEdit = sortedCart[index];
-     
-     // Remove specific item from cart
      setCart(prev => prev.filter(i => i !== itemToEdit));
-     
      if (cart.length <= 1) setSheetHeight(80);
      
      setSelectedCategory(itemToEdit.menuItem.category);
      setEditingItemId(itemToEdit.menuItem.id);
      setEditQty(itemToEdit.quantity);
      setEditNotes(itemToEdit.notes || '');
-     
-     setSheetHeight(80); // Collapse to show menu
+     setSheetHeight(80); 
   };
 
   // --- Submit Order ---
@@ -358,32 +378,43 @@ const WaiterPad: React.FC = () => {
   };
 
   const handleSendOrder = () => {
-    // Close modal first
     setSendConfirmOpen(false);
 
     if (!table || cart.length === 0) return;
-    
     setIsSending(true);
-    const newOrder: Order = {
-      id: Date.now().toString(),
-      tableNumber: table,
-      items: cart, // The stored cart (unsorted in storage, but that's fine, display handles sort)
-      status: OrderStatus.PENDING,
-      timestamp: Date.now(),
-    };
 
-    addOrder(newOrder);
+    if (editingOrderId) {
+        // UPDATE EXISTING ORDER
+        updateOrderItems(editingOrderId, cart);
+    } else {
+        // CREATE NEW ORDER
+        const newOrder: Order = {
+            id: Date.now().toString(),
+            tableNumber: table,
+            items: cart,
+            status: OrderStatus.PENDING,
+            timestamp: Date.now(),
+        };
+        addOrder(newOrder);
+    }
 
     setTimeout(() => {
       setCart([]);
       setIsSending(false);
       setSheetHeight(80);
-      loadOrdersData(); 
+      setEditingOrderId(null);
+      loadData(); 
       setTable('');
     }, 500);
   };
 
-  // --- AI Handler ---
+  // --- Settings Logic ---
+  const handleSaveSettings = () => {
+      saveTableCount(tempTableCount);
+      setIsSettingTables(false);
+  };
+
+  // --- AI & Helpers ---
   const handleAskAI = async () => {
     if (!aiQuery.trim()) return;
     setAiLoading(true);
@@ -410,7 +441,6 @@ const WaiterPad: React.FC = () => {
     }
   };
   
-  // --- Helper for Table Status ---
   const getTableStatusInfo = (tableNum: string) => {
       const tableOrders = allRestaurantOrders.filter(o => o.tableNumber === tableNum && o.status !== OrderStatus.DELIVERED);
       if (tableOrders.length === 0) return { status: 'free', count: 0 };
@@ -433,58 +463,38 @@ const WaiterPad: React.FC = () => {
          <ChefHat size={400} className="text-white opacity-[0.03] transform -rotate-12 translate-x-20 translate-y-10" />
       </div>
 
-      {/* Styles for Animations */}
       <style>{`
-        /* Card Movement (Reduced range: 50px) */
+        /* Card Movement */
         @keyframes swipe-card {
             0%, 100% { transform: translateX(0); }
-            20%, 30% { transform: translateX(50px); } /* Right (Edit) */
+            20%, 30% { transform: translateX(50px); } 
             50% { transform: translateX(0); }
-            70%, 80% { transform: translateX(-50px); } /* Left (Delete) */
+            70%, 80% { transform: translateX(-50px); }
         }
-        
-        /* Background Color Change */
         @keyframes swipe-bg {
-            0%, 100% { background-color: rgb(51, 65, 85); } /* slate-700 */
-            20%, 30% { background-color: rgb(249, 115, 22); } /* orange-500 */
+            0%, 100% { background-color: rgb(51, 65, 85); }
+            20%, 30% { background-color: rgb(249, 115, 22); }
             50% { background-color: rgb(51, 65, 85); }
-            70%, 80% { background-color: rgb(220, 38, 38); } /* red-600 */
+            70%, 80% { background-color: rgb(220, 38, 38); }
         }
-
-        /* Text Reveal - Edit (Left Side) */
         @keyframes fade-edit {
             0%, 50%, 100% { opacity: 0; transform: scale(0.9); }
             20%, 30% { opacity: 1; transform: scale(1); }
         }
-
-        /* Text Reveal - Delete (Right Side) */
         @keyframes fade-delete {
             0%, 50%, 100% { opacity: 0; transform: scale(0.9); }
             70%, 80% { opacity: 1; transform: scale(1); }
         }
-
-        /* Success Pop Animation */
         @keyframes success-pop {
             0% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); }
             50% { transform: scale(1.03); box-shadow: 0 0 20px rgba(34, 197, 94, 0.4); border-color: rgba(34, 197, 94, 0.8); background-color: rgba(34, 197, 94, 0.1); }
             100% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); }
         }
-
-        .animate-card-swipe {
-            animation: swipe-card 2.5s ease-in-out;
-        }
-        .animate-bg-color {
-            animation: swipe-bg 2.5s ease-in-out;
-        }
-        .animate-fade-edit {
-            animation: fade-edit 2.5s ease-in-out;
-        }
-        .animate-fade-delete {
-            animation: fade-delete 2.5s ease-in-out;
-        }
-        .animate-success-pop {
-            animation: success-pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-        }
+        .animate-card-swipe { animation: swipe-card 2.5s ease-in-out; }
+        .animate-bg-color { animation: swipe-bg 2.5s ease-in-out; }
+        .animate-fade-edit { animation: fade-edit 2.5s ease-in-out; }
+        .animate-fade-delete { animation: fade-delete 2.5s ease-in-out; }
+        .animate-success-pop { animation: success-pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
       `}</style>
 
       {/* --- HEADER --- */}
@@ -499,9 +509,9 @@ const WaiterPad: React.FC = () => {
         </div>
         
         <div className="flex items-center gap-3">
-            {/* Table Selector / Indicator */}
+            {/* Table Selector Toggle */}
             <button 
-                onClick={() => setTableManagerOpen(true)}
+                onClick={() => setTableManagerOpen(!tableManagerOpen)}
                 className={`flex items-center rounded-xl pl-4 pr-2 py-1.5 border-2 transition-all duration-300 transform group active:scale-95
                     ${!table 
                         ? 'bg-slate-800 border-slate-700 hover:border-slate-600' 
@@ -575,7 +585,7 @@ const WaiterPad: React.FC = () => {
                             ${isEditing 
                                 ? 'bg-slate-800 border-orange-500/50 shadow-[0_0_30px_rgba(249,115,22,0.15)] ring-1 ring-orange-500/30' 
                                 : isPopping
-                                    ? 'animate-success-pop bg-slate-700 border-green-500' // Success State
+                                    ? 'animate-success-pop bg-slate-700 border-green-500'
                                     : 'bg-gradient-to-br from-slate-700/60 to-slate-800/60 border-white/10 shadow-xl'
                             }
                         `}
@@ -590,11 +600,7 @@ const WaiterPad: React.FC = () => {
                                     <>
                                         <p className="text-slate-300 text-[10px] leading-relaxed mb-3 pr-2 line-clamp-2 font-medium">{item.description}</p>
                                         <div className="flex items-center justify-between mt-2">
-                                            {/* Placeholder for future allergens/ingredients */}
-                                            <div className="flex gap-1">
-                                                {/* Space reserved for future icons */}
-                                            </div>
-
+                                            <div className="flex gap-1"></div>
                                             <button 
                                                 onClick={(e) => { e.stopPropagation(); openAiFor(item); }} 
                                                 className="bg-transparent text-slate-500 hover:text-orange-400 transition-colors flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide"
@@ -616,7 +622,6 @@ const WaiterPad: React.FC = () => {
                               )}
                           </div>
 
-                          {/* --- INLINE EDITING BLOCK --- */}
                           {isEditing && (
                               <div className="mt-3 bg-white rounded-xl p-3 animate-slide-up shadow-inner">
                                   <div className="flex items-center justify-between mb-3">
@@ -675,7 +680,7 @@ const WaiterPad: React.FC = () => {
         </button>
       </div>
 
-      {/* --- BOTTOM SHEET CART (DRAGGABLE 3D OVERLAY) --- */}
+      {/* --- BOTTOM SHEET CART --- */}
       <div 
         className="absolute bottom-0 left-0 right-0 z-40 bg-slate-800 rounded-t-[2.5rem] shadow-[0_-10px_40px_-10px_rgba(0,0,0,0.5)] border-t border-white/10 flex flex-col will-change-transform"
         style={{ 
@@ -688,7 +693,9 @@ const WaiterPad: React.FC = () => {
             onTouchStart={handleSheetTouchStart}
             onTouchMove={handleSheetTouchMove}
             onTouchEnd={handleSheetTouchEnd}
-            className="flex-shrink-0 h-20 px-6 flex items-center justify-between relative bg-gradient-to-b from-slate-800 to-slate-800/90 rounded-t-[2.5rem] cursor-grab active:cursor-grabbing"
+            className={`flex-shrink-0 h-20 px-6 flex items-center justify-between relative rounded-t-[2.5rem] cursor-grab active:cursor-grabbing border-b border-white/5
+                ${editingOrderId ? 'bg-gradient-to-r from-blue-900/40 to-slate-800' : 'bg-gradient-to-b from-slate-800 to-slate-800/90'}
+            `}
         >
             <div className="absolute top-3 left-1/2 transform -translate-x-1/2 w-12 h-1.5 bg-slate-600/50 rounded-full" />
             
@@ -700,7 +707,10 @@ const WaiterPad: React.FC = () => {
                      </div>
                 </div>
                 <div className="flex flex-col">
-                    <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider leading-none">Ordine del</span>
+                    <div className="flex items-center gap-2">
+                         <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider leading-none">Ordine del</span>
+                         {editingOrderId && <span className="text-[8px] bg-blue-500 text-white px-1.5 py-0.5 rounded font-bold uppercase">Modifica</span>}
+                    </div>
                     <div className="flex items-baseline gap-1">
                          <span className="font-bold text-white text-lg leading-none">TAVOLO</span>
                          <span className="font-black text-orange-500 text-xl leading-none">{table || '?'}</span>
@@ -709,14 +719,13 @@ const WaiterPad: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
-                {/* 1. Send Order (Quick Action) - Moved to Left */}
                  <button
                     onClick={requestSendOrder}
                     disabled={!table || cart.length === 0 || isSending}
                     className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all transform
                          ${(!table || cart.length === 0 || isSending) 
                             ? 'bg-slate-700/50 text-slate-600 cursor-not-allowed shadow-none' 
-                            : 'bg-orange-500 text-white hover:bg-orange-600 hover:scale-110 shadow-orange-500/40'}
+                            : editingOrderId ? 'bg-blue-600 text-white hover:bg-blue-500' : 'bg-orange-500 text-white hover:bg-orange-600 hover:scale-110 shadow-orange-500/40'}
                     `}
                 >
                     {isSending ? (
@@ -724,7 +733,6 @@ const WaiterPad: React.FC = () => {
                     ) : <Send size={20} className="ml-0.5 mt-0.5" />}
                 </button>
 
-                {/* 2. Toggle Sheet Arrow - Moved to Right */}
                 <button 
                     onClick={toggleSheet}
                     className="w-12 h-12 rounded-full bg-slate-700/50 text-slate-300 flex items-center justify-center hover:bg-slate-700 transition-colors"
@@ -741,6 +749,7 @@ const WaiterPad: React.FC = () => {
                     <div className="flex flex-col items-center justify-center h-full text-slate-600 gap-2">
                         <ShoppingBag size={48} className="opacity-20" />
                         <p>Il carrello è vuoto</p>
+                        {editingOrderId && <p className="text-xs text-blue-400 text-center px-6">Stai modificando un ordine esistente. Aggiungi piatti o rimuovi quelli presenti.</p>}
                     </div>
                 ) : (
                     <>
@@ -766,13 +775,15 @@ const WaiterPad: React.FC = () => {
                     onClick={requestSendOrder}
                     disabled={!table || isSending || cart.length === 0}
                     className={`w-full py-4 rounded-2xl font-bold text-lg tracking-wide flex items-center justify-center gap-3 shadow-xl transition-all relative overflow-hidden
-                        ${(!table || isSending || cart.length === 0) ? 'bg-slate-800 text-slate-600 cursor-not-allowed shadow-none border border-slate-700' : 'bg-orange-500 text-white hover:bg-orange-600 hover:scale-[1.01] shadow-orange-500/20'}
+                        ${(!table || isSending || cart.length === 0) 
+                            ? 'bg-slate-800 text-slate-600 cursor-not-allowed shadow-none border border-slate-700' 
+                            : editingOrderId ? 'bg-blue-600 text-white hover:bg-blue-500 hover:scale-[1.01] shadow-blue-500/20' : 'bg-orange-500 text-white hover:bg-orange-600 hover:scale-[1.01] shadow-orange-500/20'}
                     `}
                 >
                     {isSending ? (
                         <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
                     ) : (
-                        <><Send size={20}/> CONFERMA ORDINE</>
+                        <><Send size={20}/> {editingOrderId ? 'AGGIORNA COMANDA' : 'INVIA ORDINE'}</>
                     )}
                     {!table && !isSending && (
                          <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-xs text-red-400 font-bold uppercase backdrop-blur-sm border-2 border-red-500/20 rounded-2xl">
@@ -789,50 +800,74 @@ const WaiterPad: React.FC = () => {
           <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
               <div className="bg-slate-900 w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-slate-700 flex flex-col max-h-[85vh]">
                   <div className="flex justify-between items-center mb-6">
-                      <div>
-                          <h2 className="text-2xl font-bold text-white">Mappa Tavoli</h2>
-                          <p className="text-slate-400 text-sm">Seleziona il tavolo corrente</p>
+                      {!isSettingTables ? (
+                        <div>
+                            <h2 className="text-2xl font-bold text-white">Mappa Tavoli</h2>
+                            <p className="text-slate-400 text-sm">Seleziona il tavolo corrente</p>
+                        </div>
+                      ) : (
+                        <div>
+                            <h2 className="text-xl font-bold text-white">Impostazioni</h2>
+                            <p className="text-slate-400 text-sm">Numero tavoli sala</p>
+                        </div>
+                      )}
+                      
+                      <div className="flex gap-2">
+                        {!isSettingTables && (
+                            <button onClick={() => { setIsSettingTables(true); setTempTableCount(totalTables); }} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white">
+                                <Settings size={20} />
+                            </button>
+                        )}
+                        <button onClick={() => { setTableManagerOpen(false); setIsSettingTables(false); }} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white">
+                            <X size={20} />
+                        </button>
                       </div>
-                      <button onClick={() => setTableManagerOpen(false)} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white">
-                          <X size={24} />
-                      </button>
                   </div>
                   
-                  <div className="grid grid-cols-3 gap-4 overflow-y-auto p-2">
-                      {RESTAURANT_TABLES.map(tId => {
-                          const info = getTableStatusInfo(tId);
-                          const isSelected = table === tId;
-                          
-                          // Determine Styling
-                          let bgClass = 'bg-slate-800 border-slate-700 text-slate-400';
-                          if (isSelected) bgClass = 'bg-slate-800 border-orange-500 text-orange-500 ring-2 ring-orange-500/30 shadow-[0_0_15px_rgba(249,115,22,0.4)]';
-                          else if (info.status === 'ready') bgClass = 'bg-green-900/30 border-green-500 text-green-400 animate-pulse';
-                          else if (info.status === 'busy') bgClass = 'bg-slate-700 border-orange-500/50 text-orange-200';
+                  {isSettingTables ? (
+                      <div className="flex flex-col items-center justify-center flex-1 py-10">
+                          <div className="flex items-center gap-4 mb-8">
+                              <button onClick={() => setTempTableCount(Math.max(1, tempTableCount - 1))} className="p-4 bg-slate-800 rounded-xl text-white active:scale-95"><Minus/></button>
+                              <span className="text-6xl font-black text-orange-500 font-mono">{tempTableCount}</span>
+                              <button onClick={() => setTempTableCount(Math.min(50, tempTableCount + 1))} className="p-4 bg-slate-800 rounded-xl text-white active:scale-95"><Plus/></button>
+                          </div>
+                          <button onClick={handleSaveSettings} className="w-full bg-orange-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2">
+                              <Save size={20}/> SALVA CONFIGURAZIONE
+                          </button>
+                      </div>
+                  ) : (
+                    <div className="grid grid-cols-3 gap-3 overflow-y-auto p-1 custom-scroll">
+                        {Array.from({ length: totalTables }, (_, i) => (i + 1).toString()).map(tId => {
+                            const info = getTableStatusInfo(tId);
+                            const isSelected = table === tId;
+                            
+                            let bgClass = 'bg-slate-800 border-slate-700 text-slate-400';
+                            if (isSelected) bgClass = 'bg-slate-800 border-orange-500 text-orange-500 ring-2 ring-orange-500/30 shadow-[0_0_15px_rgba(249,115,22,0.4)]';
+                            else if (info.status === 'ready') bgClass = 'bg-green-900/30 border-green-500 text-green-400 animate-pulse';
+                            else if (info.status === 'busy') bgClass = 'bg-slate-700 border-orange-500/50 text-orange-200';
 
-                          return (
-                              <button
-                                key={tId}
-                                onClick={() => {
-                                    setTable(tId);
-                                    setTableManagerOpen(false);
-                                }}
-                                className={`aspect-square rounded-2xl border-2 flex flex-col items-center justify-center relative transition-all active:scale-95 ${bgClass}`}
-                              >
-                                  <span className="text-2xl font-black">{tId}</span>
-                                  <span className="text-[10px] uppercase font-bold mt-1">
-                                      {info.status === 'ready' ? 'PRONTO' : info.status === 'busy' ? 'OCCUPATO' : 'LIBERO'}
-                                  </span>
-                                  {info.count > 0 && (
-                                      <div className={`absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-md
-                                          ${info.status === 'ready' ? 'bg-green-600' : 'bg-orange-500'}
-                                      `}>
-                                          {info.count}
-                                      </div>
-                                  )}
-                              </button>
-                          );
-                      })}
-                  </div>
+                            return (
+                                <button
+                                    key={tId}
+                                    onClick={() => handleSelectTable(tId)}
+                                    className={`aspect-square rounded-2xl border-2 flex flex-col items-center justify-center relative transition-all active:scale-95 ${bgClass}`}
+                                >
+                                    <span className="text-2xl font-black">{tId}</span>
+                                    <span className="text-[9px] uppercase font-bold mt-1">
+                                        {info.status === 'ready' ? 'PRONTO' : info.status === 'busy' ? 'OCCUPATO' : 'LIBERO'}
+                                    </span>
+                                    {info.count > 0 && (
+                                        <div className={`absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-md
+                                            ${info.status === 'ready' ? 'bg-green-600' : 'bg-orange-500'}
+                                        `}>
+                                            {info.count}
+                                        </div>
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+                  )}
               </div>
           </div>
       )}
@@ -850,7 +885,6 @@ const WaiterPad: React.FC = () => {
                         <X size={20} />
                     </button>
                 </div>
-                {/* ... existing history list ... */}
                  <div className="flex-1 overflow-y-auto space-y-4 pr-1">
                     {existingOrders.length === 0 ? (
                         <div className="flex flex-col items-center justify-center h-40 text-slate-600">
@@ -900,7 +934,7 @@ const WaiterPad: React.FC = () => {
                       </div>
                       <h3 className="text-xl font-bold text-white">Rimuovere piatto?</h3>
                       <p className="text-slate-400 text-sm mt-2">
-                          Vuoi eliminare <span className="text-white font-bold">{sortedCart[deleteConfirmIndex]?.menuItem.name}</span> dall'ordine?
+                          Vuoi eliminare <span className="text-white font-bold">{sortedCart[deleteConfirmIndex]?.menuItem.name}</span>?
                       </p>
                   </div>
                   <div className="flex gap-3 mt-6">
@@ -924,12 +958,12 @@ const WaiterPad: React.FC = () => {
       {/* --- SEND CONFIRMATION MODAL --- */}
       {sendConfirmOpen && (
           <div className="absolute inset-0 z-[70] bg-black/80 backdrop-blur-md flex items-center justify-center p-6 animate-fade-in">
-              <div className="bg-slate-900 border border-orange-500/30 rounded-3xl p-6 w-full max-w-xs shadow-2xl shadow-orange-900/20 transform animate-slide-up">
+              <div className={`bg-slate-900 border rounded-3xl p-6 w-full max-w-xs shadow-2xl transform animate-slide-up ${editingOrderId ? 'border-blue-500/30 shadow-blue-900/20' : 'border-orange-500/30 shadow-orange-900/20'}`}>
                   <div className="flex flex-col items-center text-center mb-4">
-                      <div className="w-16 h-16 bg-orange-500/10 rounded-full flex items-center justify-center mb-4 text-orange-500 border border-orange-500/20">
+                      <div className={`w-16 h-16 rounded-full flex items-center justify-center mb-4 border ${editingOrderId ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : 'bg-orange-500/10 text-orange-500 border-orange-500/20'}`}>
                           <Send size={32} />
                       </div>
-                      <h3 className="text-xl font-bold text-white">Inviare comanda?</h3>
+                      <h3 className="text-xl font-bold text-white">{editingOrderId ? 'Aggiornare comanda?' : 'Inviare comanda?'}</h3>
                       <p className="text-slate-400 text-sm mt-2">
                           Confermi l'invio dell'ordine per il <span className="text-white font-bold">Tavolo {table}</span>?
                       </p>
@@ -943,20 +977,19 @@ const WaiterPad: React.FC = () => {
                       </button>
                       <button 
                         onClick={handleSendOrder}
-                        className="flex-1 py-3 rounded-xl bg-orange-500 text-white font-bold text-sm hover:bg-orange-600 shadow-lg shadow-orange-600/30 transition-colors"
+                        className={`flex-1 py-3 rounded-xl text-white font-bold text-sm shadow-lg transition-colors ${editingOrderId ? 'bg-blue-600 hover:bg-blue-700 shadow-blue-600/30' : 'bg-orange-500 hover:bg-orange-600 shadow-orange-600/30'}`}
                       >
-                          INVIA
+                          {editingOrderId ? 'AGGIORNA' : 'INVIA'}
                       </button>
                   </div>
               </div>
           </div>
       )}
 
-      {/* --- AI ASSISTANT MODAL (Existing) --- */}
+      {/* --- AI ASSISTANT MODAL --- */}
       {aiModalOpen && (
         <div className="absolute inset-0 z-50 bg-black/70 backdrop-blur-md flex items-end sm:items-center justify-center p-4">
             <div className="bg-slate-900 w-full rounded-3xl p-5 shadow-2xl flex flex-col animate-slide-up border border-slate-700 relative overflow-hidden">
-                {/* Background decorative blob */}
                 <div className="absolute top-0 right-0 w-32 h-32 bg-orange-600/20 blur-3xl rounded-full pointer-events-none"></div>
 
                 <div className="flex justify-between items-center mb-4 z-10">
