@@ -73,19 +73,21 @@ alter table public.menu_items enable row level security;
 create policy "Manage own menu" on menu_items for all using (auth.uid() = user_id);
 ```
 
-### 3. Super Admin Setup
-To enable the Super Admin dashboard for your email (e.g., `castro.massimo@yahoo.com`), run this SQL:
+### 3. Super Admin Setup (CRITICAL)
+To enable the Super Admin dashboard for `castro.massimo@yahoo.com`, run this specific SQL command in Supabase Editor:
 
 ```sql
--- Replace 'castro.massimo@yahoo.com' with your actual admin email
+drop policy if exists "Super Admin View All" on public.profiles;
+drop policy if exists "Super Admin Update All" on public.profiles;
+
+-- Allow Viewing All
 create policy "Super Admin View All"
-on public.profiles
-for select
+on public.profiles for select
 using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );
 
+-- Allow Editing All
 create policy "Super Admin Update All"
-on public.profiles
-for update
+on public.profiles for update
 using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );
 ```
 

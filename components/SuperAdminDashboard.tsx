@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, signOut } from '../services/supabase';
-import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check } from 'lucide-react';
 
 interface SuperAdminDashboardProps {
     onEnterApp: () => void;
@@ -9,6 +9,7 @@ interface SuperAdminDashboardProps {
 const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp }) => {
     const [profiles, setProfiles] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
+    const [copied, setCopied] = useState(false);
     
     const fetchProfiles = async () => {
         if (!supabase) return;
@@ -42,6 +43,14 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
         } else {
             alert("Errore modifica stato: " + error.message);
         }
+    };
+    
+    const copySQL = () => {
+        const sql = `create policy "Super Admin View All" on public.profiles for select using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );
+create policy "Super Admin Update All" on public.profiles for update using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );`;
+        navigator.clipboard.writeText(sql);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
     };
 
     return (
@@ -145,17 +154,30 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
                                 {profiles.length === 0 && !loading && (
                                     <tr>
                                         <td colSpan={5} className="p-10 text-center">
-                                            <div className="flex flex-col items-center gap-3 text-slate-500">
-                                                <AlertTriangle size={32} className="text-orange-500 mb-2"/>
-                                                <p className="font-bold text-white">Nessun ristorante visibile.</p>
-                                                <p className="text-sm max-w-md mx-auto">
-                                                    Se hai già registrato dei ristoranti ma non li vedi qui, 
-                                                    significa che le <strong>Policy SQL RLS</strong> non sono aggiornate per la tua email 
-                                                    <span className="text-orange-400 font-mono mx-1">castro.massimo@yahoo.com</span>.
+                                            <div className="flex flex-col items-center gap-3 text-slate-500 max-w-lg mx-auto">
+                                                <AlertTriangle size={40} className="text-orange-500 mb-2"/>
+                                                <p className="font-bold text-white text-lg">Permessi Database Mancanti</p>
+                                                <p className="text-sm">
+                                                    Non vedo nessun ristorante. Significa che il database sta bloccando il tuo accesso. 
+                                                    Per risolvere, devi incollare questo codice nell'<strong>SQL Editor</strong> di Supabase:
                                                 </p>
-                                                <p className="text-xs bg-slate-950 p-3 rounded border border-slate-700 mt-2">
-                                                    Esegui lo script SQL "Super Admin View All" nel database.
-                                                </p>
+                                                
+                                                <div className="bg-slate-950 p-4 rounded-xl border border-slate-700 w-full mt-4 relative group">
+                                                    <pre className="text-left text-xs text-green-400 font-mono whitespace-pre-wrap overflow-x-auto">
+{`drop policy if exists "Super Admin View All" on public.profiles;
+create policy "Super Admin View All"
+on public.profiles for select
+using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );`}
+                                                    </pre>
+                                                    <button 
+                                                        onClick={copySQL}
+                                                        className="absolute top-2 right-2 p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-white"
+                                                        title="Copia SQL"
+                                                    >
+                                                        {copied ? <Check size={16} className="text-green-500"/> : <Copy size={16}/>}
+                                                    </button>
+                                                </div>
+                                                <p className="text-xs text-slate-500 mt-2">Dopo aver cliccato "RUN" su Supabase, clicca "Aggiorna Lista".</p>
                                             </div>
                                         </td>
                                     </tr>

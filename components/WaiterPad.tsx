@@ -1114,11 +1114,11 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                 <button 
                                     onClick={proceedToOrder}
                                     className={`flex-1 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors shadow-lg
-                                        ${editingOrderId ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-900/20 text-white' : 'bg-green-600 hover:bg-green-500 shadow-green-900/20 text-white'}
+                                        ${editingOrderId ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-900/20 text-white' : 'bg-orange-500 hover:bg-orange-600 shadow-orange-900/20 text-white'}
                                     `}
                                 >
                                     {editingOrderId ? <Edit2 size={20}/> : <ArrowRight size={20} />} 
-                                    {editingOrderId ? 'MODIFICA ORDINE' : 'AGGIUNGI PIATTI'}
+                                    {editingOrderId ? 'MODIFICA ORDINE' : "VAI ALL'ORDINE"}
                                 </button>
                                 
                                 <button 
