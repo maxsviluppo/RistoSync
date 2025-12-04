@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, signOut } from '../services/supabase';
-import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle } from 'lucide-react';
+import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle } from 'lucide-react';
 
 interface SuperAdminDashboardProps {
     onEnterApp: () => void;
@@ -22,6 +22,10 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
 
     useEffect(() => {
         fetchProfiles();
+        
+        // Auto-refresh ogni 30 secondi per vedere nuovi iscritti
+        const interval = setInterval(fetchProfiles, 30000);
+        return () => clearInterval(interval);
     }, []);
 
     const toggleStatus = async (id: string, currentStatus: string) => {
@@ -41,7 +45,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     };
 
     return (
-        <div className="min-h-screen bg-slate-900 text-white font-sans p-8">
+        <div className="min-h-screen bg-slate-900 text-white font-sans p-4 md:p-8">
             <div className="max-w-6xl mx-auto">
                 <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
                     <div className="flex items-center gap-4">
@@ -89,10 +93,10 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
                     </div>
                 </div>
 
-                <div className="bg-slate-800 rounded-3xl border border-slate-700 overflow-hidden">
-                    <div className="p-6 border-b border-slate-700 flex justify-between items-center">
+                <div className="bg-slate-800 rounded-3xl border border-slate-700 overflow-hidden shadow-2xl">
+                    <div className="p-6 border-b border-slate-700 flex justify-between items-center bg-slate-800">
                          <h2 className="font-bold text-xl">Lista Ristoranti (Tenants)</h2>
-                         <button onClick={fetchProfiles} className="flex items-center gap-2 text-sm font-bold bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg text-slate-300">
+                         <button onClick={fetchProfiles} className="flex items-center gap-2 text-sm font-bold bg-slate-700 hover:bg-slate-600 px-4 py-2 rounded-lg text-slate-300 transition-colors">
                              <RefreshCw size={16} className={loading ? 'animate-spin' : ''} /> Aggiorna Lista
                          </button>
                     </div>
@@ -111,25 +115,25 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
                                 {profiles.map(p => (
                                     <tr key={p.id} className="hover:bg-slate-700/30 transition-colors">
                                         <td className="p-6">
-                                            <div className="font-bold text-white">{p.restaurant_name || 'N/A'}</div>
-                                            <div className="text-xs font-mono text-slate-500 mt-1">{p.id.slice(0, 8)}...</div>
+                                            <div className="font-bold text-white text-lg">{p.restaurant_name || 'N/A'}</div>
+                                            <div className="text-xs font-mono text-slate-500 mt-1">{p.id}</div>
                                         </td>
-                                        <td className="p-6 text-slate-300">{p.email}</td>
+                                        <td className="p-6 text-slate-300 font-medium">{p.email}</td>
                                         <td className="p-6">
                                             <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${p.subscription_status === 'active' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
                                                 {p.subscription_status}
                                             </span>
                                         </td>
                                         <td className="p-6 text-slate-500 text-sm">
-                                            {new Date(p.created_at).toLocaleDateString()}
+                                            {new Date(p.created_at).toLocaleDateString('it-IT')}
                                         </td>
                                         <td className="p-6 text-right">
                                             <button 
                                                 onClick={() => toggleStatus(p.id, p.subscription_status)}
-                                                className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-colors
+                                                className={`inline-flex items-center gap-1 px-4 py-2 rounded-lg text-xs font-bold uppercase transition-colors
                                                     ${p.subscription_status === 'active' 
-                                                        ? 'bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white' 
-                                                        : 'bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white'}
+                                                        ? 'bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white border border-red-500/20' 
+                                                        : 'bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white border border-green-500/20'}
                                                 `}
                                             >
                                                 {p.subscription_status === 'active' ? <PauseCircle size={14}/> : <PlayCircle size={14}/>}
@@ -140,8 +144,19 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
                                 ))}
                                 {profiles.length === 0 && !loading && (
                                     <tr>
-                                        <td colSpan={5} className="p-10 text-center text-slate-500">
-                                            Nessun ristorante trovato. Prova ad aggiornare o verifica le Policy SQL.
+                                        <td colSpan={5} className="p-10 text-center">
+                                            <div className="flex flex-col items-center gap-3 text-slate-500">
+                                                <AlertTriangle size={32} className="text-orange-500 mb-2"/>
+                                                <p className="font-bold text-white">Nessun ristorante visibile.</p>
+                                                <p className="text-sm max-w-md mx-auto">
+                                                    Se hai già registrato dei ristoranti ma non li vedi qui, 
+                                                    significa che le <strong>Policy SQL RLS</strong> non sono aggiornate per la tua email 
+                                                    <span className="text-orange-400 font-mono mx-1">castro.massimo@yahoo.com</span>.
+                                                </p>
+                                                <p className="text-xs bg-slate-950 p-3 rounded border border-slate-700 mt-2">
+                                                    Esegui lo script SQL "Super Admin View All" nel database.
+                                                </p>
+                                            </div>
                                         </td>
                                     </tr>
                                 )}

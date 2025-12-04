@@ -73,24 +73,30 @@ alter table public.menu_items enable row level security;
 create policy "Manage own menu" on menu_items for all using (auth.uid() = user_id);
 ```
 
-### 3. Environment Variables (Vercel)
+### 3. Super Admin Setup
+To enable the Super Admin dashboard for your email (e.g., `castro.massimo@yahoo.com`), run this SQL:
+
+```sql
+-- Replace 'castro.massimo@yahoo.com' with your actual admin email
+create policy "Super Admin View All"
+on public.profiles
+for select
+using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );
+
+create policy "Super Admin Update All"
+on public.profiles
+for update
+using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );
+```
+
+### 4. Environment Variables (Vercel)
 When deploying to Vercel, set the following environment variables:
 
 - `VITE_SUPABASE_URL`: Your Supabase Project URL
 - `VITE_SUPABASE_KEY`: Your Supabase Anon/Public Key
 
 *Optional:*
-- `API_KEY`: A fallback Google Gemini API Key (if you want to provide a global key for all users, otherwise they will set their own in the settings).
-
-### 4. Running Locally
-
-```bash
-# Install dependencies
-npm install
-
-# Run development server
-npm run dev
-```
+- `API_KEY`: A fallback Google Gemini API Key.
 
 ## Usage Guide
 
