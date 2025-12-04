@@ -171,7 +171,7 @@ const App: React.FC = () => {
   }
   
   // 2. SHOW SUPER ADMIN DASHBOARD (Example Logic)
-  if (session?.user?.email === 'maxsviluppo@gmail.com') { // Replace with your admin email
+  if (session?.user?.email === 'maxsviluppo@gmail.com') { 
       return <SuperAdminDashboard />;
   }
 
@@ -485,13 +485,14 @@ const App: React.FC = () => {
                                                                     <div className="flex items-center gap-2 mb-1">
                                                                         <h5 className="font-bold text-white text-lg leading-tight">{item.name}</h5>
                                                                     </div>
+                                                                    {/* ALLERGEN ICONS DISPLAY (NEW) */}
                                                                     <div className="flex gap-1.5 flex-wrap opacity-70 mb-2">
                                                                         {item.allergens?.map(algId => {
                                                                             const config = ALLERGENS_CONFIG.find(c => c.id === algId);
                                                                             if(!config) return null;
                                                                             return (
                                                                                 <div key={algId} className="bg-slate-800 p-1 rounded-full border border-slate-700 text-slate-400" title={algId}>
-                                                                                    <config.icon size={10} />
+                                                                                    <config.icon size={12} />
                                                                                 </div>
                                                                             );
                                                                         })}

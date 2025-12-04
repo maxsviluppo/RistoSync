@@ -10,8 +10,8 @@ const SETTINGS_NOTIFICATIONS_KEY = 'ristosync_settings_notifications';
 const GOOGLE_API_KEY_STORAGE = 'ristosync_google_api_key';
 
 // --- SYNC ENGINE STATE ---
-let isSyncing = false;
 let currentUserId: string | null = null;
+let pollingInterval: any = null;
 
 // Initialize Realtime Subscription
 export const initSupabaseSync = async () => {
@@ -22,33 +22,50 @@ export const initSupabaseSync = async () => {
     if (session?.user) {
         currentUserId = session.user.id;
         
-        // 1. Sync Data
+        // 1. Initial Sync
         await fetchFromCloud(); 
+        await fetchFromCloudMenu();
         
         // 2. Sync Profile Settings (API KEY)
         const { data: profile } = await supabase.from('profiles').select('google_api_key').eq('id', currentUserId).single();
         if (profile?.google_api_key) {
             localStorage.setItem(GOOGLE_API_KEY_STORAGE, profile.google_api_key);
-        } else {
-            // If no key in cloud, clear local to avoid mismatch
-            localStorage.removeItem(GOOGLE_API_KEY_STORAGE);
         }
 
-        // Subscribe to changes
-        supabase
-            .channel('public:orders')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `user_id=eq.${currentUserId}` }, (payload) => {
-                console.log('Realtime Order Update:', payload);
-                fetchFromCloud(); // Refresh data on change
+        // 3. Realtime Subscription (Robust Mode)
+        // We create a unique channel for this user/restaurant
+        const channel = supabase.channel(`room:${currentUserId}`);
+
+        channel
+            .on('postgres_changes', { 
+                event: '*', 
+                schema: 'public', 
+                table: 'orders' 
+                // Removed filter: 'user_id=eq...' to rely on Server-Side RLS. 
+                // This fixes issues where INSERT events are missed due to filter mismatch.
+            }, (payload) => {
+                // console.log('Realtime Order Event:', payload);
+                fetchFromCloud(); 
             })
-            .subscribe();
-            
-        supabase
-            .channel('public:menu')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_items', filter: `user_id=eq.${currentUserId}` }, () => {
+            .on('postgres_changes', { 
+                event: '*', 
+                schema: 'public', 
+                table: 'menu_items' 
+            }, () => {
                 fetchFromCloudMenu();
             })
-            .subscribe();
+            .subscribe((status) => {
+                if (status === 'SUBSCRIBED') {
+                    // console.log('Connected to Realtime Cloud');
+                }
+            });
+
+        // 4. Fallback Polling (Heartbeat)
+        // Every 30 seconds, force a fetch to ensure sync even if socket drops
+        if (pollingInterval) clearInterval(pollingInterval);
+        pollingInterval = setInterval(() => {
+            fetchFromCloud();
+        }, 30000);
     }
 };
 
@@ -60,7 +77,7 @@ const fetchFromCloud = async () => {
         return;
     }
     
-    // Convert DB format to App format if necessary (e.g. handling JSONB items)
+    // Convert DB format to App format
     const appOrders: Order[] = data.map((row: any) => ({
         id: row.id,
         tableNumber: row.table_number,
@@ -117,7 +134,6 @@ const syncOrderToCloud = async (order: Order, isDelete = false) => {
 };
 
 export const saveOrders = (orders: Order[]) => {
-  // Save locally first (Optimistic UI)
   saveLocallyAndNotify(orders);
 };
 
@@ -297,7 +313,7 @@ export const deleteMenuItem = (id: string) => {
     if (itemToDelete) syncMenuToCloud(itemToDelete, true);
 };
 
-// --- API KEY MANAGEMENT (NEW) ---
+// --- API KEY MANAGEMENT ---
 export const getGoogleApiKey = (): string | null => {
     return localStorage.getItem(GOOGLE_API_KEY_STORAGE);
 };
