@@ -3,7 +3,7 @@ import { Category, MenuItem, Order, OrderItem, OrderStatus } from '../types';
 import { MENU_ITEMS } from '../constants';
 import { addOrder, getOrders } from '../services/storageService';
 import { askChefAI } from '../services/geminiService';
-import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info } from 'lucide-react';
+import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users } from 'lucide-react';
 
 // --- CONSTANTS ---
 const CATEGORY_ORDER = [
@@ -13,6 +13,9 @@ const CATEGORY_ORDER = [
     Category.DOLCI,
     Category.BEVANDE
 ];
+
+// Define available tables (Simulated layout)
+const RESTAURANT_TABLES = Array.from({ length: 12 }, (_, i) => (i + 1).toString());
 
 // --- SUB-COMPONENT: Swipeable Cart Item ---
 interface SwipeableItemProps {
@@ -201,30 +204,34 @@ const WaiterPad: React.FC = () => {
   const [aiResponse, setAiResponse] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
 
-  // History State
+  // Table Management State
+  const [tableManagerOpen, setTableManagerOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [existingOrders, setExistingOrders] = useState<Order[]>([]);
+  const [allRestaurantOrders, setAllRestaurantOrders] = useState<Order[]>([]); // For table map overview
 
   // --- Listen for updates from Kitchen to keep history fresh ---
-  const loadExistingOrders = () => {
-      if (!table) {
-          setExistingOrders([]);
-          return;
-      }
+  const loadOrdersData = () => {
       const allOrders = getOrders();
-      const tableOrders = allOrders
-        .filter(o => o.tableNumber === table)
-        .sort((a, b) => b.timestamp - a.timestamp); // Newest first
-      setExistingOrders(tableOrders);
+      setAllRestaurantOrders(allOrders);
+      
+      if (table) {
+          const tableOrders = allOrders
+            .filter(o => o.tableNumber === table)
+            .sort((a, b) => b.timestamp - a.timestamp); // Newest first
+          setExistingOrders(tableOrders);
+      } else {
+          setExistingOrders([]);
+      }
   };
 
   useEffect(() => {
-    loadExistingOrders();
+    loadOrdersData();
 
     const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'ristosync_orders') loadExistingOrders();
+      if (e.key === 'ristosync_orders') loadOrdersData();
     };
-    const handleLocalUpdate = () => loadExistingOrders();
+    const handleLocalUpdate = () => loadOrdersData();
 
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('local-storage-update', handleLocalUpdate);
@@ -371,7 +378,7 @@ const WaiterPad: React.FC = () => {
       setCart([]);
       setIsSending(false);
       setSheetHeight(80);
-      loadExistingOrders(); 
+      loadOrdersData(); 
       setTable('');
     }, 500);
   };
@@ -402,8 +409,19 @@ const WaiterPad: React.FC = () => {
         default: return <Utensils size={18} />;
     }
   };
+  
+  // --- Helper for Table Status ---
+  const getTableStatusInfo = (tableNum: string) => {
+      const tableOrders = allRestaurantOrders.filter(o => o.tableNumber === tableNum && o.status !== OrderStatus.DELIVERED);
+      if (tableOrders.length === 0) return { status: 'free', count: 0 };
+      
+      const hasReady = tableOrders.some(o => o.status === OrderStatus.READY);
+      return { 
+          status: hasReady ? 'ready' : 'busy', 
+          count: tableOrders.length 
+      };
+  };
 
-  const total = cart.reduce((acc, item) => acc + (item.menuItem.price * item.quantity), 0);
   const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
   const pendingCount = existingOrders.filter(o => o.status !== OrderStatus.DELIVERED).length;
 
@@ -481,22 +499,24 @@ const WaiterPad: React.FC = () => {
         </div>
         
         <div className="flex items-center gap-3">
-            <div className={`flex items-center rounded-xl pl-4 pr-2 py-2 border-2 transition-all duration-300 transform
-                ${!table 
-                    ? 'bg-slate-800/80 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)] animate-pulse' 
-                    : 'bg-slate-900 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.6)] scale-105 ring-1 ring-orange-500/20'
-                }`}>
-                <span className={`text-[10px] font-black uppercase tracking-wider mr-1 ${!table ? 'text-red-400' : 'text-white'}`}>TAVOLO</span>
-                <input 
-                    type="number" 
-                    value={table}
-                    onChange={(e) => setTable(e.target.value)}
-                    placeholder="?"
-                    className={`w-12 text-center font-black text-2xl focus:outline-none placeholder-slate-500/50 bg-transparent
-                        ${!table ? 'text-white' : 'text-orange-500 drop-shadow-[0_0_5px_rgba(249,115,22,0.8)]'}
-                    `}
-                />
-            </div>
+            {/* Table Selector / Indicator */}
+            <button 
+                onClick={() => setTableManagerOpen(true)}
+                className={`flex items-center rounded-xl pl-4 pr-2 py-1.5 border-2 transition-all duration-300 transform group active:scale-95
+                    ${!table 
+                        ? 'bg-slate-800 border-slate-700 hover:border-slate-600' 
+                        : 'bg-slate-900 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.6)] scale-105 ring-1 ring-orange-500/20'
+                    }`}
+            >
+                <div className="flex flex-col items-end mr-3">
+                     <span className={`text-[10px] font-black uppercase tracking-wider leading-none ${!table ? 'text-slate-500' : 'text-white'}`}>TAVOLO</span>
+                     {table && <span className="font-black text-xl text-orange-500 leading-none drop-shadow-[0_0_8px_rgba(249,115,22,0.8)]">{table}</span>}
+                </div>
+                
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${!table ? 'bg-slate-700 text-slate-400' : 'bg-orange-500 text-white shadow-lg'}`}>
+                    <LayoutGrid size={20} className={!table ? "opacity-50" : ""} />
+                </div>
+            </button>
 
             {table && (
                 <button 
@@ -526,7 +546,7 @@ const WaiterPad: React.FC = () => {
                             key={cat}
                             onClick={() => setSelectedCategory(cat)}
                             className={`
-                                flex flex-row items-center justify-center gap-2 py-2.5 px-4 rounded-lg transition-all duration-300 snap-center shrink-0 border
+                                flex flex-row items-center justify-center gap-2 py-3 px-5 rounded-lg transition-all duration-300 snap-center shrink-0 border
                                 ${isActive 
                                     ? 'bg-orange-500 border-orange-400 text-white shadow-lg shadow-orange-500/25 font-bold' 
                                     : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200'}
@@ -763,6 +783,59 @@ const WaiterPad: React.FC = () => {
              </div>
         </div>
       </div>
+
+      {/* --- TABLE MANAGER MODAL --- */}
+      {tableManagerOpen && (
+          <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+              <div className="bg-slate-900 w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-slate-700 flex flex-col max-h-[85vh]">
+                  <div className="flex justify-between items-center mb-6">
+                      <div>
+                          <h2 className="text-2xl font-bold text-white">Mappa Tavoli</h2>
+                          <p className="text-slate-400 text-sm">Seleziona il tavolo corrente</p>
+                      </div>
+                      <button onClick={() => setTableManagerOpen(false)} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white">
+                          <X size={24} />
+                      </button>
+                  </div>
+                  
+                  <div className="grid grid-cols-3 gap-4 overflow-y-auto p-2">
+                      {RESTAURANT_TABLES.map(tId => {
+                          const info = getTableStatusInfo(tId);
+                          const isSelected = table === tId;
+                          
+                          // Determine Styling
+                          let bgClass = 'bg-slate-800 border-slate-700 text-slate-400';
+                          if (isSelected) bgClass = 'bg-slate-800 border-orange-500 text-orange-500 ring-2 ring-orange-500/30 shadow-[0_0_15px_rgba(249,115,22,0.4)]';
+                          else if (info.status === 'ready') bgClass = 'bg-green-900/30 border-green-500 text-green-400 animate-pulse';
+                          else if (info.status === 'busy') bgClass = 'bg-slate-700 border-orange-500/50 text-orange-200';
+
+                          return (
+                              <button
+                                key={tId}
+                                onClick={() => {
+                                    setTable(tId);
+                                    setTableManagerOpen(false);
+                                }}
+                                className={`aspect-square rounded-2xl border-2 flex flex-col items-center justify-center relative transition-all active:scale-95 ${bgClass}`}
+                              >
+                                  <span className="text-2xl font-black">{tId}</span>
+                                  <span className="text-[10px] uppercase font-bold mt-1">
+                                      {info.status === 'ready' ? 'PRONTO' : info.status === 'busy' ? 'OCCUPATO' : 'LIBERO'}
+                                  </span>
+                                  {info.count > 0 && (
+                                      <div className={`absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-md
+                                          ${info.status === 'ready' ? 'bg-green-600' : 'bg-orange-500'}
+                                      `}>
+                                          {info.count}
+                                      </div>
+                                  )}
+                              </button>
+                          );
+                      })}
+                  </div>
+              </div>
+          </div>
+      )}
 
       {/* --- HISTORY MODAL --- */}
       {historyOpen && (
