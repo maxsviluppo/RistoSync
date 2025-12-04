@@ -40,21 +40,44 @@ const playWaiterNotification = () => {
         if (!AudioContext) return;
         const ctx = new AudioContext();
         
-        // High pitched double beep for "Attention/Ready"
-        const osc = ctx.createOscillator();
+        const now = ctx.currentTime;
         const gain = ctx.createGain();
-        osc.connect(gain);
         gain.connect(ctx.destination);
         
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, ctx.currentTime); // A5
-        osc.frequency.setValueAtTime(1760, ctx.currentTime + 0.1); // A6
+        // Sequence: High Ding - Low Dong - High Ding (Louder and Clearer - Tri-tone)
+        // Note 1
+        const osc1 = ctx.createOscillator();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(880, now); // A5
+        osc1.frequency.exponentialRampToValueAtTime(440, now + 0.15);
+        osc1.connect(gain);
         
-        gain.gain.setValueAtTime(0.1, ctx.currentTime);
-        gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3);
+        // Note 2
+        const osc2 = ctx.createOscillator();
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(554, now + 0.2); // C#5
+        osc2.frequency.exponentialRampToValueAtTime(277, now + 0.4);
+        osc2.connect(gain);
+
+        // Note 3 (Attention grabber)
+        const osc3 = ctx.createOscillator();
+        osc3.type = 'square';
+        osc3.frequency.setValueAtTime(880, now + 0.45); 
+        osc3.frequency.setValueAtTime(1108, now + 0.55);
+        osc3.connect(gain);
+
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.linearRampToValueAtTime(0, now + 0.8);
+
+        osc1.start(now);
+        osc1.stop(now + 0.2);
         
-        osc.start();
-        osc.stop(ctx.currentTime + 0.3);
+        osc2.start(now + 0.2);
+        osc2.stop(now + 0.45);
+
+        osc3.start(now + 0.45);
+        osc3.stop(now + 0.8);
+
     } catch (e) {
         console.error("Audio error", e);
     }
@@ -264,8 +287,11 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   // Notification State
   const [totalReadyItems, setTotalReadyItems] = useState(0);
   const [notificationToast, setNotificationToast] = useState<string | null>(null);
-  // We now track the NUMBER of completed items per order to detect single item completions
-  const prevItemCompletionRef = useRef<Record<string, number>>({});
+  
+  // We track the status of EVERY ITEM unique by OrderID and Index
+  // Format: "orderId-itemIndex" -> boolean (completed or not)
+  const prevItemStatusRef = useRef<Record<string, boolean>>({});
+  const isFirstLoad = useRef(true);
 
   // Dynamic Table Count
   const [totalTables, setTotalTables] = useState(12);
@@ -282,41 +308,53 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       if (name) setWaiterName(name);
 
       // --- NOTIFICATION LOGIC (Granular Item Level) ---
-      // We check for any order that has items marked 'completed' that were not completed before
-      const currentItemCompletion: Record<string, number> = {};
-      let newItemReadyFound = false;
-      let tableOfNewItem = '';
+      const currentItemStatus: Record<string, boolean> = {};
+      let newlyReadyItems: string[] = [];
       let totalReadyCount = 0;
 
       allOrders.forEach(order => {
           // Filter out orders that are already fully delivered/closed
           if (order.status === OrderStatus.DELIVERED) return;
 
-          // Check ownership if waiter name is set
+          // Check ownership if waiter name is set. 
+          // Note: We notify the waiter who OWNS the order.
           if (name && order.waiterName && order.waiterName !== name) return;
 
-          // Count how many items in this order are completed
-          const completedCount = order.items.filter(i => i.completed).length;
-          currentItemCompletion[order.id] = completedCount;
-          totalReadyCount += completedCount;
+          order.items.forEach((item, idx) => {
+              const uniqueKey = `${order.id}-${idx}`;
+              // Store current status
+              currentItemStatus[uniqueKey] = item.completed || false;
+              
+              if (item.completed) totalReadyCount++;
 
-          // Compare with previous state
-          const prevCount = prevItemCompletionRef.current[order.id] || 0;
-          if (completedCount > prevCount) {
-              newItemReadyFound = true;
-              tableOfNewItem = order.tableNumber;
-          }
+              // Compare with previous state
+              // Only trigger if it WAS false/undefined and NOW is true
+              if (!isFirstLoad.current) {
+                  const wasCompleted = prevItemStatusRef.current[uniqueKey] || false;
+                  if (!wasCompleted && item.completed) {
+                      newlyReadyItems.push(`${item.menuItem.name} (Tav. ${order.tableNumber})`);
+                  }
+              }
+          });
       });
       
-      if (newItemReadyFound) {
+      // If we found specific new items ready, notify!
+      if (newlyReadyItems.length > 0) {
           playWaiterNotification();
-          setNotificationToast(`RITIRO CUCINA: Tavolo ${tableOfNewItem || '?'}`);
+          // Show the first item name + "and X others" if multiple
+          const msg = newlyReadyItems.length === 1 
+            ? `RITIRO: ${newlyReadyItems[0]}`
+            : `RITIRO: ${newlyReadyItems.length} PIATTI PRONTI`;
+          
+          setNotificationToast(msg);
           setTimeout(() => setNotificationToast(null), 8000);
       }
       
-      prevItemCompletionRef.current = currentItemCompletion;
+      prevItemStatusRef.current = currentItemStatus;
+      isFirstLoad.current = false;
       setTotalReadyItems(totalReadyCount);
 
+      // Update table-specific orders if a table is selected
       if (table) {
           const tableOrders = allOrders
             .filter(o => o.tableNumber === table)
@@ -395,21 +433,22 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const handleSelectTable = (tId: string) => {
       setTable(tId);
       
-      // Check for active PENDING order for editing
-      const pendingOrder = allRestaurantOrders.find(o => o.tableNumber === tId && o.status === OrderStatus.PENDING);
+      // Determine what to show in the Cart based on existing orders
+      // Look for active orders for this table
+      const activeOrder = allRestaurantOrders.find(o => o.tableNumber === tId && o.status !== OrderStatus.DELIVERED);
       
-      if (pendingOrder) {
+      if (activeOrder && activeOrder.status === OrderStatus.PENDING) {
           // RECOVERY MODE: Load existing items into cart for editing
-          setCart(pendingOrder.items);
-          setEditingOrderId(pendingOrder.id);
+          setCart(activeOrder.items);
+          setEditingOrderId(activeOrder.id);
       } else {
           // INTEGRATION MODE: Clean cart for new additions
           setCart([]);
           setEditingOrderId(null);
       }
       
-      // Note: We leave the Table Manager OPEN to allow user to choose action (Go to Order / Free Table)
-      // This is the specific fix requested.
+      // Open Manager Modal to let user choose action
+      setTableManagerOpen(true);
   };
 
   // Action: Go to Order (Close modal, start ordering)
