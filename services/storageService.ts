@@ -1,5 +1,6 @@
 import { Order, OrderStatus, OrderItem, MenuItem } from '../types';
 import { MENU_ITEMS as DEFAULT_MENU_ITEMS } from '../constants';
+import { supabase } from './supabase';
 
 const STORAGE_KEY = 'ristosync_orders';
 const TABLES_COUNT_KEY = 'ristosync_table_count';
@@ -7,102 +8,201 @@ const WAITER_KEY = 'ristosync_waiter_name';
 const MENU_KEY = 'ristosync_menu_items';
 const SETTINGS_NOTIFICATIONS_KEY = 'ristosync_settings_notifications';
 
+// --- SYNC ENGINE STATE ---
+let isSyncing = false;
+let currentUserId: string | null = null;
+
+// Initialize Realtime Subscription
+export const initSupabaseSync = async () => {
+    if (!supabase) return;
+
+    // Get Current User
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+        currentUserId = session.user.id;
+        await fetchFromCloud(); // Initial fetch
+
+        // Subscribe to changes
+        supabase
+            .channel('public:orders')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `user_id=eq.${currentUserId}` }, (payload) => {
+                console.log('Realtime Order Update:', payload);
+                fetchFromCloud(); // Refresh data on change
+            })
+            .subscribe();
+            
+        supabase
+            .channel('public:menu')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_items', filter: `user_id=eq.${currentUserId}` }, () => {
+                fetchFromCloudMenu();
+            })
+            .subscribe();
+    }
+};
+
+const fetchFromCloud = async () => {
+    if (!supabase || !currentUserId) return;
+    const { data, error } = await supabase.from('orders').select('*');
+    if (error) {
+        console.error('Error fetching orders:', error);
+        return;
+    }
+    
+    // Convert DB format to App format if necessary (e.g. handling JSONB items)
+    const appOrders: Order[] = data.map((row: any) => ({
+        id: row.id,
+        tableNumber: row.table_number,
+        status: row.status as OrderStatus,
+        timestamp: parseInt(row.timestamp) || new Date(row.created_at).getTime(),
+        items: row.items,
+        waiterName: row.waiter_name
+    }));
+
+    // Update Local Cache
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(appOrders));
+    window.dispatchEvent(new Event('local-storage-update'));
+};
+
+const fetchFromCloudMenu = async () => {
+    if (!supabase || !currentUserId) return;
+    const { data, error } = await supabase.from('menu_items').select('*');
+    if (!error && data) {
+         localStorage.setItem(MENU_KEY, JSON.stringify(data));
+         window.dispatchEvent(new Event('local-menu-update'));
+    }
+};
+
 // --- ORDER MANAGEMENT ---
 export const getOrders = (): Order[] => {
   const data = localStorage.getItem(STORAGE_KEY);
   return data ? JSON.parse(data) : [];
 };
 
+const saveLocallyAndNotify = (orders: Order[]) => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
+    window.dispatchEvent(new Event('local-storage-update'));
+};
+
+// HELPER: Sync individual order to Cloud
+const syncOrderToCloud = async (order: Order, isDelete = false) => {
+    if (!supabase || !currentUserId) return;
+    
+    if (isDelete) {
+        await supabase.from('orders').delete().eq('id', order.id);
+    } else {
+        const payload = {
+            id: order.id,
+            user_id: currentUserId,
+            table_number: order.tableNumber,
+            status: order.status,
+            items: order.items,
+            timestamp: order.timestamp,
+            waiter_name: order.waiterName
+        };
+        const { error } = await supabase.from('orders').upsert(payload);
+        if (error) console.error("Cloud Sync Error", error);
+    }
+};
+
 export const saveOrders = (orders: Order[]) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
-  // Dispatch a custom event for the current tab to update
-  window.dispatchEvent(new Event('local-storage-update'));
+  // Save locally first (Optimistic UI)
+  saveLocallyAndNotify(orders);
 };
 
 export const addOrder = (order: Order) => {
   const orders = getOrders();
-  // Ensure items have completed: false initially
   const cleanOrder = {
       ...order,
       items: order.items.map(i => ({ ...i, completed: false }))
   };
   const newOrders = [...orders, cleanOrder];
-  saveOrders(newOrders);
+  
+  saveLocallyAndNotify(newOrders);
+  syncOrderToCloud(cleanOrder); // Trigger Cloud Sync
 };
 
 export const updateOrderStatus = (orderId: string, status: OrderStatus) => {
   const orders = getOrders();
-  const newOrders = orders.map(o => o.id === orderId ? { ...o, status } : o);
-  saveOrders(newOrders);
+  const order = orders.find(o => o.id === orderId);
+  if (!order) return;
+
+  const updatedOrder = { ...order, status };
+  const newOrders = orders.map(o => o.id === orderId ? updatedOrder : o);
+  
+  saveLocallyAndNotify(newOrders);
+  syncOrderToCloud(updatedOrder);
 };
 
 export const updateOrderItems = (orderId: string, newItems: OrderItem[]) => {
     const orders = getOrders();
-    const newOrders = orders.map(o => {
-        if (o.id === orderId) {
-            return { ...o, items: newItems.map(i => ({...i, completed: false})), timestamp: Date.now() }; 
-        }
-        return o;
-    });
-    saveOrders(newOrders);
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    const updatedOrder = { ...order, items: newItems.map(i => ({...i, completed: false})), timestamp: Date.now() };
+    const newOrders = orders.map(o => o.id === orderId ? updatedOrder : o);
+
+    saveLocallyAndNotify(newOrders);
+    syncOrderToCloud(updatedOrder);
 };
 
 export const toggleOrderItemCompletion = (orderId: string, itemIndex: number) => {
     const orders = getOrders();
-    const newOrders = orders.map(o => {
-        if (o.id === orderId) {
-            const newItems = [...o.items];
-            // Toggle the specific item
-            if (newItems[itemIndex]) {
-                newItems[itemIndex] = { 
-                    ...newItems[itemIndex], 
-                    completed: !newItems[itemIndex].completed 
-                };
-            }
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
 
-            // --- SMART STATUS LOGIC ---
-            const allCompleted = newItems.every(i => i.completed);
-            const anyCompleted = newItems.some(i => i.completed);
-            
-            let newStatus = o.status;
-            
-            // If currently Delivered, don't change automatically
-            if (o.status !== OrderStatus.DELIVERED) {
-                if (allCompleted) {
-                    newStatus = OrderStatus.READY;
-                } else if (anyCompleted) {
-                    newStatus = OrderStatus.COOKING;
-                } else if (!anyCompleted && (o.status === OrderStatus.COOKING || o.status === OrderStatus.READY)) {
-                    // If everything unchecked, revert to Pending
-                    newStatus = OrderStatus.PENDING;
-                }
-            }
+    const newItems = [...order.items];
+    if (newItems[itemIndex]) {
+        newItems[itemIndex] = { 
+            ...newItems[itemIndex], 
+            completed: !newItems[itemIndex].completed 
+        };
+    }
 
-            return { ...o, items: newItems, status: newStatus };
+    // Smart Status Logic
+    const allCompleted = newItems.every(i => i.completed);
+    const anyCompleted = newItems.some(i => i.completed);
+    
+    let newStatus = order.status;
+    if (order.status !== OrderStatus.DELIVERED) {
+        if (allCompleted) newStatus = OrderStatus.READY;
+        else if (anyCompleted) newStatus = OrderStatus.COOKING;
+        else if (!anyCompleted && (order.status === OrderStatus.COOKING || order.status === OrderStatus.READY)) {
+            newStatus = OrderStatus.PENDING;
         }
-        return o;
-    });
-    saveOrders(newOrders);
+    }
+
+    const updatedOrder = { ...order, items: newItems, status: newStatus };
+    const newOrders = orders.map(o => o.id === orderId ? updatedOrder : o);
+    
+    saveLocallyAndNotify(newOrders);
+    syncOrderToCloud(updatedOrder);
 };
 
-export const clearHistory = () => {
+export const clearHistory = async () => {
   const orders = getOrders();
   const activeOrders = orders.filter(o => o.status !== OrderStatus.DELIVERED);
-  saveOrders(activeOrders);
+  saveLocallyAndNotify(activeOrders);
+  
+  if (supabase && currentUserId) {
+      // In cloud, we delete delivered orders
+      await supabase.from('orders').delete().eq('user_id', currentUserId).eq('status', OrderStatus.DELIVERED);
+  }
 };
 
-// --- NEW: FREE TABLE LOGIC ---
-export const freeTable = (tableNumber: string) => {
+export const freeTable = async (tableNumber: string) => {
     const orders = getOrders();
-    // Keep orders that represent OTHER tables. 
-    // Effectively deletes/archives orders for the specific table to free it up.
+    // Identify orders to remove (archiving)
+    const ordersToRemove = orders.filter(o => o.tableNumber === tableNumber);
     const newOrders = orders.filter(o => o.tableNumber !== tableNumber);
-    saveOrders(newOrders);
-};
+    
+    saveLocallyAndNotify(newOrders);
 
-export const nukeAllData = () => {
-    localStorage.removeItem(STORAGE_KEY);
-    window.dispatchEvent(new Event('local-storage-update'));
+    if (supabase && currentUserId) {
+        // Delete from cloud
+        for (const o of ordersToRemove) {
+            await supabase.from('orders').delete().eq('id', o.id);
+        }
+    }
 };
 
 // --- DYNAMIC TABLE COUNT ---
@@ -129,15 +229,32 @@ export const logoutWaiter = () => {
     localStorage.removeItem(WAITER_KEY);
 };
 
-// --- MENU MANAGEMENT (NEW) ---
+// --- MENU MANAGEMENT (CLOUD) ---
 export const getMenuItems = (): MenuItem[] => {
     const data = localStorage.getItem(MENU_KEY);
     if (data) {
         return JSON.parse(data);
     } else {
-        // Initialize with defaults if empty
         localStorage.setItem(MENU_KEY, JSON.stringify(DEFAULT_MENU_ITEMS));
         return DEFAULT_MENU_ITEMS;
+    }
+};
+
+const syncMenuToCloud = async (item: MenuItem, isDelete = false) => {
+    if (!supabase || !currentUserId) return;
+    if (isDelete) {
+        await supabase.from('menu_items').delete().eq('id', item.id);
+    } else {
+         const payload = {
+            id: item.id,
+            user_id: currentUserId,
+            name: item.name,
+            price: item.price,
+            category: item.category,
+            description: item.description,
+            allergens: item.allergens
+        };
+        await supabase.from('menu_items').upsert(payload);
     }
 };
 
@@ -150,18 +267,22 @@ export const addMenuItem = (item: MenuItem) => {
     const items = getMenuItems();
     items.push(item);
     saveMenuItems(items);
+    syncMenuToCloud(item);
 };
 
 export const updateMenuItem = (updatedItem: MenuItem) => {
     const items = getMenuItems();
     const newItems = items.map(i => i.id === updatedItem.id ? updatedItem : i);
     saveMenuItems(newItems);
+    syncMenuToCloud(updatedItem);
 };
 
 export const deleteMenuItem = (id: string) => {
     const items = getMenuItems();
+    const itemToDelete = items.find(i => i.id === id);
     const newItems = items.filter(i => i.id !== id);
     saveMenuItems(newItems);
+    if (itemToDelete) syncMenuToCloud(itemToDelete, true);
 };
 
 // --- SETTINGS (NOTIFICATIONS) ---

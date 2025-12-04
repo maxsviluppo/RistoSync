@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import KitchenDisplay from './components/KitchenDisplay';
 import WaiterPad from './components/WaiterPad';
-import { ChefHat, Smartphone, User, Settings, Database, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Lock, ShieldAlert, CloudOff, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info } from 'lucide-react';
-import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings } from './services/storageService';
+import AuthScreen from './components/AuthScreen';
+import SuperAdminDashboard from './components/SuperAdminDashboard';
+import { ChefHat, Smartphone, User, Settings, Database, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Lock, ShieldAlert, CloudOff, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut } from 'lucide-react';
+import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync } from './services/storageService';
+import { supabase, signOut, isSupabaseConfigured } from './services/supabase';
 import { MenuItem, Category } from './types';
 
 // Ordine visualizzazione categorie nell'admin
@@ -14,14 +17,13 @@ const ADMIN_CATEGORY_ORDER = [
     Category.BEVANDE
 ];
 
-// Configurazione Allergeni
 const ALLERGENS_CONFIG = [
     { id: 'Glutine', icon: Wheat, label: 'Glutine' },
     { id: 'Latticini', icon: Milk, label: 'Latticini' },
     { id: 'Uova', icon: Egg, label: 'Uova' },
-    { id: 'Frutta a guscio', icon: Nut, label: 'Noci' }, // Using Nut as generic for nuts
+    { id: 'Frutta a guscio', icon: Nut, label: 'Noci' }, 
     { id: 'Pesce', icon: Fish, label: 'Pesce' },
-    { id: 'Soia', icon: Bean, label: 'Soia' }, // Using Bean for Soy
+    { id: 'Soia', icon: Bean, label: 'Soia' }, 
     { id: 'Piccante', icon: Flame, label: 'Piccante' },
     { id: 'Vegano', icon: Leaf, label: 'Vegano' },
 ];
@@ -32,6 +34,9 @@ const capitalize = (str: string) => {
 };
 
 const App: React.FC = () => {
+  const [session, setSession] = useState<any>(null);
+  const [loadingSession, setLoadingSession] = useState(true);
+  
   const [role, setRole] = useState<'kitchen' | 'waiter' | null>(null);
   const [showLogin, setShowLogin] = useState(false);
   const [waiterNameInput, setWaiterNameInput] = useState('');
@@ -50,6 +55,28 @@ const App: React.FC = () => {
 
   // Settings State
   const [notifSettings, setNotifSettings] = useState<NotificationSettings>({ kitchenSound: true, waiterSound: true, pushEnabled: false });
+
+  // CHECK AUTH SESSION ON LOAD
+  useEffect(() => {
+      if (supabase) {
+          supabase.auth.getSession().then(({ data: { session } }) => {
+              setSession(session);
+              if (session) initSupabaseSync();
+              setLoadingSession(false);
+          });
+
+          const {
+              data: { subscription },
+          } = supabase.auth.onAuthStateChange((_event, session) => {
+              setSession(session);
+              if (session) initSupabaseSync();
+          });
+
+          return () => subscription.unsubscribe();
+      } else {
+          setLoadingSession(false);
+      }
+  }, []);
 
   useEffect(() => {
       if (showAdmin) {
@@ -76,7 +103,7 @@ const App: React.FC = () => {
       }
   };
 
-  const handleLogout = () => {
+  const handleExitApp = () => {
       setRole(null);
   };
 
@@ -126,19 +153,53 @@ const App: React.FC = () => {
       saveNotificationSettings(newSettings);
   };
 
+  if (loadingSession) {
+      return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-orange-500 font-bold">Caricamento...</div>;
+  }
+
+  // 1. SHOW AUTH SCREEN IF NOT LOGGED IN (SaaS Mode)
+  if (!session && isSupabaseConfigured()) {
+      return <AuthScreen />;
+  }
+  
+  // 2. SHOW SUPER ADMIN DASHBOARD (Example Logic)
+  if (session?.user?.email === 'maxsviluppo@gmail.com') { // Replace with your admin email
+      return <SuperAdminDashboard />;
+  }
+
+  // 3. SHOW MAIN APP (Restaurant Dashboard)
   if (!role) {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans">
         
-        {/* Admin Toggle */}
-        <button 
-            onClick={() => setShowAdmin(true)}
-            className="absolute top-6 right-6 p-3 rounded-full bg-slate-800 text-slate-500 hover:text-white hover:bg-slate-700 transition-colors z-30"
-        >
-            <Settings size={24} />
-        </button>
+        {/* Header Bar */}
+        <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-30">
+            <div className="flex items-center gap-2">
+                <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
+                    <ChefHat size={18} className="text-white"/>
+                </div>
+                <span className="text-white font-bold">{session?.user?.user_metadata?.restaurant_name || 'Ristorante'}</span>
+            </div>
+            
+            <div className="flex gap-4">
+                <button 
+                    onClick={() => setShowAdmin(true)}
+                    className="p-3 rounded-full bg-slate-800 text-slate-500 hover:text-white hover:bg-slate-700 transition-colors"
+                    title="Impostazioni"
+                >
+                    <Settings size={24} />
+                </button>
+                <button 
+                    onClick={signOut}
+                    className="p-3 rounded-full bg-slate-800 text-red-500 hover:text-white hover:bg-red-600 transition-colors"
+                    title="Esci"
+                >
+                    <LogOut size={24} />
+                </button>
+            </div>
+        </div>
 
-        {/* Login Modal */}
+        {/* Login Modal (Waiter) */}
         {showLogin && (
             <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
                 <form onSubmit={handleLoginSubmit} className="bg-slate-800 border border-slate-700 p-8 rounded-3xl w-full max-w-sm shadow-2xl animate-slide-up">
@@ -179,13 +240,13 @@ const App: React.FC = () => {
             </div>
         )}
 
-        {/* ADMIN MODAL */}
+        {/* ADMIN SETTINGS MODAL */}
         {showAdmin && (
             <div className="absolute inset-0 z-50 bg-slate-950 flex flex-col animate-fade-in overflow-hidden">
                 <div className="flex justify-between items-center p-6 border-b border-slate-800 bg-slate-900">
                     <div className="flex items-center gap-3">
                         <div className="bg-orange-500 p-2 rounded-lg"><Settings className="text-white"/></div>
-                        <h2 className="text-2xl font-bold text-white">Configurazione Sistema</h2>
+                        <h2 className="text-2xl font-bold text-white">Configurazione Ristorante</h2>
                     </div>
                     <button onClick={() => setShowAdmin(false)} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white"><X /></button>
                 </div>
@@ -193,16 +254,12 @@ const App: React.FC = () => {
                 <div className="flex flex-1 overflow-hidden">
                     {/* Sidebar */}
                     <div className="w-64 bg-slate-900 border-r border-slate-800 p-4 space-y-2 hidden md:block">
-                         <button onClick={() => setAdminTab('db')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'db' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
-                             <Database size={20}/> Database
-                         </button>
                          <button onClick={() => setAdminTab('menu')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'menu' ? 'bg-orange-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
                              <Utensils size={20}/> Gestione Menu
                          </button>
                          <button onClick={() => setAdminTab('notif')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'notif' ? 'bg-green-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
                              <Bell size={20}/> Notifiche
                          </button>
-                         <div className="h-px bg-slate-800 my-2"></div>
                          <button onClick={() => setAdminTab('info')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'info' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
                              <Info size={20}/> Legenda
                          </button>
@@ -210,75 +267,17 @@ const App: React.FC = () => {
 
                     {/* Content */}
                     <div className="flex-1 overflow-y-auto p-6 bg-slate-950 relative">
-                        
                         {/* Mobile Tabs */}
                         <div className="flex md:hidden gap-2 mb-6 overflow-x-auto pb-2 no-scrollbar">
-                             <button onClick={() => setAdminTab('db')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'db' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Database</button>
                              <button onClick={() => setAdminTab('menu')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'menu' ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Menu</button>
                              <button onClick={() => setAdminTab('notif')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'notif' ? 'bg-green-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Notifiche</button>
                              <button onClick={() => setAdminTab('info')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'info' ? 'bg-slate-700 text-white' : 'bg-slate-800 text-slate-400'}`}>Info</button>
                         </div>
 
-                        {/* DB TAB (Locked/Technical Area) */}
-                        {adminTab === 'db' && (
-                            <div className="max-w-2xl mx-auto mt-10">
-                                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 relative overflow-hidden">
-                                    <div className="absolute top-0 right-0 p-4 opacity-10">
-                                        <Lock size={120} />
-                                    </div>
-                                    
-                                    <div className="flex items-center gap-3 mb-6">
-                                        <div className="p-3 bg-red-500/10 rounded-xl border border-red-500/20 text-red-500">
-                                            <ShieldAlert size={32} />
-                                        </div>
-                                        <div>
-                                            <h3 className="text-xl font-bold text-white">Area Riservata Tecnico</h3>
-                                            <p className="text-slate-400 text-xs uppercase tracking-widest">Configurazione Cloud & API</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-6 opacity-60 pointer-events-none select-none filter blur-[0.5px]">
-                                        <div>
-                                            <label className="flex items-center gap-2 text-slate-500 text-xs font-bold uppercase mb-2">
-                                                <CloudOff size={14}/> Endpoint Database (Protetto)
-                                            </label>
-                                            <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-500 font-mono text-sm">
-                                                <span className="flex-1">https://api.ristosync.cloud/v1/sync</span>
-                                                <Lock size={14} />
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label className="flex items-center gap-2 text-slate-500 text-xs font-bold uppercase mb-2">
-                                                Master API Key
-                                            </label>
-                                            <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-500 font-mono text-sm">
-                                                <span className="flex-1">••••••••••••••••••••••••••••••</span>
-                                                <Lock size={14} />
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="mt-8 p-4 bg-slate-950 rounded-xl border border-slate-800 flex items-center gap-4">
-                                        <Lock className="text-slate-600" size={20}/>
-                                        <p className="text-xs text-slate-500 leading-relaxed">
-                                            Questa sezione è gestita centralmente dall'amministratore di sistema. 
-                                            Le modifiche locali sono disabilitate per garantire l'integrità dei dati multi-tenant.
-                                            Contattare il supporto tecnico per variazioni.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
                         {/* INFO / LEGENDA TAB */}
                         {adminTab === 'info' && (
                             <div className="max-w-2xl">
                                 <h3 className="text-xl font-bold text-white mb-6">Legenda Icone</h3>
-                                <p className="text-slate-400 mb-6">
-                                    Guida alle icone utilizzate nel sistema per indicare allergeni e caratteristiche dei piatti.
-                                    Queste icone appaiono sull'app del cameriere quando configurate nel menu.
-                                </p>
-                                
                                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                                     {ALLERGENS_CONFIG.map(allergen => (
                                         <div key={allergen.id} className="bg-slate-900 border border-slate-800 rounded-xl p-6 flex flex-col items-center gap-3 hover:border-slate-600 transition-colors">
@@ -392,7 +391,7 @@ const App: React.FC = () => {
                                         </div>
 
                                         <div className="mb-8">
-                                            <label className="block text-slate-500 text-xs font-bold uppercase mb-2">Descrizione (per AI e Clienti)</label>
+                                            <label className="block text-slate-500 text-xs font-bold uppercase mb-2">Descrizione</label>
                                             <textarea value={editingItem.description || ''} onChange={e => setEditingItem({...editingItem, description: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-white outline-none focus:border-orange-500 h-32 resize-none transition-colors" placeholder="Ingredienti principali, note speciali..."></textarea>
                                         </div>
                                         <div className="flex gap-4">
@@ -533,7 +532,7 @@ const App: React.FC = () => {
         </div>
 
         <div className="mt-16 text-slate-500 text-sm max-w-md text-center z-10">
-            <p>Per testare la sincronizzazione, apri questa pagina in due schede diverse: una come Cucina e una come Cameriere.</p>
+            <p>Sei loggato come <b>{session?.user?.email}</b>.</p>
         </div>
       </div>
     );
@@ -541,7 +540,7 @@ const App: React.FC = () => {
 
   return (
     <>
-        {role === 'kitchen' ? <KitchenDisplay onExit={handleLogout} /> : <WaiterPad onExit={handleLogout} />}
+        {role === 'kitchen' ? <KitchenDisplay onExit={handleExitApp} /> : <WaiterPad onExit={handleExitApp} />}
     </>
   );
 };
