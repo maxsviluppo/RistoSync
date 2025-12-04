@@ -11,7 +11,7 @@
         font-family: 'Inter', sans-serif;
         background-color: #f3f4f6;
       }
-      /* Hide scrollbar for clean UI */
+      /* Custom Scrollbar Styling (visible where needed) */
       ::-webkit-scrollbar {
         width: 6px;
         height: 6px;
@@ -22,6 +22,15 @@
       ::-webkit-scrollbar-thumb {
         background: #cbd5e1; 
         border-radius: 3px;
+      }
+
+      /* Utility to hide scrollbar but allow scrolling (Touch friendly) */
+      .no-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+      .no-scrollbar {
+        -ms-overflow-style: none;  /* IE and Edge */
+        scrollbar-width: none;  /* Firefox */
       }
     </style>
   <script type="importmap">
