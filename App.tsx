@@ -1,9 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import KitchenDisplay from './components/KitchenDisplay';
 import WaiterPad from './components/WaiterPad';
-import { ChefHat, Smartphone, User, Settings, Database, Bell, Utensils, X, Save, Plus, Trash2, Edit2 } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Database, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Lock, ShieldAlert, CloudOff } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings } from './services/storageService';
 import { MenuItem, Category } from './types';
+
+// Ordine visualizzazione categorie nell'admin
+const ADMIN_CATEGORY_ORDER = [
+    Category.ANTIPASTI,
+    Category.PRIMI,
+    Category.SECONDI,
+    Category.DOLCI,
+    Category.BEVANDE
+];
 
 const App: React.FC = () => {
   const [role, setRole] = useState<'kitchen' | 'waiter' | null>(null);
@@ -18,6 +27,9 @@ const App: React.FC = () => {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [isEditingItem, setIsEditingItem] = useState(false);
   const [editingItem, setEditingItem] = useState<Partial<MenuItem>>({});
+  
+  // Delete Confirmation State
+  const [itemToDelete, setItemToDelete] = useState<MenuItem | null>(null);
 
   // Settings State
   const [notifSettings, setNotifSettings] = useState<NotificationSettings>({ kitchenSound: true, waiterSound: true, pushEnabled: false });
@@ -73,10 +85,11 @@ const App: React.FC = () => {
       }
   };
 
-  const handleDeleteMenu = (id: string) => {
-      if (confirm('Eliminare questo piatto?')) {
-          deleteMenuItem(id);
+  const confirmDeleteMenu = () => {
+      if (itemToDelete) {
+          deleteMenuItem(itemToDelete.id);
           setMenuItems(getMenuItems());
+          setItemToDelete(null);
       }
   };
 
@@ -165,32 +178,62 @@ const App: React.FC = () => {
                     </div>
 
                     {/* Content */}
-                    <div className="flex-1 overflow-y-auto p-6 bg-slate-950">
+                    <div className="flex-1 overflow-y-auto p-6 bg-slate-950 relative">
                         
                         {/* Mobile Tabs */}
-                        <div className="flex md:hidden gap-2 mb-6 overflow-x-auto pb-2">
+                        <div className="flex md:hidden gap-2 mb-6 overflow-x-auto pb-2 no-scrollbar">
                              <button onClick={() => setAdminTab('db')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'db' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Database</button>
                              <button onClick={() => setAdminTab('menu')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'menu' ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Menu</button>
                              <button onClick={() => setAdminTab('notif')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'notif' ? 'bg-green-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Notifiche</button>
                         </div>
 
-                        {/* DB TAB */}
+                        {/* DB TAB (Locked/Technical Area) */}
                         {adminTab === 'db' && (
-                            <div className="max-w-2xl">
-                                <h3 className="text-xl font-bold text-white mb-4">Connessione Cloud (Disabilitata)</h3>
-                                <div className="space-y-4 opacity-50 pointer-events-none">
-                                    <div>
-                                        <label className="block text-slate-500 text-sm font-bold mb-1">Database URL</label>
-                                        <input type="text" value="https://api.ristosync.cloud/v1/db" readOnly className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-slate-400" />
+                            <div className="max-w-2xl mx-auto mt-10">
+                                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-4 opacity-10">
+                                        <Lock size={120} />
                                     </div>
-                                    <div>
-                                        <label className="block text-slate-500 text-sm font-bold mb-1">API Key</label>
-                                        <input type="password" value="************************" readOnly className="w-full bg-slate-900 border border-slate-700 rounded-lg p-3 text-slate-400" />
+                                    
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <div className="p-3 bg-red-500/10 rounded-xl border border-red-500/20 text-red-500">
+                                            <ShieldAlert size={32} />
+                                        </div>
+                                        <div>
+                                            <h3 className="text-xl font-bold text-white">Area Riservata Tecnico</h3>
+                                            <p className="text-slate-400 text-xs uppercase tracking-widest">Configurazione Cloud & API</p>
+                                        </div>
                                     </div>
-                                    <button className="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold">Connetti</button>
-                                </div>
-                                <div className="mt-6 p-4 bg-yellow-900/20 border border-yellow-700/50 rounded-xl text-yellow-500 text-sm">
-                                    La sincronizzazione cloud è attualmente disabilitata. I dati vengono salvati localmente su questo dispositivo.
+
+                                    <div className="space-y-6 opacity-60 pointer-events-none select-none filter blur-[0.5px]">
+                                        <div>
+                                            <label className="flex items-center gap-2 text-slate-500 text-xs font-bold uppercase mb-2">
+                                                <CloudOff size={14}/> Endpoint Database (Protetto)
+                                            </label>
+                                            <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-500 font-mono text-sm">
+                                                <span className="flex-1">https://api.ristosync.cloud/v1/sync</span>
+                                                <Lock size={14} />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="flex items-center gap-2 text-slate-500 text-xs font-bold uppercase mb-2">
+                                                Master API Key
+                                            </label>
+                                            <div className="flex items-center bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-500 font-mono text-sm">
+                                                <span className="flex-1">••••••••••••••••••••••••••••••</span>
+                                                <Lock size={14} />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-8 p-4 bg-slate-950 rounded-xl border border-slate-800 flex items-center gap-4">
+                                        <Lock className="text-slate-600" size={20}/>
+                                        <p className="text-xs text-slate-500 leading-relaxed">
+                                            Questa sezione è gestita centralmente dall'amministratore di sistema. 
+                                            Le modifiche locali sono disabilitate per garantire l'integrità dei dati multi-tenant.
+                                            Contattare il supporto tecnico per variazioni.
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -218,75 +261,109 @@ const App: React.FC = () => {
                                             <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${notifSettings.waiterSound ? 'left-7' : 'left-1'}`}></div>
                                         </button>
                                     </div>
-                                    <div className="flex items-center justify-between p-4 bg-slate-900 rounded-xl border border-slate-800 opacity-50">
-                                        <div>
-                                            <h4 className="font-bold text-white">Push Notifications</h4>
-                                            <p className="text-slate-400 text-sm">Invia notifiche ai dispositivi mobili (Coming Soon)</p>
-                                        </div>
-                                        <button disabled className={`w-14 h-8 rounded-full transition-colors relative bg-slate-700`}>
-                                            <div className={`absolute top-1 w-6 h-6 bg-slate-500 rounded-full left-1`}></div>
-                                        </button>
-                                    </div>
                                 </div>
                             </div>
                         )}
 
                         {/* MENU TAB */}
                         {adminTab === 'menu' && (
-                            <div>
-                                <div className="flex justify-between items-center mb-6">
-                                    <h3 className="text-xl font-bold text-white">Gestione Piatti</h3>
-                                    <button onClick={() => { setIsEditingItem(true); setEditingItem({}); }} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2">
-                                        <Plus size={20}/> Nuovo Piatto
+                            <div className="pb-20">
+                                <div className="flex justify-between items-center mb-6 sticky top-0 bg-slate-950 py-4 z-20 border-b border-slate-800">
+                                    <div>
+                                        <h3 className="text-xl font-bold text-white">Catalogo Piatti</h3>
+                                        <p className="text-slate-400 text-xs">{menuItems.length} elementi totali</p>
+                                    </div>
+                                    <button onClick={() => { setIsEditingItem(true); setEditingItem({}); }} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg shadow-orange-900/20 active:scale-95 transition-all">
+                                        <Plus size={20}/> <span className="hidden sm:inline">Nuovo Piatto</span>
                                     </button>
                                 </div>
 
                                 {isEditingItem ? (
-                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 max-w-2xl animate-slide-up">
-                                        <h4 className="text-lg font-bold text-white mb-4">{editingItem.id ? 'Modifica Piatto' : 'Nuovo Piatto'}</h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 max-w-2xl mx-auto animate-slide-up shadow-2xl">
+                                        <h4 className="text-lg font-bold text-white mb-6 flex items-center gap-2">
+                                            {editingItem.id ? <Edit2 size={20} className="text-blue-500"/> : <Plus size={20} className="text-green-500"/>}
+                                            {editingItem.id ? 'Modifica Piatto' : 'Nuovo Piatto'}
+                                        </h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                                             <div>
-                                                <label className="block text-slate-500 text-xs font-bold uppercase mb-1">Nome Piatto</label>
-                                                <input type="text" value={editingItem.name || ''} onChange={e => setEditingItem({...editingItem, name: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white outline-none focus:border-orange-500" placeholder="Es. Carbonara" />
+                                                <label className="block text-slate-500 text-xs font-bold uppercase mb-2">Nome Piatto</label>
+                                                <input type="text" value={editingItem.name || ''} onChange={e => setEditingItem({...editingItem, name: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-white outline-none focus:border-orange-500 transition-colors font-medium" placeholder="Es. Carbonara" />
                                             </div>
                                             <div>
-                                                <label className="block text-slate-500 text-xs font-bold uppercase mb-1">Prezzo (€)</label>
-                                                <input type="number" value={editingItem.price || ''} onChange={e => setEditingItem({...editingItem, price: Number(e.target.value)})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white outline-none focus:border-orange-500" placeholder="0.00" />
+                                                <label className="block text-slate-500 text-xs font-bold uppercase mb-2">Prezzo (€)</label>
+                                                <input type="number" value={editingItem.price || ''} onChange={e => setEditingItem({...editingItem, price: Number(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-white outline-none focus:border-orange-500 transition-colors font-mono" placeholder="0.00" />
                                             </div>
-                                            <div>
-                                                <label className="block text-slate-500 text-xs font-bold uppercase mb-1">Categoria</label>
-                                                <select value={editingItem.category || ''} onChange={e => setEditingItem({...editingItem, category: e.target.value as Category})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white outline-none focus:border-orange-500">
-                                                    <option value="">Seleziona...</option>
-                                                    {Object.values(Category).map(c => <option key={c} value={c}>{c}</option>)}
-                                                </select>
+                                            <div className="md:col-span-2">
+                                                <label className="block text-slate-500 text-xs font-bold uppercase mb-2">Categoria</label>
+                                                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                                                    {Object.values(Category).map(c => (
+                                                        <button 
+                                                            key={c}
+                                                            onClick={() => setEditingItem({...editingItem, category: c})}
+                                                            className={`p-2 rounded-lg text-xs font-bold uppercase border transition-all
+                                                                ${editingItem.category === c 
+                                                                    ? 'bg-orange-500 border-orange-400 text-white shadow-md' 
+                                                                    : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-600'}
+                                                            `}
+                                                        >
+                                                            {c}
+                                                        </button>
+                                                    ))}
+                                                </div>
                                             </div>
                                         </div>
-                                        <div className="mb-6">
-                                            <label className="block text-slate-500 text-xs font-bold uppercase mb-1">Descrizione (per AI e Clienti)</label>
-                                            <textarea value={editingItem.description || ''} onChange={e => setEditingItem({...editingItem, description: e.target.value})} className="w-full bg-slate-800 border border-slate-700 rounded-lg p-3 text-white outline-none focus:border-orange-500 h-24 resize-none" placeholder="Ingredienti, allergeni, dettagli..."></textarea>
+                                        <div className="mb-8">
+                                            <label className="block text-slate-500 text-xs font-bold uppercase mb-2">Descrizione (per AI e Clienti)</label>
+                                            <textarea value={editingItem.description || ''} onChange={e => setEditingItem({...editingItem, description: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-white outline-none focus:border-orange-500 h-32 resize-none transition-colors" placeholder="Ingredienti principali, allergeni, note speciali..."></textarea>
                                         </div>
-                                        <div className="flex gap-3">
-                                            <button onClick={() => setIsEditingItem(false)} className="px-6 py-3 rounded-lg bg-slate-800 text-slate-300 font-bold hover:bg-slate-700">Annulla</button>
-                                            <button onClick={handleSaveMenu} className="px-6 py-3 rounded-lg bg-orange-500 text-white font-bold hover:bg-orange-600">Salva Piatto</button>
+                                        <div className="flex gap-4">
+                                            <button onClick={() => setIsEditingItem(false)} className="flex-1 py-4 rounded-xl bg-slate-800 text-slate-300 font-bold hover:bg-slate-700 transition-colors">Annulla</button>
+                                            <button onClick={handleSaveMenu} className="flex-1 py-4 rounded-xl bg-orange-500 text-white font-bold hover:bg-orange-600 shadow-lg shadow-orange-500/20 transition-colors">Salva Configurazione</button>
                                         </div>
                                     </div>
                                 ) : (
-                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                        {menuItems.map(item => (
-                                            <div key={item.id} className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex justify-between items-center group hover:border-slate-600 transition-colors">
-                                                <div>
-                                                    <h5 className="font-bold text-white text-lg">{item.name}</h5>
-                                                    <div className="flex gap-2 text-xs mt-1">
-                                                        <span className="bg-orange-900/30 text-orange-400 px-2 py-0.5 rounded font-bold uppercase">{item.category}</span>
-                                                        <span className="text-slate-400">€ {item.price.toFixed(2)}</span>
+                                    <div className="space-y-8">
+                                        {ADMIN_CATEGORY_ORDER.map(cat => {
+                                            const itemsInCategory = menuItems.filter(i => i.category === cat);
+                                            if (itemsInCategory.length === 0) return null;
+
+                                            return (
+                                                <div key={cat} className="animate-fade-in">
+                                                    <div className="flex items-center gap-4 mb-4">
+                                                        <h4 className="text-orange-500 font-black uppercase tracking-widest text-sm whitespace-nowrap">{cat}</h4>
+                                                        <div className="h-px bg-slate-800 w-full"></div>
+                                                    </div>
+                                                    
+                                                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                                                        {itemsInCategory.map(item => (
+                                                            <div key={item.id} className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex justify-between items-start group hover:border-slate-600 transition-all hover:shadow-lg">
+                                                                <div>
+                                                                    <h5 className="font-bold text-white text-lg leading-tight mb-1">{item.name}</h5>
+                                                                    <p className="text-slate-500 text-xs line-clamp-2 mb-3 h-8">{item.description || 'Nessuna descrizione'}</p>
+                                                                    <span className="bg-slate-950 text-slate-300 px-3 py-1 rounded-lg font-mono font-bold text-sm border border-slate-800">
+                                                                        € {item.price.toFixed(2)}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex flex-col gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                                                    <button onClick={() => { setEditingItem(item); setIsEditingItem(true); }} className="w-10 h-10 flex items-center justify-center bg-slate-800 rounded-xl text-blue-400 hover:bg-blue-500 hover:text-white transition-colors shadow-sm">
+                                                                        <Edit2 size={18}/>
+                                                                    </button>
+                                                                    <button onClick={() => setItemToDelete(item)} className="w-10 h-10 flex items-center justify-center bg-slate-800 rounded-xl text-red-400 hover:bg-red-500 hover:text-white transition-colors shadow-sm">
+                                                                        <Trash2 size={18}/>
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ))}
                                                     </div>
                                                 </div>
-                                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button onClick={() => { setEditingItem(item); setIsEditingItem(true); }} className="p-2 bg-slate-800 rounded-lg text-blue-400 hover:bg-blue-900/30"><Edit2 size={18}/></button>
-                                                    <button onClick={() => handleDeleteMenu(item.id)} className="p-2 bg-slate-800 rounded-lg text-red-400 hover:bg-red-900/30"><Trash2 size={18}/></button>
-                                                </div>
+                                            );
+                                        })}
+                                        {menuItems.length === 0 && (
+                                            <div className="text-center py-20 opacity-50">
+                                                <Utensils size={48} className="mx-auto mb-4 text-slate-600"/>
+                                                <p className="text-slate-500">Il menu è vuoto. Aggiungi il primo piatto!</p>
                                             </div>
-                                        ))}
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -294,6 +371,37 @@ const App: React.FC = () => {
                     </div>
                 </div>
             </div>
+        )}
+
+        {/* DELETE CONFIRMATION MODAL (ADMIN) */}
+        {itemToDelete && (
+             <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-md flex items-center justify-center p-6 animate-fade-in">
+                 <div className="bg-slate-900 border border-red-500/30 rounded-3xl p-6 w-full max-w-xs shadow-2xl shadow-red-900/20 transform animate-slide-up">
+                     <div className="flex flex-col items-center text-center mb-4">
+                         <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mb-4 text-red-500 border border-red-500/20">
+                             <Trash2 size={32} />
+                         </div>
+                         <h3 className="text-xl font-bold text-white">Eliminare Piatto?</h3>
+                         <p className="text-slate-400 text-sm mt-2">
+                             Stai per eliminare definitivamente <br/><span className="text-white font-bold">{itemToDelete.name}</span> dal menu.
+                         </p>
+                     </div>
+                     <div className="flex gap-3 mt-6">
+                         <button 
+                           onClick={() => setItemToDelete(null)}
+                           className="flex-1 py-3 rounded-xl bg-slate-800 text-slate-300 font-bold text-sm hover:bg-slate-700 transition-colors"
+                         >
+                             Annulla
+                         </button>
+                         <button 
+                           onClick={confirmDeleteMenu}
+                           className="flex-1 py-3 rounded-xl bg-red-600 text-white font-bold text-sm hover:bg-red-700 shadow-lg shadow-red-600/30 transition-colors"
+                         >
+                             Elimina
+                         </button>
+                     </div>
+                 </div>
+             </div>
         )}
 
         <div className="text-center mb-12 z-10">
