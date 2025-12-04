@@ -190,8 +190,9 @@ const WaiterPad: React.FC = () => {
   const [justAddedId, setJustAddedId] = useState<string | null>(null);
   const [cartBump, setCartBump] = useState(false);
 
-  // Delete Confirmation State
+  // Confirmation States
   const [deleteConfirmIndex, setDeleteConfirmIndex] = useState<number | null>(null);
+  const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
 
   // AI State
   const [aiModalOpen, setAiModalOpen] = useState(false);
@@ -344,7 +345,15 @@ const WaiterPad: React.FC = () => {
   };
 
   // --- Submit Order ---
+  const requestSendOrder = () => {
+    if (!table || cart.length === 0) return;
+    setSendConfirmOpen(true);
+  };
+
   const handleSendOrder = () => {
+    // Close modal first
+    setSendConfirmOpen(false);
+
     if (!table || cart.length === 0) return;
     
     setIsSending(true);
@@ -682,7 +691,7 @@ const WaiterPad: React.FC = () => {
             <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
                 {/* 1. Send Order (Quick Action) - Moved to Left */}
                  <button
-                    onClick={handleSendOrder}
+                    onClick={requestSendOrder}
                     disabled={!table || cart.length === 0 || isSending}
                     className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all transform
                          ${(!table || cart.length === 0 || isSending) 
@@ -734,7 +743,7 @@ const WaiterPad: React.FC = () => {
 
              <div className="p-4 border-t border-slate-800 bg-slate-900 pb-8">
                  <button
-                    onClick={handleSendOrder}
+                    onClick={requestSendOrder}
                     disabled={!table || isSending || cart.length === 0}
                     className={`w-full py-4 rounded-2xl font-bold text-lg tracking-wide flex items-center justify-center gap-3 shadow-xl transition-all relative overflow-hidden
                         ${(!table || isSending || cart.length === 0) ? 'bg-slate-800 text-slate-600 cursor-not-allowed shadow-none border border-slate-700' : 'bg-orange-500 text-white hover:bg-orange-600 hover:scale-[1.01] shadow-orange-500/20'}
@@ -833,6 +842,37 @@ const WaiterPad: React.FC = () => {
                         className="flex-1 py-3 rounded-xl bg-red-600 text-white font-bold text-sm hover:bg-red-700 shadow-lg shadow-red-600/30 transition-colors"
                       >
                           Elimina
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* --- SEND CONFIRMATION MODAL --- */}
+      {sendConfirmOpen && (
+          <div className="absolute inset-0 z-[70] bg-black/80 backdrop-blur-md flex items-center justify-center p-6 animate-fade-in">
+              <div className="bg-slate-900 border border-orange-500/30 rounded-3xl p-6 w-full max-w-xs shadow-2xl shadow-orange-900/20 transform animate-slide-up">
+                  <div className="flex flex-col items-center text-center mb-4">
+                      <div className="w-16 h-16 bg-orange-500/10 rounded-full flex items-center justify-center mb-4 text-orange-500 border border-orange-500/20">
+                          <Send size={32} />
+                      </div>
+                      <h3 className="text-xl font-bold text-white">Inviare comanda?</h3>
+                      <p className="text-slate-400 text-sm mt-2">
+                          Confermi l'invio dell'ordine per il <span className="text-white font-bold">Tavolo {table}</span>?
+                      </p>
+                  </div>
+                  <div className="flex gap-3 mt-6">
+                      <button 
+                        onClick={() => setSendConfirmOpen(false)}
+                        className="flex-1 py-3 rounded-xl bg-slate-800 text-slate-300 font-bold text-sm hover:bg-slate-700 transition-colors"
+                      >
+                          Annulla
+                      </button>
+                      <button 
+                        onClick={handleSendOrder}
+                        className="flex-1 py-3 rounded-xl bg-orange-500 text-white font-bold text-sm hover:bg-orange-600 shadow-lg shadow-orange-600/30 transition-colors"
+                      >
+                          INVIA
                       </button>
                   </div>
               </div>
