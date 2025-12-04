@@ -3,7 +3,7 @@ import { Category, MenuItem, Order, OrderItem, OrderStatus } from '../types';
 import { MENU_ITEMS } from '../constants';
 import { addOrder, getOrders } from '../services/storageService';
 import { askChefAI } from '../services/geminiService';
-import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle } from 'lucide-react';
+import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info } from 'lucide-react';
 
 // --- CONSTANTS ---
 const CATEGORY_ORDER = [
@@ -566,8 +566,11 @@ const WaiterPad: React.FC = () => {
                                                 {/* Space reserved for future icons */}
                                             </div>
 
-                                            <button onClick={(e) => { e.stopPropagation(); openAiFor(item); }} className="bg-slate-900/40 hover:bg-slate-900/70 border border-white/5 text-slate-400 hover:text-orange-400 transition-colors px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide backdrop-blur-md">
-                                                <Search size={12} /> Info Piatto
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); openAiFor(item); }} 
+                                                className="bg-transparent text-slate-500 hover:text-orange-400 transition-colors flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide"
+                                            >
+                                                INFO <Search size={10} strokeWidth={3} />
                                             </button>
                                         </div>
                                     </>
@@ -677,25 +680,27 @@ const WaiterPad: React.FC = () => {
             </div>
 
             <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
-                <button 
-                    onClick={toggleSheet}
-                    className="w-10 h-10 rounded-full bg-slate-700/50 text-slate-300 flex items-center justify-center hover:bg-slate-700 transition-colors"
-                >
-                    {sheetHeight > 200 ? <ChevronDown size={20}/> : <ChevronUp size={20}/>}
-                </button>
-
-                <button
+                {/* 1. Send Order (Quick Action) - Moved to Left */}
+                 <button
                     onClick={handleSendOrder}
                     disabled={!table || cart.length === 0 || isSending}
                     className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all transform
                          ${(!table || cart.length === 0 || isSending) 
-                            ? 'bg-slate-700 text-slate-500 cursor-not-allowed shadow-none' 
+                            ? 'bg-slate-700/50 text-slate-600 cursor-not-allowed shadow-none' 
                             : 'bg-orange-500 text-white hover:bg-orange-600 hover:scale-110 shadow-orange-500/40'}
                     `}
                 >
                     {isSending ? (
                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                    ) : <Send size={22} className="ml-0.5 mt-0.5" />}
+                    ) : <Send size={20} className="ml-0.5 mt-0.5" />}
+                </button>
+
+                {/* 2. Toggle Sheet Arrow - Moved to Right */}
+                <button 
+                    onClick={toggleSheet}
+                    className="w-12 h-12 rounded-full bg-slate-700/50 text-slate-300 flex items-center justify-center hover:bg-slate-700 transition-colors"
+                >
+                    {sheetHeight > 200 ? <ChevronDown size={24}/> : <ChevronUp size={24}/>}
                 </button>
             </div>
         </div>
