@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
 const supabaseKey = process.env.VITE_SUPABASE_KEY || '';
 
-export const SUPER_ADMIN_EMAIL = 'maxsviluppo@gmail.com'; // Change this to your real email
+export const SUPER_ADMIN_EMAIL = 'castro.massimo@yahoo.com'; 
 
 // Crea il client solo se le chiavi esistono
 export const supabase = (supabaseUrl && supabaseKey) 
