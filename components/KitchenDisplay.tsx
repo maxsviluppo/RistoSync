@@ -1,16 +1,108 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Order, OrderStatus } from '../types';
 import { getOrders, updateOrderStatus, clearHistory } from '../services/storageService';
-import { Clock, CheckCircle, ChefHat, Trash2, History, UtensilsCrossed } from 'lucide-react';
+import { Clock, CheckCircle, ChefHat, Trash2, History, UtensilsCrossed, Bell } from 'lucide-react';
+
+// --- SOUND UTILS ---
+const playNotificationSound = (type: 'new' | 'ready') => {
+    try {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContext) return;
+        
+        const ctx = new AudioContext();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        if (type === 'new') {
+            // Attention sound (Double beep)
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(440, ctx.currentTime);
+            osc.frequency.setValueAtTime(554, ctx.currentTime + 0.1); // C#5
+            gain.gain.setValueAtTime(0.1, ctx.currentTime);
+            gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3);
+            osc.start();
+            osc.stop(ctx.currentTime + 0.3);
+            
+            // Second beep
+            const osc2 = ctx.createOscillator();
+            const gain2 = ctx.createGain();
+            osc2.connect(gain2);
+            gain2.connect(ctx.destination);
+            osc2.type = 'square';
+            osc2.frequency.setValueAtTime(554, ctx.currentTime + 0.4);
+            osc2.frequency.setValueAtTime(440, ctx.currentTime + 0.5);
+            gain2.gain.setValueAtTime(0.1, ctx.currentTime + 0.4);
+            gain2.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.7);
+            osc2.start(ctx.currentTime + 0.4);
+            osc2.stop(ctx.currentTime + 0.7);
+
+        } else if (type === 'ready') {
+            // Success sound (Ding)
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+            osc.frequency.exponentialRampToValueAtTime(1046.5, ctx.currentTime + 0.1); // C6
+            
+            gain.gain.setValueAtTime(0.05, ctx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1);
+            
+            osc.start();
+            osc.stop(ctx.currentTime + 1);
+        }
+    } catch (e) {
+        console.error("Audio play failed", e);
+    }
+};
 
 const KitchenDisplay: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [viewMode, setViewMode] = useState<'active' | 'history'>('active');
+  
+  // Notification State
+  const [notification, setNotification] = useState<{msg: string, type: 'info' | 'success'} | null>(null);
+  
+  // Refs for change detection
+  const previousOrdersRef = useRef<Order[]>([]);
+  const isFirstLoad = useRef(true);
+
+  const showNotification = (msg: string, type: 'info' | 'success') => {
+      setNotification({ msg, type });
+      setTimeout(() => setNotification(null), 4000);
+  };
 
   const loadOrders = () => {
     const allOrders = getOrders();
     // Sort by time: oldest first
     const sorted = allOrders.sort((a, b) => a.timestamp - b.timestamp);
+
+    // --- CHANGE DETECTION LOGIC ---
+    if (!isFirstLoad.current) {
+        const prevOrders = previousOrdersRef.current;
+        
+        // 1. Detect NEW Orders
+        const newOrderIds = sorted.map(o => o.id);
+        const prevOrderIds = prevOrders.map(o => o.id);
+        const addedOrders = sorted.filter(o => !prevOrderIds.includes(o.id));
+        
+        if (addedOrders.length > 0) {
+            playNotificationSound('new');
+            showNotification(`Nuovo Ordine: Tavolo ${addedOrders[0].tableNumber}`, 'info');
+        }
+
+        // 2. Detect STATUS Changes to READY
+        sorted.forEach(newOrder => {
+            const oldOrder = prevOrders.find(o => o.id === newOrder.id);
+            if (oldOrder && oldOrder.status !== OrderStatus.READY && newOrder.status === OrderStatus.READY) {
+                playNotificationSound('ready');
+                showNotification(`Tavolo ${newOrder.tableNumber} è PRONTO!`, 'success');
+            }
+        });
+    }
+
+    if (isFirstLoad.current) isFirstLoad.current = false;
+    previousOrdersRef.current = sorted;
     setOrders(sorted);
   };
 
@@ -67,24 +159,43 @@ const KitchenDisplay: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-6 font-sans flex flex-col">
+    <div className="min-h-screen bg-slate-900 text-white p-6 font-sans flex flex-col relative overflow-hidden">
+      
+      {/* Toast Notification */}
+      {notification && (
+        <div className={`fixed top-6 left-1/2 transform -translate-x-1/2 z-50 px-8 py-4 rounded-2xl shadow-[0_0_30px_rgba(0,0,0,0.5)] flex items-center gap-4 animate-slide-down border-2
+            ${notification.type === 'success' ? 'bg-green-600 border-green-400 text-white' : 'bg-blue-600 border-blue-400 text-white'}
+        `}>
+            {notification.type === 'success' ? <CheckCircle size={32} className="animate-bounce" /> : <Bell size={32} className="animate-swing" />}
+            <div>
+                <h3 className="font-black text-2xl uppercase tracking-wide">{notification.type === 'success' ? 'ORDINE PRONTO' : 'NUOVO ORDINE'}</h3>
+                <p className="font-medium text-lg opacity-90">{notification.msg}</p>
+            </div>
+        </div>
+      )}
+
       {/* Top Bar */}
       <div className="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
         <div className="flex items-center gap-3">
-          <ChefHat className="w-10 h-10 text-orange-500" />
-          <h1 className="text-3xl font-bold tracking-tight">CUCINA</h1>
+          <div className="w-14 h-14 bg-orange-500 rounded-full flex items-center justify-center shadow-lg shadow-orange-500/20">
+             <ChefHat className="w-8 h-8 text-white" />
+          </div>
+          <div>
+              <h1 className="text-3xl font-bold tracking-tight leading-none">CUCINA</h1>
+              <p className="text-slate-400 text-xs uppercase tracking-widest font-semibold">Dashboard</p>
+          </div>
           
           {/* Tabs */}
-          <div className="ml-8 flex bg-slate-800 rounded-lg p-1">
+          <div className="ml-8 flex bg-slate-800 rounded-lg p-1 border border-slate-700">
              <button 
                 onClick={() => setViewMode('active')}
-                className={`px-4 py-2 rounded-md font-medium transition-all ${viewMode === 'active' ? 'bg-slate-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                className={`px-6 py-2 rounded-md font-bold text-sm uppercase tracking-wide transition-all ${viewMode === 'active' ? 'bg-slate-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
              >
-                In Corso ({orders.filter(o => o.status !== OrderStatus.DELIVERED).length})
+                In Corso <span className="ml-2 bg-orange-500 text-white px-2 py-0.5 rounded-full text-xs">{orders.filter(o => o.status !== OrderStatus.DELIVERED).length}</span>
              </button>
              <button 
                 onClick={() => setViewMode('history')}
-                className={`px-4 py-2 rounded-md font-medium transition-all ${viewMode === 'history' ? 'bg-slate-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                className={`px-6 py-2 rounded-md font-bold text-sm uppercase tracking-wide transition-all ${viewMode === 'history' ? 'bg-slate-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
              >
                 Storico
              </button>
@@ -92,9 +203,11 @@ const KitchenDisplay: React.FC = () => {
         </div>
 
         <div className="flex gap-4 items-center">
-            <span className="text-xl font-mono text-slate-300">
-                {new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}
-            </span>
+            <div className="bg-slate-800 px-4 py-2 rounded-lg border border-slate-700 shadow-inner">
+                <span className="text-2xl font-mono text-orange-400 font-bold">
+                    {new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}
+                </span>
+            </div>
             {viewMode === 'history' && (
                 <button 
                     onClick={() => {
@@ -102,7 +215,7 @@ const KitchenDisplay: React.FC = () => {
                             clearHistory();
                         }
                     }}
-                    className="flex items-center gap-2 bg-red-900/50 hover:bg-red-900 text-red-200 px-4 py-2 rounded text-sm transition-colors border border-red-800"
+                    className="flex items-center gap-2 bg-red-900/30 hover:bg-red-900/50 text-red-200 px-4 py-2 rounded-lg text-sm transition-colors border border-red-800/50 font-bold uppercase tracking-wide"
                 >
                     <Trash2 size={16} /> Svuota Storico
                 </button>
@@ -112,16 +225,16 @@ const KitchenDisplay: React.FC = () => {
 
       {/* Grid */}
       {displayedOrders.length === 0 ? (
-        <div className="flex flex-col items-center justify-center flex-1 text-slate-500 min-h-[400px]">
+        <div className="flex flex-col items-center justify-center flex-1 text-slate-500 min-h-[400px] border-2 border-dashed border-slate-800 rounded-3xl bg-slate-800/20">
           {viewMode === 'active' ? (
              <>
-               <UtensilsCrossed className="w-24 h-24 mb-4 opacity-20" />
-               <p className="text-2xl">Tutto tranquillo, Chef!</p>
+               <UtensilsCrossed className="w-24 h-24 mb-4 opacity-10" />
+               <p className="text-2xl font-bold opacity-30 uppercase tracking-widest">Nessun ordine attivo</p>
              </>
           ) : (
              <>
-               <History className="w-24 h-24 mb-4 opacity-20" />
-               <p className="text-2xl">Nessun ordine nello storico</p>
+               <History className="w-24 h-24 mb-4 opacity-10" />
+               <p className="text-2xl font-bold opacity-30 uppercase tracking-widest">Nessun ordine nello storico</p>
              </>
           )}
         </div>
@@ -130,43 +243,47 @@ const KitchenDisplay: React.FC = () => {
           {displayedOrders.map((order) => {
              const timeDiff = Math.floor((Date.now() - order.timestamp) / 60000);
              const isLate = viewMode === 'active' && timeDiff > 15 && order.status !== OrderStatus.READY;
+             const isReady = order.status === OrderStatus.READY;
 
             return (
               <div 
                 key={order.id} 
-                className={`flex flex-col rounded-lg shadow-lg border-l-8 ${getStatusColor(order.status).replace('text', 'border')} bg-white text-slate-800 overflow-hidden transform transition-all duration-300 ${viewMode === 'active' ? 'hover:scale-[1.02]' : 'opacity-90'}`}
+                className={`flex flex-col rounded-xl shadow-xl border-t-8 ${getStatusColor(order.status).replace('text', 'border').replace('bg-','border-')} bg-slate-800 text-slate-200 overflow-hidden transform transition-all duration-300 relative
+                    ${viewMode === 'active' ? 'hover:-translate-y-1' : 'opacity-75'}
+                    ${isReady ? 'ring-2 ring-green-500/50 shadow-green-900/20' : ''}
+                `}
               >
                 {/* Header Card */}
-                <div className={`p-4 border-b flex justify-between items-start ${isLate ? 'bg-red-50' : 'bg-gray-50'}`}>
+                <div className={`p-4 border-b border-slate-700 flex justify-between items-start bg-slate-800/50`}>
                   <div>
-                    <h2 className="text-2xl font-bold">Tavolo {order.tableNumber}</h2>
-                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide mt-1 ${getStatusColor(order.status)}`}>
+                    <h2 className="text-3xl font-black text-white">Tav. {order.tableNumber}</h2>
+                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide mt-1 shadow-sm ${getStatusColor(order.status)}`}>
                       {order.status}
                     </span>
                   </div>
                   <div className="text-right">
-                    <div className="flex items-center gap-1 text-slate-500 font-mono text-lg">
+                    <div className="flex items-center gap-1 text-slate-400 font-mono text-lg font-bold">
                         <Clock size={18} />
                         {formatTime(order.timestamp)}
                     </div>
-                    {isLate && <div className="text-red-600 font-bold text-xs mt-1 animate-pulse">RITARDO {timeDiff}m</div>}
+                    {isLate && <div className="text-red-500 font-bold text-xs mt-1 animate-pulse bg-red-900/30 px-2 rounded">RITARDO {timeDiff}m</div>}
                   </div>
                 </div>
 
                 {/* Body Card */}
-                <div className="p-4 flex-1 overflow-y-auto max-h-[300px]">
+                <div className="p-4 flex-1 overflow-y-auto max-h-[300px] bg-slate-900/50">
                   <ul className="space-y-3">
                     {order.items.map((item, idx) => (
-                      <li key={idx} className="flex justify-between items-start border-b border-dashed border-slate-200 pb-2 last:border-0">
-                        <div className="flex gap-2">
-                           <span className="font-bold text-lg w-6 h-6 flex items-center justify-center bg-slate-100 rounded-full text-slate-700">
+                      <li key={idx} className="flex justify-between items-start border-b border-dashed border-slate-700 pb-3 last:border-0">
+                        <div className="flex gap-3">
+                           <span className="font-black text-xl w-8 h-8 flex items-center justify-center bg-slate-700 rounded-lg text-white shadow-inner">
                              {item.quantity}
                            </span>
                            <div>
-                               <p className="font-semibold text-lg leading-tight">{item.menuItem.name}</p>
+                               <p className="font-bold text-lg leading-tight text-slate-200">{item.menuItem.name}</p>
                                {item.notes && (
-                                   <p className="text-red-500 text-sm font-medium mt-0.5 bg-red-50 inline-block px-1 rounded">
-                                       Note: {item.notes}
+                                   <p className="text-red-300 text-sm font-bold mt-1 bg-red-900/20 inline-block px-2 py-0.5 rounded border border-red-900/30">
+                                       ⚠️ {item.notes}
                                    </p>
                                )}
                            </div>
@@ -180,20 +297,20 @@ const KitchenDisplay: React.FC = () => {
                 {viewMode === 'active' && (
                     <button
                     onClick={() => advanceStatus(order.id, order.status)}
-                    className={`w-full py-4 text-center font-bold text-white uppercase tracking-wider transition-colors flex items-center justify-center gap-2
-                        ${order.status === OrderStatus.READY ? 'bg-green-600 hover:bg-green-700' : 'bg-blue-600 hover:bg-blue-700'}
+                    className={`w-full py-5 text-center font-black text-lg uppercase tracking-wider transition-all flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.98]
+                        ${order.status === OrderStatus.READY ? 'bg-green-600 text-white' : 'bg-blue-600 text-white'}
                     `}
                     >
                     {order.status === OrderStatus.READY ? (
-                        <> <CheckCircle /> Segna Consegnato </>
+                        <> <CheckCircle /> SERVI AL TAVOLO </>
                     ) : (
-                        <> Avanza Stato </>
+                        <> AVANZA STATO {order.status === OrderStatus.PENDING && '→ PREPARAZIONE'} {order.status === OrderStatus.COOKING && '→ PRONTO'} </>
                     )}
                     </button>
                 )}
                 {viewMode === 'history' && (
-                     <div className="p-2 bg-slate-100 text-center text-xs text-slate-500 font-mono">
-                         COMPLETATO
+                     <div className="p-2 bg-slate-800 text-center text-xs text-slate-500 font-mono border-t border-slate-700">
+                         COMPLETATO alle {formatTime(order.timestamp + 1000 * 60 * 20)} {/* Simulated time */}
                      </div>
                 )}
               </div>
@@ -201,6 +318,27 @@ const KitchenDisplay: React.FC = () => {
           })}
         </div>
       )}
+      
+      <style>{`
+        @keyframes slide-down {
+            0% { transform: translate(-50%, -100%); opacity: 0; }
+            100% { transform: translate(-50%, 0); opacity: 1; }
+        }
+        .animate-slide-down {
+            animation: slide-down 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        @keyframes swing {
+            0% { transform: rotate(0deg); }
+            20% { transform: rotate(15deg); }
+            40% { transform: rotate(-10deg); }
+            60% { transform: rotate(5deg); }
+            80% { transform: rotate(-5deg); }
+            100% { transform: rotate(0deg); }
+        }
+        .animate-swing {
+            animation: swing 1s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   );
 };
