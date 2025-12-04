@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Category, MenuItem, Order, OrderItem, OrderStatus } from '../types';
 import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, getWaiterName, logoutWaiter, getMenuItems, freeTable } from '../services/storageService';
 import { askChefAI } from '../services/geminiService';
-import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen, Bell } from 'lucide-react';
+import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen, Bell, ArrowRight } from 'lucide-react';
 
 // --- CONSTANTS ---
 const CATEGORY_ORDER = [
@@ -281,9 +281,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       if (name) setWaiterName(name);
 
       // --- NOTIFICATION LOGIC (Robust) ---
-      // Find orders that are READY.
-      // Filter logic: If I am logged in as "Marco", I see my orders OR orders with no waiter assigned.
-      // If I am just "Staff" (no name), I see everything.
       const myReadyOrders = allOrders.filter(o => 
           o.status === OrderStatus.READY && 
           (!name || o.waiterName === name || !o.waiterName)
@@ -296,7 +293,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       const hasNewReadyOrder = currentReadyIds.some(id => !prevIds.includes(id));
 
       if (hasNewReadyOrder && currentReadyIds.length > 0) {
-          // Identify which tables are new
           const newOrders = myReadyOrders.filter(o => !prevIds.includes(o.id));
           const tableNums = Array.from(new Set(newOrders.map(o => o.tableNumber))).join(', ');
           
@@ -305,7 +301,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
           setTimeout(() => setNotificationToast(null), 8000);
       }
       
-      // Update Ref for next check
       prevReadyOrderIdsRef.current = currentReadyIds;
       setReadyCount(myReadyOrders.length);
 
@@ -318,10 +313,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
           setExistingOrders([]);
       }
 
-      // Load Config
       setTotalTables(getTableCount());
-      
-      // Load Menu from Storage (Dynamic)
       setMenuItems(getMenuItems());
   };
 
@@ -343,7 +335,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       window.removeEventListener('local-storage-update', handleLocalUpdate);
       window.removeEventListener('local-menu-update', handleMenuUpdate);
     };
-  }, [table]); // Reduced dependencies to avoid loops, loadData reads fresh storage
+  }, [table]); 
 
   // --- Sorting Logic for Cart ---
   const sortedCart = [...cart].sort((a, b) => {
@@ -389,7 +381,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   // --- Table Selection & Order Recovery ---
   const handleSelectTable = (tId: string) => {
       setTable(tId);
-      // Don't close modal immediately to allow reviewing status
       
       // Check for active PENDING order for editing
       const pendingOrder = allRestaurantOrders.find(o => o.tableNumber === tId && o.status === OrderStatus.PENDING);
@@ -403,6 +394,9 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
           setCart([]);
           setEditingOrderId(null);
       }
+      
+      // NOTE: We do NOT close the table manager automatically anymore.
+      // We allow the user to choose "ORDER" or "FREE TABLE" from the buttons.
   };
 
   // --- Item Selection Logic ---
@@ -439,7 +433,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       setCartBump(true);
       setTimeout(() => setCartBump(false), 300);
       
-      // If table manager is open, close it to let user order
       if(tableManagerOpen) setTableManagerOpen(false);
   };
 
@@ -493,7 +486,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
             items: cart,
             status: OrderStatus.PENDING,
             timestamp: Date.now(),
-            waiterName: waiterName || 'Cameriere', // Add Waiter Name
+            waiterName: waiterName || 'Cameriere', 
         };
         addOrder(newOrder);
     }
@@ -566,14 +559,9 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       const hasReady = tableOrders.some(o => o.status === OrderStatus.READY);
       const hasPending = tableOrders.some(o => o.status === OrderStatus.PENDING || o.status === OrderStatus.COOKING);
       
-      // Priority 1: Ready to Serve (Green)
       if (hasReady) return { status: 'ready', count: tableOrders.filter(o => o.status === OrderStatus.READY).length };
-      
-      // Priority 2: Waiting/Cooking (Orange)
       if (hasPending) return { status: 'busy', count: tableOrders.length };
       
-      // Priority 3: Delivered/Eating (Blue/Occupied)
-      // This ensures that even if all orders are delivered, the table is NOT free.
       return { status: 'eating', count: 0 };
   };
 
@@ -669,7 +657,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all relative ${!table ? 'bg-slate-700 text-slate-400' : 'bg-orange-500 text-white shadow-lg'}`}>
                     <LayoutGrid size={20} className={!table ? "opacity-50" : ""} />
                     
-                    {/* READY NOTIFICATION BADGE */}
                     {readyCount > 0 && !tableManagerOpen && (
                         <div className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border border-slate-900 animate-bounce z-50">
                             {readyCount}
@@ -736,7 +723,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                     <>
                                         <p className="text-slate-300 text-[10px] leading-relaxed mb-3 pr-2 line-clamp-2 font-medium">{item.description}</p>
                                         <div className="flex items-center justify-between mt-2">
-                                            {/* Allergens Area (Restored Space) */}
                                             <div className="flex gap-1.5 flex-wrap opacity-70">
                                                 {item.allergens?.map(algId => (
                                                     <div key={algId} className="bg-slate-800 p-1 rounded-full border border-slate-700 text-slate-400" title={algId}>
@@ -814,7 +800,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
               })}
           </div>
 
-        {/* Floating AI Helper */}
         <button 
             onClick={() => openAiFor(null)}
             className={`fixed right-5 w-12 h-12 bg-indigo-600 border border-indigo-400 text-white rounded-full shadow-[0_8px_30px_rgba(79,70,229,0.4)] flex items-center justify-center z-20 transition-all duration-500 hover:scale-110 hover:shadow-indigo-500/60`}
@@ -832,7 +817,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
             transition: isDraggingSheet ? 'none' : 'height 0.4s cubic-bezier(0.17, 0.67, 0.22, 1.26)'
         }}
       >
-        {/* Drag Handle Area - ADDED touch-none */}
         <div 
             onTouchStart={handleSheetTouchStart}
             onTouchMove={handleSheetTouchMove}
@@ -886,9 +870,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
             </div>
         </div>
 
-        {/* Content */}
         <div className="flex-1 overflow-hidden flex flex-col relative bg-slate-900">
-             {/* ADDED overscroll-contain */}
              <div className="flex-1 overflow-y-auto p-4 space-y-2 pb-4 overscroll-contain">
                 {cart.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-slate-600 gap-2">
@@ -1003,7 +985,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                     bgClass = 'bg-slate-700 border-orange-500/50 text-orange-200';
                                     statusText = 'IN ATTESA';
                                 } else if (info.status === 'eating') {
-                                    // NEW STATUS: Eating/Served
                                     bgClass = 'bg-blue-900/40 border-blue-500/50 text-blue-200';
                                     statusText = 'AL TAVOLO';
                                 }
@@ -1031,13 +1012,24 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                         </div>
                         
                         {/* ACTION BUTTONS FOR SELECTED TABLE */}
-                        {table && getTableStatusInfo(table).status !== 'free' && (
-                             <button 
-                                onClick={() => setFreeTableConfirmOpen(true)}
-                                className="w-full bg-slate-800 border border-slate-700 text-slate-300 py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-700 hover:text-white transition-colors"
-                             >
-                                <DoorOpen size={20} /> LIBERA TAVOLO / CONTO
-                             </button>
+                        {table && (
+                            <div className="flex gap-3">
+                                <button 
+                                    onClick={() => setTableManagerOpen(false)}
+                                    className="flex-1 bg-green-600 hover:bg-green-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors shadow-lg shadow-green-900/20"
+                                >
+                                    <ArrowRight size={20} /> VAI ALL'ORDINE
+                                </button>
+                                
+                                {getTableStatusInfo(table).status !== 'free' && (
+                                    <button 
+                                        onClick={() => setFreeTableConfirmOpen(true)}
+                                        className="flex-1 bg-slate-800 border border-red-900/50 text-red-400 hover:bg-red-900/20 hover:text-red-300 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
+                                    >
+                                        <DoorOpen size={20} /> LIBERA
+                                    </button>
+                                )}
+                            </div>
                         )}
                     </>
                   )}
