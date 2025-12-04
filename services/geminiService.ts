@@ -1,20 +1,8 @@
 import { GoogleGenAI } from "@google/genai";
 import { MenuItem } from "../types";
 
-// Safe API Key retrieval that won't crash the browser if process is undefined
-const getApiKey = () => {
-  try {
-    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-      return process.env.API_KEY;
-    }
-  } catch (e) {
-    // Ignore error
-  }
-  return '';
-};
-
 // Initialize the Gemini client
-const ai = new GoogleGenAI({ apiKey: getApiKey() });
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const askChefAI = async (query: string, currentItem: MenuItem | null): Promise<string> => {
   try {
