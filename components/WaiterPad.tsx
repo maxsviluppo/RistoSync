@@ -76,10 +76,10 @@ const SwipeableCartItem: React.FC<SwipeableItemProps> = ({ item, index, onEdit, 
         const interval = setInterval(() => {
             if (!hasInteracted) {
                 setIsAnimating(true);
-                // Animation duration is 2s, stop "isAnimating" state after
+                // Animation duration is 2.5s, stop "isAnimating" state after
                 setTimeout(() => {
                     if (!hasInteracted) setIsAnimating(false);
-                }, 2000); 
+                }, 2500); 
             }
         }, 6000); // Repeat every 6 seconds
 
@@ -87,7 +87,7 @@ const SwipeableCartItem: React.FC<SwipeableItemProps> = ({ item, index, onEdit, 
         const initialTimeout = setTimeout(() => {
              if (!hasInteracted) {
                 setIsAnimating(true);
-                setTimeout(() => setIsAnimating(false), 2000);
+                setTimeout(() => setIsAnimating(false), 2500);
             }
         }, 1000);
 
@@ -100,8 +100,8 @@ const SwipeableCartItem: React.FC<SwipeableItemProps> = ({ item, index, onEdit, 
     // Determine background color based on drag direction OR animation state
     const getBgColor = () => {
         if (isAnimating) return 'animate-bg-color'; // Handled by CSS animation
-        if (offsetX > 0) return 'bg-orange-500'; // Edit
-        if (offsetX < 0) return 'bg-red-600';    // Delete
+        if (offsetX > 20) return 'bg-orange-500'; // Edit
+        if (offsetX < -20) return 'bg-red-600';    // Delete
         return 'bg-slate-700';
     };
 
@@ -113,17 +113,17 @@ const SwipeableCartItem: React.FC<SwipeableItemProps> = ({ item, index, onEdit, 
             onTouchEnd={handleTouchEnd}
         >
             {/* Background Actions Layer */}
-            <div className="absolute inset-0 flex justify-between items-center px-6 text-white font-bold">
+            <div className="absolute inset-0 flex justify-between items-center px-6 text-white font-black">
                 {/* Left Action (Reveal on swipe Right - EDIT) */}
-                <div className={`flex items-center gap-2 transition-opacity duration-300 ${isAnimating ? 'animate-fade-edit' : (offsetX > 20 ? 'opacity-100' : 'opacity-0')}`}>
-                    <Edit2 size={24} /> 
-                    <span className="text-sm uppercase tracking-wider">Modifica</span>
+                <div className={`flex items-center gap-2 transition-all duration-300 ${isAnimating ? 'animate-fade-edit' : (offsetX > 30 ? 'opacity-100 scale-100' : 'opacity-0 scale-90')}`}>
+                    <Edit2 size={28} /> 
+                    <span className="text-sm uppercase tracking-widest">Modifica</span>
                 </div>
 
                 {/* Right Action (Reveal on swipe Left - DELETE) */}
-                <div className={`flex items-center gap-2 transition-opacity duration-300 ${isAnimating ? 'animate-fade-delete' : (offsetX < -20 ? 'opacity-100' : 'opacity-0')}`}>
-                    <span className="text-sm uppercase tracking-wider">Elimina</span>
-                    <Trash2 size={24} />
+                <div className={`flex items-center gap-2 transition-all duration-300 ${isAnimating ? 'animate-fade-delete' : (offsetX < -30 ? 'opacity-100 scale-100' : 'opacity-0 scale-90')}`}>
+                    <span className="text-sm uppercase tracking-widest">Elimina</span>
+                    <Trash2 size={28} />
                 </div>
             </div>
 
@@ -392,45 +392,45 @@ const WaiterPad: React.FC = () => {
       
       {/* Styles for Swipe Animation */}
       <style>{`
-        /* Card Movement */
+        /* Card Movement (Wider range: 100px) */
         @keyframes swipe-card {
             0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(80px); } /* Move Right to Reveal Edit */
+            20%, 30% { transform: translateX(100px); } /* Right (Edit) */
             50% { transform: translateX(0); }
-            75% { transform: translateX(-80px); } /* Move Left to Reveal Delete */
+            70%, 80% { transform: translateX(-100px); } /* Left (Delete) */
         }
         
         /* Background Color Change */
         @keyframes swipe-bg {
             0%, 100% { background-color: rgb(51, 65, 85); } /* slate-700 */
-            25% { background-color: rgb(249, 115, 22); } /* orange-500 */
+            20%, 30% { background-color: rgb(249, 115, 22); } /* orange-500 */
             50% { background-color: rgb(51, 65, 85); }
-            75% { background-color: rgb(220, 38, 38); } /* red-600 */
+            70%, 80% { background-color: rgb(220, 38, 38); } /* red-600 */
         }
 
-        /* Text Opacity - Reveal Edit (Left Side) */
+        /* Text Reveal - Edit (Left Side) */
         @keyframes fade-edit {
-            0%, 50%, 100% { opacity: 0; }
-            25% { opacity: 1; }
+            0%, 50%, 100% { opacity: 0; transform: scale(0.9); }
+            20%, 30% { opacity: 1; transform: scale(1); }
         }
 
-        /* Text Opacity - Reveal Delete (Right Side) */
+        /* Text Reveal - Delete (Right Side) */
         @keyframes fade-delete {
-            0%, 50%, 100% { opacity: 0; }
-            75% { opacity: 1; }
+            0%, 50%, 100% { opacity: 0; transform: scale(0.9); }
+            70%, 80% { opacity: 1; transform: scale(1); }
         }
 
         .animate-card-swipe {
-            animation: swipe-card 2s ease-in-out;
+            animation: swipe-card 2.5s ease-in-out;
         }
         .animate-bg-color {
-            animation: swipe-bg 2s ease-in-out;
+            animation: swipe-bg 2.5s ease-in-out;
         }
         .animate-fade-edit {
-            animation: fade-edit 2s ease-in-out;
+            animation: fade-edit 2.5s ease-in-out;
         }
         .animate-fade-delete {
-            animation: fade-delete 2s ease-in-out;
+            animation: fade-delete 2.5s ease-in-out;
         }
       `}</style>
 
