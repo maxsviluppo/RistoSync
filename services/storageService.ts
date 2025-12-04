@@ -41,8 +41,8 @@ export const initSupabaseSync = async () => {
                 event: '*', 
                 schema: 'public', 
                 table: 'orders' 
-                // Removed filter: 'user_id=eq...' to rely on Server-Side RLS. 
-                // This fixes issues where INSERT events are missed due to filter mismatch.
+                // Removed filter to rely on Server-Side RLS. 
+                // This ensures INSERT events are received even if RLS hides them initially.
             }, (payload) => {
                 // console.log('Realtime Order Event:', payload);
                 fetchFromCloud(); 
@@ -61,11 +61,11 @@ export const initSupabaseSync = async () => {
             });
 
         // 4. Fallback Polling (Heartbeat)
-        // Every 30 seconds, force a fetch to ensure sync even if socket drops
+        // Every 15 seconds, force a fetch to ensure sync even if socket drops
         if (pollingInterval) clearInterval(pollingInterval);
         pollingInterval = setInterval(() => {
             fetchFromCloud();
-        }, 30000);
+        }, 15000);
     }
 };
 
@@ -166,6 +166,7 @@ export const updateOrderItems = (orderId: string, newItems: OrderItem[]) => {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
+    // Reset timestamp to bring it to top, but keep ID
     const updatedOrder = { ...order, items: newItems.map(i => ({...i, completed: false})), timestamp: Date.now() };
     const newOrders = orders.map(o => o.id === orderId ? updatedOrder : o);
 

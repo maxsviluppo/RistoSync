@@ -408,8 +408,18 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
           setEditingOrderId(null);
       }
       
-      // NOTE: We do NOT close the table manager automatically anymore.
-      // We allow the user to choose "ORDER" or "FREE TABLE" from the buttons.
+      // Note: We leave the Table Manager OPEN to allow user to choose action (Go to Order / Free Table)
+      // This is the specific fix requested.
+  };
+
+  // Action: Go to Order (Close modal, start ordering)
+  const proceedToOrder = () => {
+      setTableManagerOpen(false);
+  };
+
+  // Action: Request Free Table
+  const requestFreeTable = () => {
+      setFreeTableConfirmOpen(true);
   };
 
   // --- Item Selection Logic ---
@@ -1042,20 +1052,18 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                         {table && (
                             <div className="flex gap-3">
                                 <button 
-                                    onClick={() => setTableManagerOpen(false)}
+                                    onClick={proceedToOrder}
                                     className="flex-1 bg-green-600 hover:bg-green-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors shadow-lg shadow-green-900/20"
                                 >
                                     <ArrowRight size={20} /> VAI ALL'ORDINE
                                 </button>
                                 
-                                {getTableStatusInfo(table).status !== 'free' && (
-                                    <button 
-                                        onClick={() => setFreeTableConfirmOpen(true)}
-                                        className="flex-1 bg-slate-800 border border-red-900/50 text-red-400 hover:bg-red-900/20 hover:text-red-300 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
-                                    >
-                                        <DoorOpen size={20} /> LIBERA
-                                    </button>
-                                )}
+                                <button 
+                                    onClick={requestFreeTable}
+                                    className="flex-1 bg-slate-800 border border-red-900/50 text-red-400 hover:bg-red-900/20 hover:text-red-300 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
+                                >
+                                    <DoorOpen size={20} /> LIBERA
+                                </button>
                             </div>
                         )}
                     </>

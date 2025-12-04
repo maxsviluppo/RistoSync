@@ -3,9 +3,9 @@ import KitchenDisplay from './components/KitchenDisplay';
 import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey } from './services/storageService';
-import { supabase, signOut, isSupabaseConfigured } from './services/supabase';
+import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { MenuItem, Category } from './types';
 
 // Ordine visualizzazione categorie nell'admin
@@ -43,7 +43,7 @@ const App: React.FC = () => {
   
   // Admin State
   const [showAdmin, setShowAdmin] = useState(false);
-  const [adminTab, setAdminTab] = useState<'menu' | 'notif' | 'info' | 'ai'>('menu');
+  const [adminTab, setAdminTab] = useState<'menu' | 'notif' | 'info' | 'ai' | 'db'>('menu');
   
   // Menu Manager State
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -56,6 +56,8 @@ const App: React.FC = () => {
   // Settings State
   const [notifSettings, setNotifSettings] = useState<NotificationSettings>({ kitchenSound: true, waiterSound: true, pushEnabled: false });
   const [apiKeyInput, setApiKeyInput] = useState('');
+
+  const isSuperAdmin = session?.user?.email === SUPER_ADMIN_EMAIL;
 
   // CHECK AUTH SESSION ON LOAD
   useEffect(() => {
@@ -171,7 +173,7 @@ const App: React.FC = () => {
   }
   
   // 2. SHOW SUPER ADMIN DASHBOARD (Example Logic)
-  if (session?.user?.email === 'maxsviluppo@gmail.com') { 
+  if (isSuperAdmin && !role) { 
       return <SuperAdminDashboard />;
   }
 
@@ -271,6 +273,11 @@ const App: React.FC = () => {
                          <button onClick={() => setAdminTab('ai')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'ai' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
                              <Bot size={20}/> AI Intelligence
                          </button>
+                         {isSuperAdmin && (
+                             <button onClick={() => setAdminTab('db')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'db' ? 'bg-red-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
+                                 <Database size={20}/> Database (Admin)
+                             </button>
+                         )}
                          <button onClick={() => setAdminTab('info')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'info' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
                              <Info size={20}/> Legenda
                          </button>
@@ -298,6 +305,17 @@ const App: React.FC = () => {
                                             <span className="font-bold text-white text-sm uppercase tracking-wide">{allergen.label}</span>
                                         </div>
                                     ))}
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* DB / SUPER ADMIN TAB */}
+                        {adminTab === 'db' && isSuperAdmin && (
+                            <div className="max-w-2xl">
+                                <h3 className="text-xl font-bold text-white mb-6">Database Management</h3>
+                                <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl">
+                                    <p className="text-slate-400">Area Riservata Super Admin</p>
+                                    <p className="text-sm text-slate-500 mt-2">Qui puoi gestire i tenant (ristoranti) e le configurazioni globali.</p>
                                 </div>
                             </div>
                         )}
