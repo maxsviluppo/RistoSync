@@ -264,7 +264,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   // Notification State
   const [readyCount, setReadyCount] = useState(0);
   const [notificationToast, setNotificationToast] = useState<string | null>(null);
-  const prevReadyCountRef = useRef(0);
+  const prevReadyOrderIdsRef = useRef<string[]>([]); // Track IDs to avoid duplicate alerts
 
   // Dynamic Table Count
   const [totalTables, setTotalTables] = useState(12);
@@ -280,26 +280,34 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       const name = getWaiterName();
       if (name) setWaiterName(name);
 
-      // --- NOTIFICATION LOGIC ---
-      // Find orders that are READY and belong to this waiter (or all if name not set for demo)
+      // --- NOTIFICATION LOGIC (Robust) ---
+      // Find orders that are READY.
+      // Filter logic: If I am logged in as "Marco", I see my orders OR orders with no waiter assigned.
+      // If I am just "Staff" (no name), I see everything.
       const myReadyOrders = allOrders.filter(o => 
           o.status === OrderStatus.READY && 
           (!name || o.waiterName === name || !o.waiterName)
       );
 
-      const currentCount = myReadyOrders.length;
-      if (currentCount > prevReadyCountRef.current) {
-          // New ready order detected!
-          const diff = myReadyOrders.filter(o => !allRestaurantOrders.find(old => old.id === o.id && old.status === OrderStatus.READY));
-          const tableNums = diff.map(o => o.tableNumber).join(', ');
+      const currentReadyIds = myReadyOrders.map(o => o.id);
+      const prevIds = prevReadyOrderIdsRef.current;
+      
+      // Detect ANY new ID that wasn't there before
+      const hasNewReadyOrder = currentReadyIds.some(id => !prevIds.includes(id));
+
+      if (hasNewReadyOrder && currentReadyIds.length > 0) {
+          // Identify which tables are new
+          const newOrders = myReadyOrders.filter(o => !prevIds.includes(o.id));
+          const tableNums = Array.from(new Set(newOrders.map(o => o.tableNumber))).join(', ');
           
           playWaiterNotification();
           setNotificationToast(`PIATTI PRONTI: Tavolo ${tableNums || '?'}`);
-          setTimeout(() => setNotificationToast(null), 5000);
+          setTimeout(() => setNotificationToast(null), 8000);
       }
       
-      prevReadyCountRef.current = currentCount;
-      setReadyCount(currentCount);
+      // Update Ref for next check
+      prevReadyOrderIdsRef.current = currentReadyIds;
+      setReadyCount(myReadyOrders.length);
 
       if (table) {
           const tableOrders = allOrders
@@ -335,7 +343,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       window.removeEventListener('local-storage-update', handleLocalUpdate);
       window.removeEventListener('local-menu-update', handleMenuUpdate);
     };
-  }, [table, allRestaurantOrders]); // Depend on allOrders to trigger notification logic
+  }, [table]); // Reduced dependencies to avoid loops, loadData reads fresh storage
 
   // --- Sorting Logic for Cart ---
   const sortedCart = [...cart].sort((a, b) => {
@@ -581,9 +589,9 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
       {/* NOTIFICATION TOAST */}
       {notificationToast && (
-          <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[60] bg-orange-500 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-slide-down border-2 border-orange-300">
-              <Bell className="animate-swing" size={20} />
-              <span className="font-bold text-sm">{notificationToast}</span>
+          <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[60] bg-orange-500 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-slide-down border-2 border-orange-300 w-[90%] justify-center">
+              <Bell className="animate-swing shrink-0" size={20} />
+              <span className="font-bold text-sm truncate">{notificationToast}</span>
           </div>
       )}
 
@@ -663,7 +671,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                     
                     {/* READY NOTIFICATION BADGE */}
                     {readyCount > 0 && !tableManagerOpen && (
-                        <div className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border border-slate-900 animate-bounce">
+                        <div className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border border-slate-900 animate-bounce z-50">
                             {readyCount}
                         </div>
                     )}
@@ -776,7 +784,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                   <div className="mb-3">
                                       <label className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1 block">Note Cucina</label>
                                       <input 
-                                          type="text"
+                                          type="text" 
                                           value={editNotes}
                                           onChange={(e) => setEditNotes(capitalize(e.target.value))}
                                           placeholder="Es. Ben cotto..."

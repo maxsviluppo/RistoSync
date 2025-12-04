@@ -484,12 +484,17 @@ const App: React.FC = () => {
                                                                 <div>
                                                                     <div className="flex items-center gap-2 mb-1">
                                                                         <h5 className="font-bold text-white text-lg leading-tight">{item.name}</h5>
-                                                                        {item.allergens && item.allergens.length > 0 && (
-                                                                            <span className="flex gap-1">
-                                                                                {item.allergens.includes('Piccante') && <Flame size={12} className="text-orange-500" />}
-                                                                                {item.allergens.includes('Vegano') && <Leaf size={12} className="text-green-500" />}
-                                                                            </span>
-                                                                        )}
+                                                                    </div>
+                                                                    <div className="flex gap-1.5 flex-wrap opacity-70 mb-2">
+                                                                        {item.allergens?.map(algId => {
+                                                                            const config = ALLERGENS_CONFIG.find(c => c.id === algId);
+                                                                            if(!config) return null;
+                                                                            return (
+                                                                                <div key={algId} className="bg-slate-800 p-1 rounded-full border border-slate-700 text-slate-400" title={algId}>
+                                                                                    <config.icon size={10} />
+                                                                                </div>
+                                                                            );
+                                                                        })}
                                                                     </div>
                                                                     <p className="text-slate-500 text-xs line-clamp-2 mb-3 h-8">{item.description || 'Nessuna descrizione'}</p>
                                                                     <div className="flex items-center gap-2">
