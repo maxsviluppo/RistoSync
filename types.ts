@@ -26,6 +26,7 @@ export interface OrderItem {
   menuItem: MenuItem;
   quantity: number;
   notes?: string;
+  completed?: boolean;
 }
 
 export interface Order {

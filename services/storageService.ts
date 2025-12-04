@@ -21,7 +21,12 @@ export const saveOrders = (orders: Order[]) => {
 
 export const addOrder = (order: Order) => {
   const orders = getOrders();
-  const newOrders = [...orders, order];
+  // Ensure items have completed: false initially
+  const cleanOrder = {
+      ...order,
+      items: order.items.map(i => ({ ...i, completed: false }))
+  };
+  const newOrders = [...orders, cleanOrder];
   saveOrders(newOrders);
 };
 
@@ -35,7 +40,45 @@ export const updateOrderItems = (orderId: string, newItems: OrderItem[]) => {
     const orders = getOrders();
     const newOrders = orders.map(o => {
         if (o.id === orderId) {
-            return { ...o, items: newItems, timestamp: Date.now() }; 
+            return { ...o, items: newItems.map(i => ({...i, completed: false})), timestamp: Date.now() }; 
+        }
+        return o;
+    });
+    saveOrders(newOrders);
+};
+
+export const toggleOrderItemCompletion = (orderId: string, itemIndex: number) => {
+    const orders = getOrders();
+    const newOrders = orders.map(o => {
+        if (o.id === orderId) {
+            const newItems = [...o.items];
+            // Toggle the specific item
+            if (newItems[itemIndex]) {
+                newItems[itemIndex] = { 
+                    ...newItems[itemIndex], 
+                    completed: !newItems[itemIndex].completed 
+                };
+            }
+
+            // --- SMART STATUS LOGIC ---
+            const allCompleted = newItems.every(i => i.completed);
+            const anyCompleted = newItems.some(i => i.completed);
+            
+            let newStatus = o.status;
+            
+            // If currently Delivered, don't change automatically
+            if (o.status !== OrderStatus.DELIVERED) {
+                if (allCompleted) {
+                    newStatus = OrderStatus.READY;
+                } else if (anyCompleted) {
+                    newStatus = OrderStatus.COOKING;
+                } else if (!anyCompleted && (o.status === OrderStatus.COOKING || o.status === OrderStatus.READY)) {
+                    // If everything unchecked, revert to Pending
+                    newStatus = OrderStatus.PENDING;
+                }
+            }
+
+            return { ...o, items: newItems, status: newStatus };
         }
         return o;
     });
@@ -46,6 +89,15 @@ export const clearHistory = () => {
   const orders = getOrders();
   const activeOrders = orders.filter(o => o.status !== OrderStatus.DELIVERED);
   saveOrders(activeOrders);
+};
+
+// --- NEW: FREE TABLE LOGIC ---
+export const freeTable = (tableNumber: string) => {
+    const orders = getOrders();
+    // Keep orders that represent OTHER tables. 
+    // Effectively deletes/archives orders for the specific table to free it up.
+    const newOrders = orders.filter(o => o.tableNumber !== tableNumber);
+    saveOrders(newOrders);
 };
 
 export const nukeAllData = () => {

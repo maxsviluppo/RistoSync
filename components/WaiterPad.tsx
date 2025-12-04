@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Category, MenuItem, Order, OrderItem, OrderStatus } from '../types';
-import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, getWaiterName, logoutWaiter, getMenuItems } from '../services/storageService';
+import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, getWaiterName, logoutWaiter, getMenuItems, freeTable } from '../services/storageService';
 import { askChefAI } from '../services/geminiService';
-import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf } from 'lucide-react';
+import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen } from 'lucide-react';
 
 // --- CONSTANTS ---
 const CATEGORY_ORDER = [
@@ -26,6 +26,11 @@ const getAllergenIcon = (id: string) => {
         case 'Vegano': return <Leaf size={10} className="text-green-500" />;
         default: return null;
     }
+};
+
+const capitalize = (str: string) => {
+    if (!str) return '';
+    return str.charAt(0).toUpperCase() + str.slice(1);
 };
 
 // --- SUB-COMPONENT: Swipeable Cart Item ---
@@ -214,6 +219,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const [deleteConfirmIndex, setDeleteConfirmIndex] = useState<number | null>(null);
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [freeTableConfirmOpen, setFreeTableConfirmOpen] = useState(false); // NEW: Free Table Modal
 
   // AI State
   const [aiModalOpen, setAiModalOpen] = useState(false);
@@ -323,7 +329,8 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   // --- Table Selection & Order Recovery ---
   const handleSelectTable = (tId: string) => {
       setTable(tId);
-      setTableManagerOpen(false);
+      // Removed setTableManagerOpen(false) to allow interaction inside modal
+      // We will close it manually or when user starts ordering
 
       // Check if there is an active PENDING order for this table
       const pendingOrder = allRestaurantOrders.find(o => o.tableNumber === tId && o.status === OrderStatus.PENDING);
@@ -332,7 +339,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
           // RECOVERY MODE: Load existing items into cart for editing
           setCart(pendingOrder.items);
           setEditingOrderId(pendingOrder.id);
-          // Auto-expand sheet to show we recovered something? Maybe not, too intrusive.
       } else {
           // INTEGRATION MODE: Clean cart for new additions
           setCart([]);
@@ -373,6 +379,9 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       setTimeout(() => setJustAddedId(null), 600);
       setCartBump(true);
       setTimeout(() => setCartBump(false), 300);
+      
+      // If table manager is open, close it to let user order
+      if(tableManagerOpen) setTableManagerOpen(false);
   };
 
   // --- Cart Management ---
@@ -440,6 +449,18 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
     }, 500);
   };
 
+  // --- Table Actions (Free Table) ---
+  const handleFreeTable = () => {
+      if (table) {
+          freeTable(table);
+          setTable('');
+          setCart([]);
+          setEditingOrderId(null);
+          setFreeTableConfirmOpen(false);
+          loadData();
+      }
+  };
+
   // --- Settings Logic ---
   const handleSaveSettings = () => {
       saveTableCount(tempTableCount);
@@ -479,18 +500,25 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   };
   
   const getTableStatusInfo = (tableNum: string) => {
-      const tableOrders = allRestaurantOrders.filter(o => o.tableNumber === tableNum && o.status !== OrderStatus.DELIVERED);
+      // Logic Update: We look at ALL orders for this table.
+      // Even if DELIVERED, it means the table is still occupied until explicitly freed.
+      const tableOrders = allRestaurantOrders.filter(o => o.tableNumber === tableNum);
+      
       if (tableOrders.length === 0) return { status: 'free', count: 0 };
       
       const hasReady = tableOrders.some(o => o.status === OrderStatus.READY);
-      return { 
-          status: hasReady ? 'ready' : 'busy', 
-          count: tableOrders.length 
-      };
+      const hasPending = tableOrders.some(o => o.status === OrderStatus.PENDING || o.status === OrderStatus.COOKING);
+      
+      // Determine Status Priority
+      if (hasReady) return { status: 'ready', count: tableOrders.filter(o => o.status === OrderStatus.READY).length };
+      if (hasPending) return { status: 'busy', count: tableOrders.length };
+      
+      // If we have orders but none are pending/ready, it means everything is delivered
+      // Status: Eating/Complete
+      return { status: 'eating', count: 0 };
   };
 
   const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
-  const pendingCount = existingOrders.filter(o => o.status !== OrderStatus.DELIVERED).length;
 
   return (
     <div className="flex flex-col h-screen bg-slate-900 text-slate-100 max-w-md mx-auto shadow-2xl overflow-hidden relative border-x border-slate-800 font-sans selection:bg-orange-500 selection:text-white">
@@ -684,7 +712,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                       <input 
                                           type="text"
                                           value={editNotes}
-                                          onChange={(e) => setEditNotes(e.target.value)}
+                                          onChange={(e) => setEditNotes(capitalize(e.target.value))}
                                           placeholder="Es. Ben cotto..."
                                           className="w-full bg-slate-100 border-none rounded-lg px-3 py-2 text-slate-800 text-xs focus:ring-2 focus:ring-orange-200 outline-none"
                                       />
@@ -846,7 +874,11 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                       {!isSettingTables ? (
                         <div>
                             <h2 className="text-2xl font-bold text-white">Mappa Tavoli</h2>
-                            <p className="text-slate-400 text-sm">Seleziona il tavolo corrente</p>
+                            {table ? (
+                                <p className="text-orange-400 text-sm font-bold">Selezionato: TAVOLO {table}</p>
+                            ) : (
+                                <p className="text-slate-400 text-sm">Seleziona un tavolo</p>
+                            )}
                         </div>
                       ) : (
                         <div>
@@ -879,37 +911,61 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                           </button>
                       </div>
                   ) : (
-                    <div className="grid grid-cols-3 gap-3 overflow-y-auto p-1 custom-scroll">
-                        {Array.from({ length: totalTables }, (_, i) => (i + 1).toString()).map(tId => {
-                            const info = getTableStatusInfo(tId);
-                            const isSelected = table === tId;
-                            
-                            let bgClass = 'bg-slate-800 border-slate-700 text-slate-400';
-                            if (isSelected) bgClass = 'bg-slate-800 border-orange-500 text-orange-500 ring-2 ring-orange-500/30 shadow-[0_0_15px_rgba(249,115,22,0.4)]';
-                            else if (info.status === 'ready') bgClass = 'bg-green-900/30 border-green-500 text-green-400 animate-pulse';
-                            else if (info.status === 'busy') bgClass = 'bg-slate-700 border-orange-500/50 text-orange-200';
+                    <>
+                        <div className="grid grid-cols-3 gap-3 overflow-y-auto p-1 custom-scroll mb-4 flex-1">
+                            {Array.from({ length: totalTables }, (_, i) => (i + 1).toString()).map(tId => {
+                                const info = getTableStatusInfo(tId);
+                                const isSelected = table === tId;
+                                
+                                let bgClass = 'bg-slate-800 border-slate-700 text-slate-400';
+                                let statusText = 'LIBERO';
 
-                            return (
-                                <button
-                                    key={tId}
-                                    onClick={() => handleSelectTable(tId)}
-                                    className={`aspect-square rounded-2xl border-2 flex flex-col items-center justify-center relative transition-all active:scale-95 ${bgClass}`}
-                                >
-                                    <span className="text-2xl font-black">{tId}</span>
-                                    <span className="text-[9px] uppercase font-bold mt-1">
-                                        {info.status === 'ready' ? 'PRONTO' : info.status === 'busy' ? 'OCCUPATO' : 'LIBERO'}
-                                    </span>
-                                    {info.count > 0 && (
-                                        <div className={`absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-md
-                                            ${info.status === 'ready' ? 'bg-green-600' : 'bg-orange-500'}
-                                        `}>
-                                            {info.count}
-                                        </div>
-                                    )}
-                                </button>
-                            );
-                        })}
-                    </div>
+                                if (isSelected) {
+                                    bgClass = 'bg-slate-800 border-orange-500 text-orange-500 ring-2 ring-orange-500/30 shadow-[0_0_15px_rgba(249,115,22,0.4)]';
+                                } else if (info.status === 'ready') {
+                                    bgClass = 'bg-green-900/30 border-green-500 text-green-400 animate-pulse';
+                                    statusText = 'PRONTO';
+                                } else if (info.status === 'busy') {
+                                    bgClass = 'bg-slate-700 border-orange-500/50 text-orange-200';
+                                    statusText = 'IN ATTESA';
+                                } else if (info.status === 'eating') {
+                                    // NEW STATUS: Eating/Served
+                                    bgClass = 'bg-blue-900/40 border-blue-500/50 text-blue-200';
+                                    statusText = 'AL TAVOLO';
+                                }
+
+                                return (
+                                    <button
+                                        key={tId}
+                                        onClick={() => handleSelectTable(tId)}
+                                        className={`aspect-square rounded-2xl border-2 flex flex-col items-center justify-center relative transition-all active:scale-95 ${bgClass}`}
+                                    >
+                                        <span className="text-2xl font-black">{tId}</span>
+                                        <span className="text-[9px] uppercase font-bold mt-1 leading-none text-center px-1">
+                                            {statusText}
+                                        </span>
+                                        {info.count > 0 && (
+                                            <div className={`absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-md
+                                                ${info.status === 'ready' ? 'bg-green-600' : 'bg-orange-500'}
+                                            `}>
+                                                {info.count}
+                                            </div>
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        
+                        {/* ACTION BUTTONS FOR SELECTED TABLE */}
+                        {table && getTableStatusInfo(table).status !== 'free' && (
+                             <button 
+                                onClick={() => setFreeTableConfirmOpen(true)}
+                                className="w-full bg-slate-800 border border-slate-700 text-slate-300 py-3 rounded-xl font-bold flex items-center justify-center gap-2 hover:bg-slate-700 hover:text-white transition-colors"
+                             >
+                                <DoorOpen size={20} /> LIBERA TAVOLO / CONTO
+                             </button>
+                        )}
+                    </>
                   )}
               </div>
           </div>
@@ -1029,6 +1085,37 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                         className="flex-1 py-3 rounded-xl bg-red-600 text-white font-bold text-sm hover:bg-red-700 shadow-lg shadow-red-600/30 transition-colors"
                       >
                           Elimina
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* --- FREE TABLE CONFIRMATION MODAL --- */}
+      {freeTableConfirmOpen && (
+          <div className="absolute inset-0 z-[70] bg-black/80 backdrop-blur-md flex items-center justify-center p-6 animate-fade-in">
+              <div className="bg-slate-900 border border-slate-600 rounded-3xl p-6 w-full max-w-xs shadow-2xl transform animate-slide-up">
+                  <div className="flex flex-col items-center text-center mb-4">
+                      <div className="w-16 h-16 bg-slate-700 rounded-full flex items-center justify-center mb-4 text-slate-300 border border-slate-600">
+                          <DoorOpen size={32} />
+                      </div>
+                      <h3 className="text-xl font-bold text-white">Liberare il Tavolo {table}?</h3>
+                      <p className="text-slate-400 text-sm mt-2">
+                          Confermi che il tavolo è libero e il conto è stato gestito? Tutti gli ordini verranno archiviati.
+                      </p>
+                  </div>
+                  <div className="flex gap-3 mt-6">
+                      <button 
+                        onClick={() => setFreeTableConfirmOpen(false)}
+                        className="flex-1 py-3 rounded-xl bg-slate-800 text-slate-300 font-bold text-sm hover:bg-slate-700 transition-colors"
+                      >
+                          Annulla
+                      </button>
+                      <button 
+                        onClick={handleFreeTable}
+                        className="flex-1 py-3 rounded-xl bg-white text-slate-900 font-bold text-sm hover:bg-slate-200 shadow-lg transition-colors"
+                      >
+                          Conferma
                       </button>
                   </div>
               </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import KitchenDisplay from './components/KitchenDisplay';
 import WaiterPad from './components/WaiterPad';
-import { ChefHat, Smartphone, User, Settings, Database, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Lock, ShieldAlert, CloudOff, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Database, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Lock, ShieldAlert, CloudOff, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings } from './services/storageService';
 import { MenuItem, Category } from './types';
 
@@ -26,6 +26,11 @@ const ALLERGENS_CONFIG = [
     { id: 'Vegano', icon: Leaf, label: 'Vegano' },
 ];
 
+const capitalize = (str: string) => {
+    if (!str) return '';
+    return str.charAt(0).toUpperCase() + str.slice(1);
+};
+
 const App: React.FC = () => {
   const [role, setRole] = useState<'kitchen' | 'waiter' | null>(null);
   const [showLogin, setShowLogin] = useState(false);
@@ -33,7 +38,7 @@ const App: React.FC = () => {
   
   // Admin State
   const [showAdmin, setShowAdmin] = useState(false);
-  const [adminTab, setAdminTab] = useState<'db' | 'menu' | 'notif'>('menu');
+  const [adminTab, setAdminTab] = useState<'db' | 'menu' | 'notif' | 'info'>('menu');
   
   // Menu Manager State
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -148,7 +153,7 @@ const App: React.FC = () => {
                     <input 
                         type="text" 
                         value={waiterNameInput}
-                        onChange={(e) => setWaiterNameInput(e.target.value)}
+                        onChange={(e) => setWaiterNameInput(capitalize(e.target.value))}
                         placeholder="Nome (es. Marco)"
                         className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-4 text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 outline-none mb-4 text-center font-bold text-lg"
                         autoFocus
@@ -197,6 +202,10 @@ const App: React.FC = () => {
                          <button onClick={() => setAdminTab('notif')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'notif' ? 'bg-green-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
                              <Bell size={20}/> Notifiche
                          </button>
+                         <div className="h-px bg-slate-800 my-2"></div>
+                         <button onClick={() => setAdminTab('info')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'info' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
+                             <Info size={20}/> Legenda
+                         </button>
                     </div>
 
                     {/* Content */}
@@ -207,6 +216,7 @@ const App: React.FC = () => {
                              <button onClick={() => setAdminTab('db')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'db' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Database</button>
                              <button onClick={() => setAdminTab('menu')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'menu' ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Menu</button>
                              <button onClick={() => setAdminTab('notif')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'notif' ? 'bg-green-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Notifiche</button>
+                             <button onClick={() => setAdminTab('info')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'info' ? 'bg-slate-700 text-white' : 'bg-slate-800 text-slate-400'}`}>Info</button>
                         </div>
 
                         {/* DB TAB (Locked/Technical Area) */}
@@ -260,6 +270,28 @@ const App: React.FC = () => {
                             </div>
                         )}
 
+                        {/* INFO / LEGENDA TAB */}
+                        {adminTab === 'info' && (
+                            <div className="max-w-2xl">
+                                <h3 className="text-xl font-bold text-white mb-6">Legenda Icone</h3>
+                                <p className="text-slate-400 mb-6">
+                                    Guida alle icone utilizzate nel sistema per indicare allergeni e caratteristiche dei piatti.
+                                    Queste icone appaiono sull'app del cameriere quando configurate nel menu.
+                                </p>
+                                
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                                    {ALLERGENS_CONFIG.map(allergen => (
+                                        <div key={allergen.id} className="bg-slate-900 border border-slate-800 rounded-xl p-6 flex flex-col items-center gap-3 hover:border-slate-600 transition-colors">
+                                            <div className="p-3 bg-slate-800 rounded-full text-white">
+                                                <allergen.icon size={24} />
+                                            </div>
+                                            <span className="font-bold text-white text-sm uppercase tracking-wide">{allergen.label}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {/* NOTIF TAB */}
                         {adminTab === 'notif' && (
                             <div className="max-w-2xl">
@@ -309,7 +341,7 @@ const App: React.FC = () => {
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                                             <div>
                                                 <label className="block text-slate-500 text-xs font-bold uppercase mb-2">Nome Piatto</label>
-                                                <input type="text" value={editingItem.name || ''} onChange={e => setEditingItem({...editingItem, name: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-white outline-none focus:border-orange-500 transition-colors font-medium" placeholder="Es. Carbonara" />
+                                                <input type="text" value={editingItem.name || ''} onChange={e => setEditingItem({...editingItem, name: capitalize(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-white outline-none focus:border-orange-500 transition-colors font-medium" placeholder="Es. Carbonara" />
                                             </div>
                                             <div>
                                                 <label className="block text-slate-500 text-xs font-bold uppercase mb-2">Prezzo (€)</label>

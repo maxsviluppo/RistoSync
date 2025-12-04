@@ -1,7 +1,16 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Order, OrderStatus } from '../types';
-import { getOrders, updateOrderStatus, clearHistory } from '../services/storageService';
-import { Clock, CheckCircle, ChefHat, Trash2, History, UtensilsCrossed, Bell, User, LogOut } from 'lucide-react';
+import { Order, OrderStatus, Category } from '../types';
+import { getOrders, updateOrderStatus, clearHistory, toggleOrderItemCompletion } from '../services/storageService';
+import { Clock, CheckCircle, ChefHat, Trash2, History, UtensilsCrossed, Bell, User, LogOut, Square, CheckSquare } from 'lucide-react';
+
+// --- SORT PRIORITY ---
+const CATEGORY_PRIORITY: Record<Category, number> = {
+    [Category.ANTIPASTI]: 1,
+    [Category.PRIMI]: 2,
+    [Category.SECONDI]: 3,
+    [Category.DOLCI]: 4,
+    [Category.BEVANDE]: 5
+};
 
 // --- SOUND UTILS ---
 const playNotificationSound = (type: 'new' | 'ready') => {
@@ -136,6 +145,10 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
     updateOrderStatus(orderId, nextStatus);
   };
 
+  const handleToggleItem = (orderId: string, originalIndex: number) => {
+      toggleOrderItemCompletion(orderId, originalIndex);
+  };
+
   const formatTime = (timestamp: number) => {
     return new Date(timestamp).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
   };
@@ -256,6 +269,15 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
              const isLate = viewMode === 'active' && timeDiff > 15 && order.status !== OrderStatus.READY;
              const isReady = order.status === OrderStatus.READY;
 
+            // Sort items for display using category priority, but KEEP reference to original index for toggling
+            const sortedItemsWithIndex = order.items
+                .map((item, originalIndex) => ({ item, originalIndex }))
+                .sort((a, b) => {
+                    const pA = CATEGORY_PRIORITY[a.item.menuItem.category] || 99;
+                    const pB = CATEGORY_PRIORITY[b.item.menuItem.category] || 99;
+                    return pA - pB;
+                });
+
             return (
               <div 
                 key={order.id} 
@@ -288,14 +310,31 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
                 {/* Body Card */}
                 <div className="p-4 flex-1 overflow-y-auto max-h-[300px] bg-slate-900/50">
                   <ul className="space-y-3">
-                    {order.items.map((item, idx) => (
-                      <li key={idx} className="flex justify-between items-start border-b border-dashed border-slate-700 pb-3 last:border-0">
-                        <div className="flex gap-3">
-                           <span className="font-black text-xl w-8 h-8 flex items-center justify-center bg-slate-700 rounded-lg text-white shadow-inner">
+                    {sortedItemsWithIndex.map(({ item, originalIndex }) => (
+                      <li 
+                        key={`${order.id}-${originalIndex}`} 
+                        onClick={() => viewMode === 'active' && handleToggleItem(order.id, originalIndex)}
+                        className={`flex justify-between items-start border-b border-dashed border-slate-700 pb-3 last:border-0 transition-all cursor-pointer rounded-lg p-2
+                            ${item.completed ? 'bg-green-900/10 opacity-50' : 'hover:bg-slate-800'}
+                        `}
+                      >
+                        <div className="flex gap-3 items-center w-full">
+                           <div className={`transition-colors ${item.completed ? 'text-green-500' : 'text-slate-600'}`}>
+                                {item.completed ? <CheckSquare size={24} /> : <Square size={24} />}
+                           </div>
+                           <span className={`font-black text-xl w-8 h-8 flex items-center justify-center rounded-lg shadow-inner mt-1 transition-colors
+                                ${item.completed ? 'bg-green-900/30 text-green-400' : 'bg-slate-700 text-white'}
+                           `}>
                              {item.quantity}
                            </span>
-                           <div>
-                               <p className="font-bold text-lg leading-tight text-slate-200">{item.menuItem.name}</p>
+                           <div className="flex-1">
+                               {/* Category Label */}
+                               <p className="text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-0.5">
+                                   {item.menuItem.category}
+                               </p>
+                               <p className={`font-bold text-lg leading-tight transition-all ${item.completed ? 'text-slate-500 line-through decoration-2 decoration-green-500/50' : 'text-slate-200'}`}>
+                                   {item.menuItem.name}
+                               </p>
                                {item.notes && (
                                    <p className="text-red-300 text-sm font-bold mt-1 bg-red-900/20 inline-block px-2 py-0.5 rounded border border-red-900/30">
                                        ⚠️ {item.notes}
