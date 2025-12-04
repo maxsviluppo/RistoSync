@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import KitchenDisplay from './components/KitchenDisplay';
 import WaiterPad from './components/WaiterPad';
-import { ChefHat, Smartphone, User, Settings, Database, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Lock, ShieldAlert, CloudOff } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Database, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Lock, ShieldAlert, CloudOff, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings } from './services/storageService';
 import { MenuItem, Category } from './types';
 
@@ -12,6 +12,18 @@ const ADMIN_CATEGORY_ORDER = [
     Category.SECONDI,
     Category.DOLCI,
     Category.BEVANDE
+];
+
+// Configurazione Allergeni
+const ALLERGENS_CONFIG = [
+    { id: 'Glutine', icon: Wheat, label: 'Glutine' },
+    { id: 'Latticini', icon: Milk, label: 'Latticini' },
+    { id: 'Uova', icon: Egg, label: 'Uova' },
+    { id: 'Frutta a guscio', icon: Nut, label: 'Noci' }, // Using Nut as generic for nuts
+    { id: 'Pesce', icon: Fish, label: 'Pesce' },
+    { id: 'Soia', icon: Bean, label: 'Soia' }, // Using Bean for Soy
+    { id: 'Piccante', icon: Flame, label: 'Piccante' },
+    { id: 'Vegano', icon: Leaf, label: 'Vegano' },
 ];
 
 const App: React.FC = () => {
@@ -71,7 +83,8 @@ const App: React.FC = () => {
               name: editingItem.name,
               price: Number(editingItem.price),
               category: editingItem.category as Category,
-              description: editingItem.description || ''
+              description: editingItem.description || '',
+              allergens: editingItem.allergens || []
           };
           
           if (editingItem.id) {
@@ -90,6 +103,15 @@ const App: React.FC = () => {
           deleteMenuItem(itemToDelete.id);
           setMenuItems(getMenuItems());
           setItemToDelete(null);
+      }
+  };
+
+  const toggleAllergen = (allergenId: string) => {
+      const current = editingItem.allergens || [];
+      if (current.includes(allergenId)) {
+          setEditingItem({ ...editingItem, allergens: current.filter(a => a !== allergenId) });
+      } else {
+          setEditingItem({ ...editingItem, allergens: [...current, allergenId] });
       }
   };
 
@@ -312,9 +334,34 @@ const App: React.FC = () => {
                                                 </div>
                                             </div>
                                         </div>
+                                        
+                                        {/* ALLERGENS SECTION */}
+                                        <div className="mb-6">
+                                            <label className="block text-slate-500 text-xs font-bold uppercase mb-2">Allergeni & Caratteristiche</label>
+                                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                                                {ALLERGENS_CONFIG.map(allergen => {
+                                                    const isActive = editingItem.allergens?.includes(allergen.id);
+                                                    return (
+                                                        <button
+                                                            key={allergen.id}
+                                                            onClick={() => toggleAllergen(allergen.id)}
+                                                            className={`p-2 rounded-xl flex flex-col items-center justify-center gap-1 border transition-all
+                                                                ${isActive 
+                                                                    ? 'bg-orange-500 border-orange-400 text-white shadow-md' 
+                                                                    : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-600 hover:text-slate-300'}
+                                                            `}
+                                                        >
+                                                            <allergen.icon size={18} strokeWidth={2.5} />
+                                                            <span className="text-[10px] font-bold uppercase tracking-tighter">{allergen.label}</span>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+
                                         <div className="mb-8">
                                             <label className="block text-slate-500 text-xs font-bold uppercase mb-2">Descrizione (per AI e Clienti)</label>
-                                            <textarea value={editingItem.description || ''} onChange={e => setEditingItem({...editingItem, description: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-white outline-none focus:border-orange-500 h-32 resize-none transition-colors" placeholder="Ingredienti principali, allergeni, note speciali..."></textarea>
+                                            <textarea value={editingItem.description || ''} onChange={e => setEditingItem({...editingItem, description: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-white outline-none focus:border-orange-500 h-32 resize-none transition-colors" placeholder="Ingredienti principali, note speciali..."></textarea>
                                         </div>
                                         <div className="flex gap-4">
                                             <button onClick={() => setIsEditingItem(false)} className="flex-1 py-4 rounded-xl bg-slate-800 text-slate-300 font-bold hover:bg-slate-700 transition-colors">Annulla</button>
@@ -338,11 +385,21 @@ const App: React.FC = () => {
                                                         {itemsInCategory.map(item => (
                                                             <div key={item.id} className="bg-slate-900 border border-slate-800 p-4 rounded-2xl flex justify-between items-start group hover:border-slate-600 transition-all hover:shadow-lg">
                                                                 <div>
-                                                                    <h5 className="font-bold text-white text-lg leading-tight mb-1">{item.name}</h5>
+                                                                    <div className="flex items-center gap-2 mb-1">
+                                                                        <h5 className="font-bold text-white text-lg leading-tight">{item.name}</h5>
+                                                                        {item.allergens && item.allergens.length > 0 && (
+                                                                            <span className="flex gap-1">
+                                                                                {item.allergens.includes('Piccante') && <Flame size={12} className="text-orange-500" />}
+                                                                                {item.allergens.includes('Vegano') && <Leaf size={12} className="text-green-500" />}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
                                                                     <p className="text-slate-500 text-xs line-clamp-2 mb-3 h-8">{item.description || 'Nessuna descrizione'}</p>
-                                                                    <span className="bg-slate-950 text-slate-300 px-3 py-1 rounded-lg font-mono font-bold text-sm border border-slate-800">
-                                                                        € {item.price.toFixed(2)}
-                                                                    </span>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <span className="bg-slate-950 text-slate-300 px-3 py-1 rounded-lg font-mono font-bold text-sm border border-slate-800">
+                                                                            € {item.price.toFixed(2)}
+                                                                        </span>
+                                                                    </div>
                                                                 </div>
                                                                 <div className="flex flex-col gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                                                                     <button onClick={() => { setEditingItem(item); setIsEditingItem(true); }} className="w-10 h-10 flex items-center justify-center bg-slate-800 rounded-xl text-blue-400 hover:bg-blue-500 hover:text-white transition-colors shadow-sm">

@@ -19,6 +19,7 @@ export interface MenuItem {
   price: number;
   category: Category;
   description?: string; // Used for AI context
+  allergens?: string[]; // Array of allergen names (e.g., 'Glutine', 'Latte')
 }
 
 export interface OrderItem {

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Category, MenuItem, Order, OrderItem, OrderStatus } from '../types';
 import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, getWaiterName, logoutWaiter, getMenuItems } from '../services/storageService';
 import { askChefAI } from '../services/geminiService';
-import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home } from 'lucide-react';
+import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf } from 'lucide-react';
 
 // --- CONSTANTS ---
 const CATEGORY_ORDER = [
@@ -12,6 +12,21 @@ const CATEGORY_ORDER = [
     Category.DOLCI,
     Category.BEVANDE
 ];
+
+// Helper to get icon for allergen
+const getAllergenIcon = (id: string) => {
+    switch (id) {
+        case 'Glutine': return <Wheat size={10} />;
+        case 'Latticini': return <Milk size={10} />;
+        case 'Uova': return <Egg size={10} />;
+        case 'Frutta a guscio': return <Nut size={10} />;
+        case 'Pesce': return <Fish size={10} />;
+        case 'Soia': return <Bean size={10} />;
+        case 'Piccante': return <Flame size={10} className="text-orange-500" />;
+        case 'Vegano': return <Leaf size={10} className="text-green-500" />;
+        default: return null;
+    }
+};
 
 // --- SUB-COMPONENT: Swipeable Cart Item ---
 interface SwipeableItemProps {
@@ -619,7 +634,15 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                     <>
                                         <p className="text-slate-300 text-[10px] leading-relaxed mb-3 pr-2 line-clamp-2 font-medium">{item.description}</p>
                                         <div className="flex items-center justify-between mt-2">
-                                            <div className="flex gap-1"></div>
+                                            {/* Allergens Area (Restored Space) */}
+                                            <div className="flex gap-1.5 flex-wrap opacity-70">
+                                                {item.allergens?.map(algId => (
+                                                    <div key={algId} className="bg-slate-800 p-1 rounded-full border border-slate-700 text-slate-400" title={algId}>
+                                                        {getAllergenIcon(algId)}
+                                                    </div>
+                                                ))}
+                                            </div>
+
                                             <button 
                                                 onClick={(e) => { e.stopPropagation(); openAiFor(item); }} 
                                                 className="bg-transparent text-slate-500 hover:text-orange-400 transition-colors flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide"
