@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Category, MenuItem, Order, OrderItem, OrderStatus } from '../types';
 import { MENU_ITEMS } from '../constants';
-import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems } from '../services/storageService';
+import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, getWaiterName, logoutWaiter } from '../services/storageService';
 import { askChefAI } from '../services/geminiService';
-import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save } from 'lucide-react';
+import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut } from 'lucide-react';
 
 // --- CONSTANTS ---
 const CATEGORY_ORDER = [
@@ -168,13 +168,17 @@ const SwipeableCartItem: React.FC<SwipeableItemProps> = ({ item, index, onEdit, 
     );
 };
 
+interface WaiterPadProps {
+    onExit: () => void;
+}
 
-const WaiterPad: React.FC = () => {
+const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const [table, setTable] = useState<string>('');
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<Category>(Category.ANTIPASTI);
   const [isSending, setIsSending] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null); // Track if we are editing an existing order
+  const [waiterName, setWaiterName] = useState<string>('');
   
   // Sheet Drag State
   const [sheetHeight, setSheetHeight] = useState(80); // Default collapsed height in px
@@ -194,6 +198,7 @@ const WaiterPad: React.FC = () => {
   // Confirmation States
   const [deleteConfirmIndex, setDeleteConfirmIndex] = useState<number | null>(null);
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   // AI State
   const [aiModalOpen, setAiModalOpen] = useState(false);
@@ -230,6 +235,10 @@ const WaiterPad: React.FC = () => {
 
       // Load Config
       setTotalTables(getTableCount());
+      
+      // Load Waiter Name
+      const name = getWaiterName();
+      if (name) setWaiterName(name);
   };
 
   useEffect(() => {
@@ -394,6 +403,7 @@ const WaiterPad: React.FC = () => {
             items: cart,
             status: OrderStatus.PENDING,
             timestamp: Date.now(),
+            waiterName: waiterName || 'Cameriere', // Add Waiter Name
         };
         addOrder(newOrder);
     }
@@ -412,6 +422,11 @@ const WaiterPad: React.FC = () => {
   const handleSaveSettings = () => {
       saveTableCount(tempTableCount);
       setIsSettingTables(false);
+  };
+  
+  const handleLogout = () => {
+      logoutWaiter();
+      onExit();
   };
 
   // --- AI & Helpers ---
@@ -499,16 +514,27 @@ const WaiterPad: React.FC = () => {
 
       {/* --- HEADER --- */}
       <div className="bg-slate-900 pt-5 pb-2 px-5 z-40 flex justify-between items-center sticky top-0 border-b border-white/5 bg-opacity-95 backdrop-blur-sm">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/20 border border-orange-400/30 transform -rotate-3">
                 <Utensils size={18} className="text-white" />
             </div>
-            <h1 className="font-bold text-lg tracking-tight text-white leading-none">
-                Risto<br/><span className="text-orange-500">Sync</span>
-            </h1>
+            <div>
+                <h1 className="font-bold text-sm tracking-tight text-white leading-none mb-0.5">
+                    Risto<span className="text-orange-500">Sync</span>
+                </h1>
+                <p className="text-[10px] text-slate-400 font-medium">Ciao, {waiterName || 'Staff'}</p>
+            </div>
         </div>
         
         <div className="flex items-center gap-3">
+             {/* Profile/Exit Button */}
+             <button 
+                onClick={() => setProfileOpen(true)}
+                className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all active:scale-95"
+            >
+                <User size={18} />
+            </button>
+
             {/* Table Selector Toggle */}
             <button 
                 onClick={() => setTableManagerOpen(!tableManagerOpen)}
@@ -527,20 +553,6 @@ const WaiterPad: React.FC = () => {
                     <LayoutGrid size={20} className={!table ? "opacity-50" : ""} />
                 </div>
             </button>
-
-            {table && (
-                <button 
-                    onClick={() => setHistoryOpen(true)}
-                    className={`relative p-3 rounded-full transition-all active:scale-95 border ${existingOrders.length > 0 ? 'bg-orange-600/10 border-orange-500/30 text-orange-400 hover:bg-orange-600/20' : 'bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700'}`}
-                >
-                    <History size={20} />
-                    {pendingCount > 0 && (
-                        <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-5 h-5 rounded-full flex items-center justify-center font-bold shadow-md border border-slate-900 animate-bounce">
-                            {pendingCount}
-                        </span>
-                    )}
-                </button>
-            )}
         </div>
       </div>
 
@@ -869,6 +881,36 @@ const WaiterPad: React.FC = () => {
                         })}
                     </div>
                   )}
+              </div>
+          </div>
+      )}
+
+      {/* --- PROFILE / EXIT MODAL --- */}
+      {profileOpen && (
+          <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-6 animate-fade-in">
+              <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 w-full max-w-xs shadow-2xl animate-slide-up">
+                  <div className="flex flex-col items-center text-center mb-6">
+                      <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center border border-blue-500 text-blue-500 mb-3">
+                          <User size={32} />
+                      </div>
+                      <h3 className="text-xl font-bold text-white">Profilo Cameriere</h3>
+                      <p className="text-slate-400 text-sm mt-1">Stai operando come <span className="text-white font-bold">{waiterName}</span></p>
+                  </div>
+                  
+                  <div className="space-y-3">
+                      <button 
+                        onClick={handleLogout}
+                        className="w-full py-3 rounded-xl bg-slate-800 text-red-400 font-bold text-sm hover:bg-slate-700 transition-colors flex items-center justify-center gap-2"
+                      >
+                          <LogOut size={18} /> Logout / Cambia Utente
+                      </button>
+                      <button 
+                        onClick={() => setProfileOpen(false)}
+                        className="w-full py-3 rounded-xl bg-slate-700 text-white font-bold text-sm hover:bg-slate-600 transition-colors"
+                      >
+                          Chiudi
+                      </button>
+                  </div>
               </div>
           </div>
       )}

@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Order, OrderStatus } from '../types';
 import { getOrders, updateOrderStatus, clearHistory } from '../services/storageService';
-import { Clock, CheckCircle, ChefHat, Trash2, History, UtensilsCrossed, Bell } from 'lucide-react';
+import { Clock, CheckCircle, ChefHat, Trash2, History, UtensilsCrossed, Bell, User, LogOut } from 'lucide-react';
 
 // --- SOUND UTILS ---
 const playNotificationSound = (type: 'new' | 'ready') => {
@@ -56,7 +56,11 @@ const playNotificationSound = (type: 'new' | 'ready') => {
     }
 };
 
-const KitchenDisplay: React.FC = () => {
+interface KitchenDisplayProps {
+    onExit: () => void;
+}
+
+const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [viewMode, setViewMode] = useState<'active' | 'history'>('active');
   
@@ -220,6 +224,13 @@ const KitchenDisplay: React.FC = () => {
                     <Trash2 size={16} /> Svuota Storico
                 </button>
             )}
+            <button 
+                onClick={onExit}
+                className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white p-2.5 rounded-lg transition-colors border border-slate-700"
+                title="Esci"
+            >
+                <LogOut size={20} />
+            </button>
         </div>
       </div>
 
@@ -262,9 +273,13 @@ const KitchenDisplay: React.FC = () => {
                     </span>
                   </div>
                   <div className="text-right">
-                    <div className="flex items-center gap-1 text-slate-400 font-mono text-lg font-bold">
+                    <div className="flex items-center justify-end gap-1 text-slate-400 font-mono text-lg font-bold">
                         <Clock size={18} />
                         {formatTime(order.timestamp)}
+                    </div>
+                    {/* Waiter Info */}
+                    <div className="flex items-center justify-end gap-1 text-slate-500 text-xs mt-1 font-bold">
+                        <User size={12} /> {order.waiterName || 'Staff'}
                     </div>
                     {isLate && <div className="text-red-500 font-bold text-xs mt-1 animate-pulse bg-red-900/30 px-2 rounded">RITARDO {timeDiff}m</div>}
                   </div>

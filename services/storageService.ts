@@ -2,6 +2,7 @@ import { Order, OrderStatus, OrderItem } from '../types';
 
 const STORAGE_KEY = 'ristosync_orders';
 const TABLES_COUNT_KEY = 'ristosync_table_count';
+const WAITER_KEY = 'ristosync_waiter_name';
 
 export const getOrders = (): Order[] => {
   const data = localStorage.getItem(STORAGE_KEY);
@@ -61,4 +62,17 @@ export const getTableCount = (): number => {
 export const saveTableCount = (count: number) => {
     localStorage.setItem(TABLES_COUNT_KEY, count.toString());
     window.dispatchEvent(new Event('local-storage-update'));
+};
+
+// --- Waiter Session Management ---
+export const getWaiterName = (): string | null => {
+    return localStorage.getItem(WAITER_KEY);
+};
+
+export const saveWaiterName = (name: string) => {
+    localStorage.setItem(WAITER_KEY, name);
+};
+
+export const logoutWaiter = () => {
+    localStorage.removeItem(WAITER_KEY);
 };
