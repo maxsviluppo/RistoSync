@@ -75,12 +75,14 @@ create policy "Manage own menu" on menu_items for all using (auth.uid() = user_i
 
 ### 3. Super Admin Setup (CRITICAL)
 To enable the Super Admin dashboard for `castro.massimo@yahoo.com`, run this specific SQL command in Supabase Editor.
-**NOTE**: This grants view/edit access to ALL tenants for this specific email.
+**Use this "Nuclear Option" to ensure clean permissions:**
 
 ```sql
+-- 1. CLEAN UP
 drop policy if exists "Super Admin View All" on public.profiles;
 drop policy if exists "Super Admin Update All" on public.profiles;
 
+-- 2. CREATE CORRECT PERMISSIONS
 -- Allow Viewing All (Check JWT Email)
 create policy "Super Admin View All"
 on public.profiles for select
