@@ -560,17 +560,14 @@ const WaiterPad: React.FC = () => {
                                   {!isEditing && (
                                     <>
                                         <p className="text-slate-300 text-[10px] leading-relaxed mb-3 pr-2 line-clamp-2 font-medium">{item.description}</p>
-                                        <div className="flex items-center justify-between pr-2">
-                                            {/* Table Number Display (Replaces Price) */}
-                                            <div className="flex items-center gap-2 bg-slate-900/40 px-3 py-1.5 rounded-lg border border-white/5 backdrop-blur-sm">
-                                                <span className="text-[9px] font-black text-white uppercase tracking-wider">TAVOLO</span>
-                                                <span className={`text-sm font-black ${table ? 'text-orange-500' : 'text-orange-500/50'}`}>
-                                                    {table || '?'}
-                                                </span>
+                                        <div className="flex items-center justify-between mt-2">
+                                            {/* Placeholder for future allergens/ingredients */}
+                                            <div className="flex gap-1">
+                                                {/* Space reserved for future icons */}
                                             </div>
 
-                                            <button onClick={(e) => { e.stopPropagation(); openAiFor(item); }} className="text-slate-400 hover:text-orange-400 transition-colors flex items-center gap-1 text-[9px] font-bold uppercase tracking-wide">
-                                                <Search size={10} /> Info
+                                            <button onClick={(e) => { e.stopPropagation(); openAiFor(item); }} className="bg-slate-900/40 hover:bg-slate-900/70 border border-white/5 text-slate-400 hover:text-orange-400 transition-colors px-3 py-1.5 rounded-lg flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide backdrop-blur-md">
+                                                <Search size={12} /> Info Piatto
                                             </button>
                                         </div>
                                     </>
@@ -663,25 +660,43 @@ const WaiterPad: React.FC = () => {
         >
             <div className="absolute top-3 left-1/2 transform -translate-x-1/2 w-12 h-1.5 bg-slate-600/50 rounded-full" />
             
-            <div className="flex items-center gap-4 mt-2">
+            <div className="flex items-center gap-3 mt-1" onClick={(e) => e.stopPropagation()}>
                 <div className={`transition-all duration-300 ${sheetHeight > 100 ? 'scale-0 w-0' : 'scale-100 w-12'}`}>
                      <div className={`w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center text-white font-bold relative transition-transform ${cartBump ? 'scale-125 bg-orange-500 text-white ring-2 ring-orange-300' : ''}`}>
                         <ShoppingBag size={18} />
                         {totalItems > 0 && <span className="absolute -top-1 -right-1 bg-orange-500 text-[10px] w-5 h-5 rounded-full flex items-center justify-center border border-slate-900">{totalItems}</span>}
                      </div>
                 </div>
-                <div>
-                    <h2 className="font-bold text-white text-lg">Il tuo Ordine</h2>
-                    {sheetHeight < 150 && cart.length > 0 && <span className="text-slate-400 text-xs">{totalItems} elementi</span>}
-                    {sheetHeight > 150 && table && <span className="text-orange-400 text-xs uppercase tracking-wider font-bold">Tavolo {table}</span>}
+                <div className="flex flex-col">
+                    <span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider leading-none">Ordine del</span>
+                    <div className="flex items-baseline gap-1">
+                         <span className="font-bold text-white text-lg leading-none">TAVOLO</span>
+                         <span className="font-black text-orange-500 text-xl leading-none">{table || '?'}</span>
+                    </div>
                 </div>
             </div>
 
-            <div className="mt-2 flex items-center gap-3">
-                 <span className="font-mono text-2xl font-bold text-white">€{total.toFixed(2)}</span>
-                 <button onClick={toggleSheet} className={`bg-slate-700 p-2 rounded-full transition-transform duration-500 ${sheetHeight > 200 ? 'rotate-180' : 'rotate-0'}`}>
-                     <ChevronUp size={20} className="text-slate-400" />
-                 </button>
+            <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
+                <button 
+                    onClick={toggleSheet}
+                    className="w-10 h-10 rounded-full bg-slate-700/50 text-slate-300 flex items-center justify-center hover:bg-slate-700 transition-colors"
+                >
+                    {sheetHeight > 200 ? <ChevronDown size={20}/> : <ChevronUp size={20}/>}
+                </button>
+
+                <button
+                    onClick={handleSendOrder}
+                    disabled={!table || cart.length === 0 || isSending}
+                    className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all transform
+                         ${(!table || cart.length === 0 || isSending) 
+                            ? 'bg-slate-700 text-slate-500 cursor-not-allowed shadow-none' 
+                            : 'bg-orange-500 text-white hover:bg-orange-600 hover:scale-110 shadow-orange-500/40'}
+                    `}
+                >
+                    {isSending ? (
+                         <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    ) : <Send size={22} className="ml-0.5 mt-0.5" />}
+                </button>
             </div>
         </div>
 
