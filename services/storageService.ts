@@ -7,6 +7,7 @@ const TABLES_COUNT_KEY = 'ristosync_table_count';
 const WAITER_KEY = 'ristosync_waiter_name';
 const MENU_KEY = 'ristosync_menu_items';
 const SETTINGS_NOTIFICATIONS_KEY = 'ristosync_settings_notifications';
+const GOOGLE_API_KEY_STORAGE = 'ristosync_google_api_key';
 
 // --- SYNC ENGINE STATE ---
 let isSyncing = false;
@@ -20,7 +21,15 @@ export const initSupabaseSync = async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (session?.user) {
         currentUserId = session.user.id;
-        await fetchFromCloud(); // Initial fetch
+        
+        // 1. Sync Data
+        await fetchFromCloud(); 
+        
+        // 2. Sync Profile Settings (API KEY)
+        const { data: profile } = await supabase.from('profiles').select('google_api_key').eq('id', currentUserId).single();
+        if (profile?.google_api_key) {
+            localStorage.setItem(GOOGLE_API_KEY_STORAGE, profile.google_api_key);
+        }
 
         // Subscribe to changes
         supabase
@@ -283,6 +292,25 @@ export const deleteMenuItem = (id: string) => {
     const newItems = items.filter(i => i.id !== id);
     saveMenuItems(newItems);
     if (itemToDelete) syncMenuToCloud(itemToDelete, true);
+};
+
+// --- API KEY MANAGEMENT (NEW) ---
+export const getGoogleApiKey = (): string | null => {
+    return localStorage.getItem(GOOGLE_API_KEY_STORAGE);
+};
+
+export const saveGoogleApiKey = async (apiKey: string) => {
+    localStorage.setItem(GOOGLE_API_KEY_STORAGE, apiKey);
+    
+    // Sync to Cloud Profile
+    if (supabase && currentUserId) {
+        const { error } = await supabase
+            .from('profiles')
+            .update({ google_api_key: apiKey })
+            .eq('id', currentUserId);
+            
+        if (error) console.error("Failed to save API Key to cloud", error);
+    }
 };
 
 // --- SETTINGS (NOTIFICATIONS) ---

@@ -3,8 +3,8 @@ import KitchenDisplay from './components/KitchenDisplay';
 import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
-import { ChefHat, Smartphone, User, Settings, Database, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Lock, ShieldAlert, CloudOff, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut } from 'lucide-react';
-import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync } from './services/storageService';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key } from 'lucide-react';
+import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured } from './services/supabase';
 import { MenuItem, Category } from './types';
 
@@ -43,7 +43,7 @@ const App: React.FC = () => {
   
   // Admin State
   const [showAdmin, setShowAdmin] = useState(false);
-  const [adminTab, setAdminTab] = useState<'db' | 'menu' | 'notif' | 'info'>('menu');
+  const [adminTab, setAdminTab] = useState<'menu' | 'notif' | 'info' | 'ai'>('menu');
   
   // Menu Manager State
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -55,6 +55,7 @@ const App: React.FC = () => {
 
   // Settings State
   const [notifSettings, setNotifSettings] = useState<NotificationSettings>({ kitchenSound: true, waiterSound: true, pushEnabled: false });
+  const [apiKeyInput, setApiKeyInput] = useState('');
 
   // CHECK AUTH SESSION ON LOAD
   useEffect(() => {
@@ -82,6 +83,8 @@ const App: React.FC = () => {
       if (showAdmin) {
           setMenuItems(getMenuItems());
           setNotifSettings(getNotificationSettings());
+          const key = getGoogleApiKey();
+          if (key) setApiKeyInput(key);
       }
   }, [showAdmin]);
 
@@ -151,6 +154,11 @@ const App: React.FC = () => {
       const newSettings = { ...notifSettings, [key]: !notifSettings[key] };
       setNotifSettings(newSettings);
       saveNotificationSettings(newSettings);
+  };
+
+  const handleSaveApiKey = () => {
+      saveGoogleApiKey(apiKeyInput.trim());
+      alert("Chiave API salvata e sincronizzata!");
   };
 
   if (loadingSession) {
@@ -260,6 +268,9 @@ const App: React.FC = () => {
                          <button onClick={() => setAdminTab('notif')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'notif' ? 'bg-green-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
                              <Bell size={20}/> Notifiche
                          </button>
+                         <button onClick={() => setAdminTab('ai')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'ai' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
+                             <Bot size={20}/> AI Intelligence
+                         </button>
                          <button onClick={() => setAdminTab('info')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'info' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
                              <Info size={20}/> Legenda
                          </button>
@@ -271,7 +282,7 @@ const App: React.FC = () => {
                         <div className="flex md:hidden gap-2 mb-6 overflow-x-auto pb-2 no-scrollbar">
                              <button onClick={() => setAdminTab('menu')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'menu' ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Menu</button>
                              <button onClick={() => setAdminTab('notif')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'notif' ? 'bg-green-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Notifiche</button>
-                             <button onClick={() => setAdminTab('info')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'info' ? 'bg-slate-700 text-white' : 'bg-slate-800 text-slate-400'}`}>Info</button>
+                             <button onClick={() => setAdminTab('ai')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'ai' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>AI</button>
                         </div>
 
                         {/* INFO / LEGENDA TAB */}
@@ -287,6 +298,61 @@ const App: React.FC = () => {
                                             <span className="font-bold text-white text-sm uppercase tracking-wide">{allergen.label}</span>
                                         </div>
                                     ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* AI TAB */}
+                        {adminTab === 'ai' && (
+                            <div className="max-w-2xl">
+                                <h3 className="text-xl font-bold text-white mb-6">Configurazione Intelligenza Artificiale</h3>
+                                <div className="bg-slate-900 border border-indigo-500/20 rounded-2xl p-6 mb-6">
+                                    <div className="flex items-start gap-4 mb-6">
+                                        <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400">
+                                            <Bot size={32} />
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-white text-lg">Assistente Chef Google Gemini</h4>
+                                            <p className="text-slate-400 text-sm mt-1">L'AI risponde alle domande dei camerieri sugli ingredienti, allergeni e abbinamenti dei piatti in tempo reale.</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="mb-6">
+                                        <label className="block text-slate-500 text-xs font-bold uppercase mb-2">Google AI Studio API Key</label>
+                                        <div className="flex gap-2">
+                                            <div className="relative flex-1">
+                                                <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+                                                <input 
+                                                    type="password" 
+                                                    value={apiKeyInput} 
+                                                    onChange={(e) => setApiKeyInput(e.target.value)}
+                                                    placeholder="Incolla la tua chiave qui (es. AIzaSy...)" 
+                                                    className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white outline-none focus:border-indigo-500 transition-colors font-mono text-sm"
+                                                />
+                                            </div>
+                                            <button 
+                                                onClick={handleSaveApiKey}
+                                                className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 rounded-xl font-bold shadow-lg shadow-indigo-600/20 transition-all active:scale-95"
+                                            >
+                                                Salva
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
+                                        <h5 className="font-bold text-white text-sm mb-2 flex items-center gap-2">
+                                            Come ottenere la chiave gratuita?
+                                        </h5>
+                                        <ol className="list-decimal list-inside text-slate-400 text-sm space-y-1 mb-4">
+                                            <li>Vai su <a href="https://aistudiogoogle.com/app/apikey" target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">Google AI Studio</a>.</li>
+                                            <li>Accedi con un account Google.</li>
+                                            <li>Clicca su "Create API Key".</li>
+                                            <li>Copia la chiave e incollala qui sopra.</li>
+                                        </ol>
+                                        <a href="https://aistudiogoogle.com/app/apikey" target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-indigo-400 text-xs font-bold uppercase hover:text-indigo-300">
+                                            Vai al sito <ExternalLink size={12} />
+                                        </a>
+                                    </div>
                                 </div>
                             </div>
                         )}
