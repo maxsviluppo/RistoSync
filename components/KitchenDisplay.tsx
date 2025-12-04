@@ -202,8 +202,17 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
               <p className="text-slate-400 text-xs uppercase tracking-widest font-semibold">Dashboard</p>
           </div>
           
+          {/* Refresh Manuale (Sync Check) */}
+          <button 
+             onClick={() => loadOrders()}
+             className="ml-4 p-2 rounded-full bg-slate-800 text-slate-500 hover:text-white hover:bg-slate-700 transition-colors"
+             title="Forza Aggiornamento"
+          >
+             <History size={16} />
+          </button>
+          
           {/* Tabs */}
-          <div className="ml-8 flex bg-slate-800 rounded-lg p-1 border border-slate-700">
+          <div className="ml-4 flex bg-slate-800 rounded-lg p-1 border border-slate-700">
              <button 
                 onClick={() => setViewMode('active')}
                 className={`px-6 py-2 rounded-md font-bold text-sm uppercase tracking-wide transition-all ${viewMode === 'active' ? 'bg-slate-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
@@ -352,7 +361,9 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
                     <button
                     onClick={() => advanceStatus(order.id, order.status)}
                     className={`w-full py-5 text-center font-black text-lg uppercase tracking-wider transition-all flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.98]
-                        ${order.status === OrderStatus.READY ? 'bg-green-600 text-white' : 'bg-blue-600 text-white'}
+                        ${order.status === OrderStatus.READY 
+                            ? 'bg-green-600 hover:bg-green-500 text-white shadow-green-900/20' 
+                            : 'bg-orange-500 hover:bg-orange-600 text-white shadow-orange-900/20'}
                     `}
                     >
                     {order.status === OrderStatus.READY ? (
