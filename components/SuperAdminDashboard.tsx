@@ -52,13 +52,13 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     };
     
     const copySQL = () => {
-        const sql = `-- 1. RESET (CANCELLA REGOLE VECCHIE)
+        const sql = `-- 1. RESET PULIZIA
 drop policy if exists "Super Admin View All" on public.profiles;
 drop policy if exists "Super Admin Update All" on public.profiles;
 
--- 2. CREA REGOLE NUOVE
-create policy "Super Admin View All" on public.profiles for select using ( email ilike 'castro.massimo@yahoo.com' );
-create policy "Super Admin Update All" on public.profiles for update using ( email ilike 'castro.massimo@yahoo.com' );`;
+-- 2. REGOLE CORRETTE (Usa auth.jwt() per vedere tutti)
+create policy "Super Admin View All" on public.profiles for select using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );
+create policy "Super Admin Update All" on public.profiles for update using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );`;
         navigator.clipboard.writeText(sql);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
@@ -181,13 +181,11 @@ create policy "Super Admin Update All" on public.profiles for update using ( ema
 {`drop policy if exists "Super Admin View All" on public.profiles;
 drop policy if exists "Super Admin Update All" on public.profiles;
 
-create policy "Super Admin View All"
-on public.profiles for select
-using ( email ilike 'castro.massimo@yahoo.com' );
+create policy "Super Admin View All" on public.profiles for select
+using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );
 
-create policy "Super Admin Update All"
-on public.profiles for update
-using ( email ilike 'castro.massimo@yahoo.com' );`}
+create policy "Super Admin Update All" on public.profiles for update
+using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );`}
                                                     </pre>
                                                     <button 
                                                         onClick={copySQL}
