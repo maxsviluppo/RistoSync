@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, signOut } from '../services/supabase';
-import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check } from 'lucide-react';
+import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User } from 'lucide-react';
 
 interface SuperAdminDashboardProps {
     onEnterApp: () => void;
@@ -10,24 +10,30 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     const [profiles, setProfiles] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [copied, setCopied] = useState(false);
+    const [currentEmail, setCurrentEmail] = useState<string>('');
     
+    useEffect(() => {
+        // Recupera l'email attuale per mostrarla (Debug)
+        supabase?.auth.getUser().then(({ data }) => {
+            if (data.user?.email) setCurrentEmail(data.user.email);
+        });
+
+        fetchProfiles();
+        
+        // Auto-refresh ogni 30 secondi
+        const interval = setInterval(fetchProfiles, 30000);
+        return () => clearInterval(interval);
+    }, []);
+
     const fetchProfiles = async () => {
         if (!supabase) return;
         setLoading(true);
-        // This query works because of the "Super Admin View All" policy we just created in SQL
+        // This query works because of the "Super Admin View All" policy
         const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
         if (data) setProfiles(data);
         if (error) console.error("Errore recupero profili:", error);
         setLoading(false);
     };
-
-    useEffect(() => {
-        fetchProfiles();
-        
-        // Auto-refresh ogni 30 secondi per vedere nuovi iscritti
-        const interval = setInterval(fetchProfiles, 30000);
-        return () => clearInterval(interval);
-    }, []);
 
     const toggleStatus = async (id: string, currentStatus: string) => {
         if (!supabase) return;
@@ -46,8 +52,9 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     };
     
     const copySQL = () => {
-        const sql = `create policy "Super Admin View All" on public.profiles for select using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );
-create policy "Super Admin Update All" on public.profiles for update using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );`;
+        // Usiamo ILIKE per ignorare maiuscole/minuscole ed evitare errori di battitura
+        const sql = `create policy "Super Admin View All" on public.profiles for select using ( email ilike 'castro.massimo@yahoo.com' );
+create policy "Super Admin Update All" on public.profiles for update using ( email ilike 'castro.massimo@yahoo.com' );`;
         navigator.clipboard.writeText(sql);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
@@ -63,7 +70,10 @@ create policy "Super Admin Update All" on public.profiles for update using ( aut
                         </div>
                         <div>
                             <h1 className="text-3xl font-black">SUPER ADMIN</h1>
-                            <p className="text-slate-400">Pannello di Controllo Globale</p>
+                            <div className="flex items-center gap-2 text-slate-400 text-sm">
+                                <User size={14}/> 
+                                {currentEmail ? <span>Loggato come: <strong className="text-white">{currentEmail}</strong></span> : 'Verifica utente...'}
+                            </div>
                         </div>
                     </div>
                     
@@ -165,9 +175,15 @@ create policy "Super Admin Update All" on public.profiles for update using ( aut
                                                 <div className="bg-slate-950 p-4 rounded-xl border border-slate-700 w-full mt-4 relative group">
                                                     <pre className="text-left text-xs text-green-400 font-mono whitespace-pre-wrap overflow-x-auto">
 {`drop policy if exists "Super Admin View All" on public.profiles;
+drop policy if exists "Super Admin Update All" on public.profiles;
+
 create policy "Super Admin View All"
 on public.profiles for select
-using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );`}
+using ( email ilike 'castro.massimo@yahoo.com' );
+
+create policy "Super Admin Update All"
+on public.profiles for update
+using ( email ilike 'castro.massimo@yahoo.com' );`}
                                                     </pre>
                                                     <button 
                                                         onClick={copySQL}
