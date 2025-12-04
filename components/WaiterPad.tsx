@@ -3,7 +3,7 @@ import { Category, MenuItem, Order, OrderItem, OrderStatus } from '../types';
 import { MENU_ITEMS } from '../constants';
 import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, getWaiterName, logoutWaiter } from '../services/storageService';
 import { askChefAI } from '../services/geminiService';
-import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut } from 'lucide-react';
+import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home } from 'lucide-react';
 
 // --- CONSTANTS ---
 const CATEGORY_ORDER = [
@@ -899,8 +899,15 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                   
                   <div className="space-y-3">
                       <button 
+                        onClick={onExit}
+                        className="w-full py-3 rounded-xl bg-slate-800 text-white font-bold text-sm hover:bg-slate-700 transition-colors flex items-center justify-center gap-2 border border-slate-700"
+                      >
+                          <Home size={18} /> Torna alla Dashboard
+                      </button>
+                      
+                      <button 
                         onClick={handleLogout}
-                        className="w-full py-3 rounded-xl bg-slate-800 text-red-400 font-bold text-sm hover:bg-slate-700 transition-colors flex items-center justify-center gap-2"
+                        className="w-full py-3 rounded-xl bg-slate-800 text-red-400 font-bold text-sm hover:bg-slate-700 transition-colors flex items-center justify-center gap-2 border border-slate-700"
                       >
                           <LogOut size={18} /> Logout / Cambia Utente
                       </button>
