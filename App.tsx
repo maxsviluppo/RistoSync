@@ -3,7 +3,7 @@ import KitchenDisplay from './components/KitchenDisplay';
 import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { MenuItem, Category } from './types';
@@ -44,6 +44,7 @@ const App: React.FC = () => {
   // Admin State
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminTab, setAdminTab] = useState<'menu' | 'notif' | 'info' | 'ai' | 'db'>('menu');
+  const [adminViewMode, setAdminViewMode] = useState<'dashboard' | 'app'>('dashboard');
   
   // Menu Manager State
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -172,9 +173,10 @@ const App: React.FC = () => {
       return <AuthScreen />;
   }
   
-  // 2. SHOW SUPER ADMIN DASHBOARD (Example Logic)
-  if (isSuperAdmin && !role) { 
-      return <SuperAdminDashboard />;
+  // 2. SHOW SUPER ADMIN DASHBOARD
+  // Mostra dashboard SOLO se adminMode è 'dashboard'. Se è 'app', mostra l'app normale.
+  if (isSuperAdmin && !role && adminViewMode === 'dashboard') { 
+      return <SuperAdminDashboard onEnterApp={() => setAdminViewMode('app')} />;
   }
 
   // 3. SHOW MAIN APP (Restaurant Dashboard)
@@ -189,9 +191,20 @@ const App: React.FC = () => {
                     <ChefHat size={18} className="text-white"/>
                 </div>
                 <span className="text-white font-bold">{session?.user?.user_metadata?.restaurant_name || 'Ristorante'}</span>
+                {isSuperAdmin && (
+                    <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase ml-2">Admin Mode</span>
+                )}
             </div>
             
             <div className="flex gap-4">
+                {isSuperAdmin && (
+                    <button 
+                        onClick={() => setAdminViewMode('dashboard')}
+                        className="px-4 py-2 rounded-full bg-slate-800 text-slate-300 hover:text-white hover:bg-slate-700 transition-colors text-sm font-bold flex items-center gap-2"
+                    >
+                        <ShieldCheck size={18} /> Dashboard
+                    </button>
+                )}
                 <button 
                     onClick={() => setShowAdmin(true)}
                     className="p-3 rounded-full bg-slate-800 text-slate-500 hover:text-white hover:bg-slate-700 transition-colors"
@@ -315,7 +328,7 @@ const App: React.FC = () => {
                                 <h3 className="text-xl font-bold text-white mb-6">Database Management</h3>
                                 <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl">
                                     <p className="text-slate-400">Area Riservata Super Admin</p>
-                                    <p className="text-sm text-slate-500 mt-2">Qui puoi gestire i tenant (ristoranti) e le configurazioni globali.</p>
+                                    <p className="text-sm text-slate-500 mt-2">Usa la Dashboard principale per gestire i tenant.</p>
                                 </div>
                             </div>
                         )}

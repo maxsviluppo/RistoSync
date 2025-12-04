@@ -28,7 +28,7 @@ const AuthScreen: React.FC = () => {
                 if (error) throw error;
             } else {
                 // REGISTER
-                const { data, error } = await supabase.auth.signUp({
+                const { data, error: signUpError } = await supabase.auth.signUp({
                     email,
                     password,
                     options: {
@@ -37,15 +37,22 @@ const AuthScreen: React.FC = () => {
                         }
                     }
                 });
-                if (error) throw error;
+                if (signUpError) throw signUpError;
                 
                 // Create Profile Entry
                 if (data.user) {
-                     await supabase.from('profiles').insert({
+                     const { error: profileError } = await supabase.from('profiles').insert({
                          id: data.user.id,
                          email: email,
                          restaurant_name: restaurantName
                      });
+                     
+                     if (profileError) {
+                         // Fallback: se fallisce la creazione profilo (es. tabella non esiste), mostriamo l'errore
+                         console.error("Profile creation failed:", profileError);
+                         setError("Account creato ma errore nel profilo: " + profileError.message);
+                         return; // Stop here so user sees error
+                     }
                 }
             }
             // Page will reload or state update via App.tsx listener
