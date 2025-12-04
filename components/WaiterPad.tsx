@@ -187,6 +187,10 @@ const WaiterPad: React.FC = () => {
   const [editQty, setEditQty] = useState(1);
   const [editNotes, setEditNotes] = useState('');
 
+  // Animation States
+  const [justAddedId, setJustAddedId] = useState<string | null>(null);
+  const [cartBump, setCartBump] = useState(false);
+
   // Delete Confirmation State
   const [deleteConfirmIndex, setDeleteConfirmIndex] = useState<number | null>(null);
 
@@ -300,6 +304,13 @@ const WaiterPad: React.FC = () => {
       });
       
       setEditingItemId(null);
+      
+      // Trigger Animations
+      setJustAddedId(item.id);
+      setTimeout(() => setJustAddedId(null), 600);
+      
+      setCartBump(true);
+      setTimeout(() => setCartBump(false), 300);
   };
 
   // --- Cart Management ---
@@ -390,7 +401,7 @@ const WaiterPad: React.FC = () => {
   return (
     <div className="flex flex-col h-screen bg-slate-900 text-slate-100 max-w-md mx-auto shadow-2xl overflow-hidden relative border-x border-slate-800 font-sans selection:bg-orange-500 selection:text-white">
       
-      {/* Styles for Swipe Animation */}
+      {/* Styles for Animations */}
       <style>{`
         /* Card Movement (Wider range: 100px) */
         @keyframes swipe-card {
@@ -420,6 +431,13 @@ const WaiterPad: React.FC = () => {
             70%, 80% { opacity: 1; transform: scale(1); }
         }
 
+        /* Success Pop Animation */
+        @keyframes success-pop {
+            0% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); }
+            50% { transform: scale(1.03); box-shadow: 0 0 20px rgba(34, 197, 94, 0.4); border-color: rgba(34, 197, 94, 0.8); background-color: rgba(34, 197, 94, 0.1); }
+            100% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); }
+        }
+
         .animate-card-swipe {
             animation: swipe-card 2.5s ease-in-out;
         }
@@ -431,6 +449,9 @@ const WaiterPad: React.FC = () => {
         }
         .animate-fade-delete {
             animation: fade-delete 2.5s ease-in-out;
+        }
+        .animate-success-pop {
+            animation: success-pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
       `}</style>
 
@@ -510,6 +531,7 @@ const WaiterPad: React.FC = () => {
           <div className="px-4 space-y-4 pt-1">
               {MENU_ITEMS.filter(i => i.category === selectedCategory).map(item => {
                   const isEditing = editingItemId === item.id;
+                  const isPopping = justAddedId === item.id;
                   
                   return (
                     <div 
@@ -518,7 +540,10 @@ const WaiterPad: React.FC = () => {
                             group relative overflow-hidden transition-all duration-300 rounded-[2rem] border
                             ${isEditing 
                                 ? 'bg-slate-800 border-orange-500/50 shadow-[0_0_30px_rgba(249,115,22,0.15)] ring-1 ring-orange-500/30' 
-                                : 'bg-gradient-to-br from-slate-700/60 to-slate-800/60 border-white/10 shadow-xl'}
+                                : isPopping
+                                    ? 'animate-success-pop bg-slate-700 border-green-500' // Success State
+                                    : 'bg-gradient-to-br from-slate-700/60 to-slate-800/60 border-white/10 shadow-xl'
+                            }
                         `}
                     >
                       <div className="p-5">
@@ -628,9 +653,9 @@ const WaiterPad: React.FC = () => {
             
             <div className="flex items-center gap-4 mt-2">
                 <div className={`transition-all duration-300 ${sheetHeight > 100 ? 'scale-0 w-0' : 'scale-100 w-12'}`}>
-                     <div className="w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center text-white font-bold relative">
+                     <div className={`w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center text-white font-bold relative transition-transform ${cartBump ? 'scale-125 bg-orange-500 text-white ring-2 ring-orange-300' : ''}`}>
                         <ShoppingBag size={18} />
-                        {totalItems > 0 && <span className="absolute -top-1 -right-1 bg-orange-500 text-[10px] w-5 h-5 rounded-full flex items-center justify-center">{totalItems}</span>}
+                        {totalItems > 0 && <span className="absolute -top-1 -right-1 bg-orange-500 text-[10px] w-5 h-5 rounded-full flex items-center justify-center border border-slate-900">{totalItems}</span>}
                      </div>
                 </div>
                 <div>
