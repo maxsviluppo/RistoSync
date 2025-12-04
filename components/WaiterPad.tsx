@@ -107,7 +107,7 @@ const SwipeableCartItem: React.FC<SwipeableItemProps> = ({ item, index, onEdit, 
 
     return (
         <div 
-            className={`relative h-[72px] rounded-2xl overflow-hidden mb-2 select-none transition-colors duration-200 ${getBgColor()}`}
+            className={`relative h-[72px] rounded-2xl overflow-hidden mb-2 select-none transition-colors duration-200 touch-pan-y ${getBgColor()}`}
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
@@ -545,7 +545,7 @@ const WaiterPad: React.FC = () => {
       </div>
 
       {/* --- MENU GRID --- */}
-      <div className="flex-1 overflow-y-auto pb-48 relative scroll-smooth z-10">
+      <div className="flex-1 overflow-y-auto pb-48 relative scroll-smooth z-10 no-scrollbar touch-pan-y">
           
           <div className="sticky top-0 z-30 pt-2 pb-4 bg-gradient-to-b from-slate-900 via-slate-900/95 to-transparent">
             <div className="flex px-4 gap-3 overflow-x-auto no-scrollbar scroll-smooth snap-x snap-mandatory">
@@ -688,12 +688,12 @@ const WaiterPad: React.FC = () => {
             transition: isDraggingSheet ? 'none' : 'height 0.4s cubic-bezier(0.17, 0.67, 0.22, 1.26)'
         }}
       >
-        {/* Drag Handle Area */}
+        {/* Drag Handle Area - ADDED touch-none */}
         <div 
             onTouchStart={handleSheetTouchStart}
             onTouchMove={handleSheetTouchMove}
             onTouchEnd={handleSheetTouchEnd}
-            className={`flex-shrink-0 h-20 px-6 flex items-center justify-between relative rounded-t-[2.5rem] cursor-grab active:cursor-grabbing border-b border-white/5
+            className={`flex-shrink-0 h-20 px-6 flex items-center justify-between relative rounded-t-[2.5rem] cursor-grab active:cursor-grabbing border-b border-white/5 touch-none
                 ${editingOrderId ? 'bg-gradient-to-r from-blue-900/40 to-slate-800' : 'bg-gradient-to-b from-slate-800 to-slate-800/90'}
             `}
         >
@@ -744,7 +744,8 @@ const WaiterPad: React.FC = () => {
 
         {/* Content */}
         <div className="flex-1 overflow-hidden flex flex-col relative bg-slate-900">
-             <div className="flex-1 overflow-y-auto p-4 space-y-2 pb-4">
+             {/* ADDED overscroll-contain */}
+             <div className="flex-1 overflow-y-auto p-4 space-y-2 pb-4 overscroll-contain">
                 {cart.length === 0 ? (
                     <div className="flex flex-col items-center justify-center h-full text-slate-600 gap-2">
                         <ShoppingBag size={48} className="opacity-20" />
