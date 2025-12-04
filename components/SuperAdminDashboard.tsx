@@ -52,8 +52,12 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     };
     
     const copySQL = () => {
-        // Usiamo ILIKE per ignorare maiuscole/minuscole ed evitare errori di battitura
-        const sql = `create policy "Super Admin View All" on public.profiles for select using ( email ilike 'castro.massimo@yahoo.com' );
+        const sql = `-- 1. RESET (CANCELLA REGOLE VECCHIE)
+drop policy if exists "Super Admin View All" on public.profiles;
+drop policy if exists "Super Admin Update All" on public.profiles;
+
+-- 2. CREA REGOLE NUOVE
+create policy "Super Admin View All" on public.profiles for select using ( email ilike 'castro.massimo@yahoo.com' );
 create policy "Super Admin Update All" on public.profiles for update using ( email ilike 'castro.massimo@yahoo.com' );`;
         navigator.clipboard.writeText(sql);
         setCopied(true);
