@@ -1,8 +1,20 @@
 import { GoogleGenAI } from "@google/genai";
 import { MenuItem } from "../types";
 
+// Safe API Key retrieval that won't crash the browser if process is undefined
+const getApiKey = () => {
+  try {
+    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+      return process.env.API_KEY;
+    }
+  } catch (e) {
+    // Ignore error
+  }
+  return '';
+};
+
 // Initialize the Gemini client
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
 export const askChefAI = async (query: string, currentItem: MenuItem | null): Promise<string> => {
   try {
@@ -26,6 +38,6 @@ export const askChefAI = async (query: string, currentItem: MenuItem | null): Pr
     return response.text || "Mi dispiace, non riesco a recuperare questa informazione al momento.";
   } catch (error) {
     console.error("Gemini Error:", error);
-    return "Errore di connessione con l'Assistente Chef.";
+    return "Assistente Chef offline (Verifica API Key).";
   }
 };
