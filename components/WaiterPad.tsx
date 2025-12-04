@@ -262,9 +262,10 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const [allRestaurantOrders, setAllRestaurantOrders] = useState<Order[]>([]);
   
   // Notification State
-  const [readyCount, setReadyCount] = useState(0);
+  const [totalReadyItems, setTotalReadyItems] = useState(0);
   const [notificationToast, setNotificationToast] = useState<string | null>(null);
-  const prevReadyOrderIdsRef = useRef<string[]>([]); // Track IDs to avoid duplicate alerts
+  // We now track the NUMBER of completed items per order to detect single item completions
+  const prevItemCompletionRef = useRef<Record<string, number>>({});
 
   // Dynamic Table Count
   const [totalTables, setTotalTables] = useState(12);
@@ -280,29 +281,41 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       const name = getWaiterName();
       if (name) setWaiterName(name);
 
-      // --- NOTIFICATION LOGIC (Robust) ---
-      const myReadyOrders = allOrders.filter(o => 
-          o.status === OrderStatus.READY && 
-          (!name || o.waiterName === name || !o.waiterName)
-      );
+      // --- NOTIFICATION LOGIC (Granular Item Level) ---
+      // We check for any order that has items marked 'completed' that were not completed before
+      const currentItemCompletion: Record<string, number> = {};
+      let newItemReadyFound = false;
+      let tableOfNewItem = '';
+      let totalReadyCount = 0;
 
-      const currentReadyIds = myReadyOrders.map(o => o.id);
-      const prevIds = prevReadyOrderIdsRef.current;
+      allOrders.forEach(order => {
+          // Filter out orders that are already fully delivered/closed
+          if (order.status === OrderStatus.DELIVERED) return;
+
+          // Check ownership if waiter name is set
+          if (name && order.waiterName && order.waiterName !== name) return;
+
+          // Count how many items in this order are completed
+          const completedCount = order.items.filter(i => i.completed).length;
+          currentItemCompletion[order.id] = completedCount;
+          totalReadyCount += completedCount;
+
+          // Compare with previous state
+          const prevCount = prevItemCompletionRef.current[order.id] || 0;
+          if (completedCount > prevCount) {
+              newItemReadyFound = true;
+              tableOfNewItem = order.tableNumber;
+          }
+      });
       
-      // Detect ANY new ID that wasn't there before
-      const hasNewReadyOrder = currentReadyIds.some(id => !prevIds.includes(id));
-
-      if (hasNewReadyOrder && currentReadyIds.length > 0) {
-          const newOrders = myReadyOrders.filter(o => !prevIds.includes(o.id));
-          const tableNums = Array.from(new Set(newOrders.map(o => o.tableNumber))).join(', ');
-          
+      if (newItemReadyFound) {
           playWaiterNotification();
-          setNotificationToast(`PIATTI PRONTI: Tavolo ${tableNums || '?'}`);
+          setNotificationToast(`RITIRO CUCINA: Tavolo ${tableOfNewItem || '?'}`);
           setTimeout(() => setNotificationToast(null), 8000);
       }
       
-      prevReadyOrderIdsRef.current = currentReadyIds;
-      setReadyCount(myReadyOrders.length);
+      prevItemCompletionRef.current = currentItemCompletion;
+      setTotalReadyItems(totalReadyCount);
 
       if (table) {
           const tableOrders = allOrders
@@ -556,12 +569,26 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       
       if (tableOrders.length === 0) return { status: 'free', count: 0 };
       
-      const hasReady = tableOrders.some(o => o.status === OrderStatus.READY);
+      // Count specifically COMPLETED items (that are ready to be served)
+      let readyItemsCount = 0;
+      let activeItemsCount = 0;
+
+      tableOrders.forEach(o => {
+          if (o.status !== OrderStatus.DELIVERED) {
+              o.items.forEach(i => {
+                  activeItemsCount++;
+                  if (i.completed) readyItemsCount++;
+              });
+          }
+      });
+      
+      if (readyItemsCount > 0) return { status: 'ready', count: readyItemsCount };
+      
       const hasPending = tableOrders.some(o => o.status === OrderStatus.PENDING || o.status === OrderStatus.COOKING);
       
-      if (hasReady) return { status: 'ready', count: tableOrders.filter(o => o.status === OrderStatus.READY).length };
-      if (hasPending) return { status: 'busy', count: tableOrders.length };
+      if (hasPending || activeItemsCount > 0) return { status: 'busy', count: 0 };
       
+      // If table has orders but all are Delivered, it's occupied by eating customers
       return { status: 'eating', count: 0 };
   };
 
@@ -657,9 +684,9 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all relative ${!table ? 'bg-slate-700 text-slate-400' : 'bg-orange-500 text-white shadow-lg'}`}>
                     <LayoutGrid size={20} className={!table ? "opacity-50" : ""} />
                     
-                    {readyCount > 0 && !tableManagerOpen && (
+                    {totalReadyItems > 0 && !tableManagerOpen && (
                         <div className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border border-slate-900 animate-bounce z-50">
-                            {readyCount}
+                            {totalReadyItems}
                         </div>
                     )}
                 </div>
