@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Category, MenuItem, Order, OrderItem, OrderStatus } from '../types';
 import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, getWaiterName, logoutWaiter, getMenuItems, freeTable } from '../services/storageService';
 import { askChefAI } from '../services/geminiService';
-import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen, Bell, ArrowRight } from 'lucide-react';
+import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen, Bell, ArrowRight, Lock } from 'lucide-react';
 
 // --- CONSTANTS ---
 const CATEGORY_ORDER = [
@@ -360,7 +360,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   // --- Sheet Drag Logic ---
   const handleSheetTouchStart = (e: React.TouchEvent) => {
     setIsDraggingSheet(true);
-    dragStartY.current = e.touches[0].clientY;
+    dragStartY.current = e.touches[0].clientX;
     startHeight.current = sheetHeight;
   };
 
@@ -577,8 +577,12 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const getTableStatusInfo = (tableNum: string) => {
       const tableOrders = allRestaurantOrders.filter(o => o.tableNumber === tableNum);
       
-      if (tableOrders.length === 0) return { status: 'free', count: 0 };
+      if (tableOrders.length === 0) return { status: 'free', count: 0, owner: null };
       
+      // Get the owner of the active order (if any)
+      const activeOrder = tableOrders.find(o => o.status !== OrderStatus.DELIVERED);
+      const owner = activeOrder ? activeOrder.waiterName : tableOrders[0].waiterName;
+
       // Count specifically COMPLETED items (that are ready to be served)
       let readyItemsCount = 0;
       let activeItemsCount = 0;
@@ -592,14 +596,14 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
           }
       });
       
-      if (readyItemsCount > 0) return { status: 'ready', count: readyItemsCount };
+      if (readyItemsCount > 0) return { status: 'ready', count: readyItemsCount, owner };
       
       const hasPending = tableOrders.some(o => o.status === OrderStatus.PENDING || o.status === OrderStatus.COOKING);
       
-      if (hasPending || activeItemsCount > 0) return { status: 'busy', count: 0 };
+      if (hasPending || activeItemsCount > 0) return { status: 'busy', count: 0, owner };
       
       // If table has orders but all are Delivered, it's occupied by eating customers
-      return { status: 'eating', count: 0 };
+      return { status: 'eating', count: 0, owner };
   };
 
   const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
@@ -1009,11 +1013,15 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                             {Array.from({ length: totalTables }, (_, i) => (i + 1).toString()).map(tId => {
                                 const info = getTableStatusInfo(tId);
                                 const isSelected = table === tId;
+                                const isLocked = info.owner && info.owner !== waiterName; // Lock if owned by another waiter
                                 
                                 let bgClass = 'bg-slate-800 border-slate-700 text-slate-400';
                                 let statusText = 'LIBERO';
 
-                                if (isSelected) {
+                                if (isLocked) {
+                                    bgClass = 'bg-slate-900 border-slate-800 text-slate-600 opacity-70 cursor-not-allowed';
+                                    statusText = 'BLOCCATO';
+                                } else if (isSelected) {
                                     bgClass = 'bg-slate-800 border-orange-500 text-orange-500 ring-2 ring-orange-500/30 shadow-[0_0_15px_rgba(249,115,22,0.4)]';
                                 } else if (info.status === 'ready') {
                                     bgClass = 'bg-green-900/30 border-green-500 text-green-400 animate-pulse';
@@ -1029,19 +1037,32 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                 return (
                                     <button
                                         key={tId}
-                                        onClick={() => handleSelectTable(tId)}
+                                        onClick={() => !isLocked && handleSelectTable(tId)}
+                                        disabled={!!isLocked}
                                         className={`aspect-square rounded-2xl border-2 flex flex-col items-center justify-center relative transition-all active:scale-95 ${bgClass}`}
                                     >
-                                        <span className="text-2xl font-black">{tId}</span>
-                                        <span className="text-[9px] uppercase font-bold mt-1 leading-none text-center px-1">
-                                            {statusText}
-                                        </span>
-                                        {info.count > 0 && (
-                                            <div className={`absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-md
-                                                ${info.status === 'ready' ? 'bg-green-600' : 'bg-orange-500'}
-                                            `}>
-                                                {info.count}
-                                            </div>
+                                        {isLocked ? (
+                                            <>
+                                                <Lock size={20} className="mb-1"/>
+                                                <span className="text-xl font-black text-slate-500">{tId}</span>
+                                                <div className="absolute bottom-2 text-[8px] uppercase font-bold bg-slate-800 px-2 py-0.5 rounded text-slate-400 max-w-[90%] truncate">
+                                                    {info.owner}
+                                                </div>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className="text-2xl font-black">{tId}</span>
+                                                <span className="text-[9px] uppercase font-bold mt-1 leading-none text-center px-1">
+                                                    {statusText}
+                                                </span>
+                                                {info.count > 0 && (
+                                                    <div className={`absolute top-2 right-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-md
+                                                        ${info.status === 'ready' ? 'bg-green-600' : 'bg-orange-500'}
+                                                    `}>
+                                                        {info.count}
+                                                    </div>
+                                                )}
+                                            </>
                                         )}
                                     </button>
                                 );
@@ -1053,9 +1074,12 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                             <div className="flex gap-3">
                                 <button 
                                     onClick={proceedToOrder}
-                                    className="flex-1 bg-green-600 hover:bg-green-500 text-white py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors shadow-lg shadow-green-900/20"
+                                    className={`flex-1 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors shadow-lg
+                                        ${editingOrderId ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-900/20 text-white' : 'bg-green-600 hover:bg-green-500 shadow-green-900/20 text-white'}
+                                    `}
                                 >
-                                    <ArrowRight size={20} /> VAI ALL'ORDINE
+                                    {editingOrderId ? <Edit2 size={20}/> : <ArrowRight size={20} />} 
+                                    {editingOrderId ? 'MODIFICA ORDINE' : 'AGGIUNGI PIATTI'}
                                 </button>
                                 
                                 <button 
