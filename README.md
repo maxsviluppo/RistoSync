@@ -78,7 +78,9 @@ When deploying to Vercel, set the following environment variables:
 
 - `VITE_SUPABASE_URL`: Your Supabase Project URL
 - `VITE_SUPABASE_KEY`: Your Supabase Anon/Public Key
-- `API_KEY`: (Optional) Fallback Google Gemini API Key
+
+*Optional:*
+- `API_KEY`: A fallback Google Gemini API Key (if you want to provide a global key for all users, otherwise they will set their own in the settings).
 
 ### 4. Running Locally
 

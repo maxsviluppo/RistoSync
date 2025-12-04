@@ -4,8 +4,9 @@ import { getGoogleApiKey } from "./storageService";
 
 export const askChefAI = async (query: string, currentItem: MenuItem | null): Promise<string> => {
   try {
-    // 1. Retrieve the Key dynamically
-    const apiKey = getGoogleApiKey();
+    // 1. Retrieve the Key dynamically (Priority: Customer Settings > System Env)
+    // process.env.API_KEY acts as a fallback/global key if you want to provide one default key
+    const apiKey = getGoogleApiKey() || process.env.API_KEY;
     
     if (!apiKey) {
         return "⚠️ Configurazione AI mancante. Vai nelle Impostazioni > AI Intelligence e inserisci la tua Google API Key.";
@@ -15,7 +16,7 @@ export const askChefAI = async (query: string, currentItem: MenuItem | null): Pr
     const ai = new GoogleGenAI({ apiKey });
 
     const context = currentItem 
-      ? `Il cliente sta chiedendo informazioni sul piatto: "${currentItem.name}". Descrizione: ${currentItem.description || 'Nessuna descrizione specifica'}.` 
+      ? `Il cliente sta chiedendo informazioni sul piatto: "${currentItem.name}". Descrizione: ${currentItem.description || 'Nessuna descrizione specifica'}. Allergeni noti: ${currentItem.allergens?.join(', ') || 'Nessuno specificato'}.` 
       : 'Il cliente sta facendo una domanda generale sul menu.';
 
     const prompt = `
@@ -36,6 +37,6 @@ export const askChefAI = async (query: string, currentItem: MenuItem | null): Pr
     return response.text || "Mi dispiace, non riesco a recuperare questa informazione al momento.";
   } catch (error) {
     console.error("Gemini Error:", error);
-    return "Errore di connessione AI. Verifica la validità della tua API Key.";
+    return "Errore di connessione AI. Verifica la validità della tua API Key nelle impostazioni.";
   }
 };

@@ -29,6 +29,9 @@ export const initSupabaseSync = async () => {
         const { data: profile } = await supabase.from('profiles').select('google_api_key').eq('id', currentUserId).single();
         if (profile?.google_api_key) {
             localStorage.setItem(GOOGLE_API_KEY_STORAGE, profile.google_api_key);
+        } else {
+            // If no key in cloud, clear local to avoid mismatch
+            localStorage.removeItem(GOOGLE_API_KEY_STORAGE);
         }
 
         // Subscribe to changes
