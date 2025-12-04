@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Category, MenuItem, Order, OrderItem, OrderStatus } from '../types';
 import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, getWaiterName, logoutWaiter, getMenuItems, freeTable } from '../services/storageService';
 import { askChefAI } from '../services/geminiService';
-import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen } from 'lucide-react';
+import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen, Bell } from 'lucide-react';
 
 // --- CONSTANTS ---
 const CATEGORY_ORDER = [
@@ -31,6 +31,33 @@ const getAllergenIcon = (id: string) => {
 const capitalize = (str: string) => {
     if (!str) return '';
     return str.charAt(0).toUpperCase() + str.slice(1);
+};
+
+// --- SOUND UTILS ---
+const playWaiterNotification = () => {
+    try {
+        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+        if (!AudioContext) return;
+        const ctx = new AudioContext();
+        
+        // High pitched double beep for "Attention/Ready"
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, ctx.currentTime); // A5
+        osc.frequency.setValueAtTime(1760, ctx.currentTime + 0.1); // A6
+        
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.3);
+        
+        osc.start();
+        osc.stop(ctx.currentTime + 0.3);
+    } catch (e) {
+        console.error("Audio error", e);
+    }
 };
 
 // --- SUB-COMPONENT: Swipeable Cart Item ---
@@ -234,6 +261,11 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const [existingOrders, setExistingOrders] = useState<Order[]>([]);
   const [allRestaurantOrders, setAllRestaurantOrders] = useState<Order[]>([]);
   
+  // Notification State
+  const [readyCount, setReadyCount] = useState(0);
+  const [notificationToast, setNotificationToast] = useState<string | null>(null);
+  const prevReadyCountRef = useRef(0);
+
   // Dynamic Table Count
   const [totalTables, setTotalTables] = useState(12);
   const [isSettingTables, setIsSettingTables] = useState(false);
@@ -245,6 +277,30 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       const allOrders = getOrders();
       setAllRestaurantOrders(allOrders);
       
+      const name = getWaiterName();
+      if (name) setWaiterName(name);
+
+      // --- NOTIFICATION LOGIC ---
+      // Find orders that are READY and belong to this waiter (or all if name not set for demo)
+      const myReadyOrders = allOrders.filter(o => 
+          o.status === OrderStatus.READY && 
+          (!name || o.waiterName === name || !o.waiterName)
+      );
+
+      const currentCount = myReadyOrders.length;
+      if (currentCount > prevReadyCountRef.current) {
+          // New ready order detected!
+          const diff = myReadyOrders.filter(o => !allRestaurantOrders.find(old => old.id === o.id && old.status === OrderStatus.READY));
+          const tableNums = diff.map(o => o.tableNumber).join(', ');
+          
+          playWaiterNotification();
+          setNotificationToast(`PIATTI PRONTI: Tavolo ${tableNums || '?'}`);
+          setTimeout(() => setNotificationToast(null), 5000);
+      }
+      
+      prevReadyCountRef.current = currentCount;
+      setReadyCount(currentCount);
+
       if (table) {
           const tableOrders = allOrders
             .filter(o => o.tableNumber === table)
@@ -257,10 +313,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       // Load Config
       setTotalTables(getTableCount());
       
-      // Load Waiter Name
-      const name = getWaiterName();
-      if (name) setWaiterName(name);
-
       // Load Menu from Storage (Dynamic)
       setMenuItems(getMenuItems());
   };
@@ -283,7 +335,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       window.removeEventListener('local-storage-update', handleLocalUpdate);
       window.removeEventListener('local-menu-update', handleMenuUpdate);
     };
-  }, [table]); 
+  }, [table, allRestaurantOrders]); // Depend on allOrders to trigger notification logic
 
   // --- Sorting Logic for Cart ---
   const sortedCart = [...cart].sort((a, b) => {
@@ -329,10 +381,9 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   // --- Table Selection & Order Recovery ---
   const handleSelectTable = (tId: string) => {
       setTable(tId);
-      // Removed setTableManagerOpen(false) to allow interaction inside modal
-      // We will close it manually or when user starts ordering
-
-      // Check if there is an active PENDING order for this table
+      // Don't close modal immediately to allow reviewing status
+      
+      // Check for active PENDING order for editing
       const pendingOrder = allRestaurantOrders.find(o => o.tableNumber === tId && o.status === OrderStatus.PENDING);
       
       if (pendingOrder) {
@@ -500,8 +551,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   };
   
   const getTableStatusInfo = (tableNum: string) => {
-      // Logic Update: We look at ALL orders for this table.
-      // Even if DELIVERED, it means the table is still occupied until explicitly freed.
       const tableOrders = allRestaurantOrders.filter(o => o.tableNumber === tableNum);
       
       if (tableOrders.length === 0) return { status: 'free', count: 0 };
@@ -509,12 +558,14 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       const hasReady = tableOrders.some(o => o.status === OrderStatus.READY);
       const hasPending = tableOrders.some(o => o.status === OrderStatus.PENDING || o.status === OrderStatus.COOKING);
       
-      // Determine Status Priority
+      // Priority 1: Ready to Serve (Green)
       if (hasReady) return { status: 'ready', count: tableOrders.filter(o => o.status === OrderStatus.READY).length };
+      
+      // Priority 2: Waiting/Cooking (Orange)
       if (hasPending) return { status: 'busy', count: tableOrders.length };
       
-      // If we have orders but none are pending/ready, it means everything is delivered
-      // Status: Eating/Complete
+      // Priority 3: Delivered/Eating (Blue/Occupied)
+      // This ensures that even if all orders are delivered, the table is NOT free.
       return { status: 'eating', count: 0 };
   };
 
@@ -527,6 +578,14 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden flex items-center justify-center">
          <ChefHat size={400} className="text-white opacity-[0.03] transform -rotate-12 translate-x-20 translate-y-10" />
       </div>
+
+      {/* NOTIFICATION TOAST */}
+      {notificationToast && (
+          <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[60] bg-orange-500 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-slide-down border-2 border-orange-300">
+              <Bell className="animate-swing" size={20} />
+              <span className="font-bold text-sm">{notificationToast}</span>
+          </div>
+      )}
 
       <style>{`
         /* Card Movement */
@@ -588,7 +647,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
             {/* Table Selector Toggle */}
             <button 
                 onClick={() => setTableManagerOpen(!tableManagerOpen)}
-                className={`flex items-center rounded-xl pl-4 pr-2 py-1.5 border-2 transition-all duration-300 transform group active:scale-95
+                className={`flex items-center rounded-xl pl-4 pr-2 py-1.5 border-2 transition-all duration-300 transform group active:scale-95 relative
                     ${!table 
                         ? 'bg-slate-800 border-slate-700 hover:border-slate-600' 
                         : 'bg-slate-900 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.6)] scale-105 ring-1 ring-orange-500/20'
@@ -599,8 +658,15 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                      {table && <span className="font-black text-xl text-orange-500 leading-none drop-shadow-[0_0_8px_rgba(249,115,22,0.8)]">{table}</span>}
                 </div>
                 
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all ${!table ? 'bg-slate-700 text-slate-400' : 'bg-orange-500 text-white shadow-lg'}`}>
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all relative ${!table ? 'bg-slate-700 text-slate-400' : 'bg-orange-500 text-white shadow-lg'}`}>
                     <LayoutGrid size={20} className={!table ? "opacity-50" : ""} />
+                    
+                    {/* READY NOTIFICATION BADGE */}
+                    {readyCount > 0 && !tableManagerOpen && (
+                        <div className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border border-slate-900 animate-bounce">
+                            {readyCount}
+                        </div>
+                    )}
                 </div>
             </button>
         </div>
