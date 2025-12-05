@@ -141,7 +141,7 @@ export const addOrder = (order: Order) => {
   const orders = getOrders();
   const cleanOrder = {
       ...order,
-      items: order.items.map(i => ({ ...i, completed: false }))
+      items: order.items.map(i => ({ ...i, completed: false, isAddedLater: false }))
   };
   const newOrders = [...orders, cleanOrder];
   
@@ -166,8 +166,37 @@ export const updateOrderItems = (orderId: string, newItems: OrderItem[]) => {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
+    // Smart Merge Logic to Detect "Added" Items vs Existing
+    const processedItems = newItems.map(newItem => {
+        // Try to find matching old item (Same ID and Same Notes)
+        const existing = order.items.find(old => 
+            old.menuItem.id === newItem.menuItem.id && 
+            old.notes === newItem.notes
+        );
+
+        if (existing) {
+            // If exists, determine if quantity increased
+            const isQuantityIncreased = newItem.quantity > existing.quantity;
+            
+            return {
+                ...newItem,
+                // If quantity increased, reset completion status for kitchen to notice
+                completed: isQuantityIncreased ? false : existing.completed,
+                // Mark as added later if it was already marked OR if quantity bumped
+                isAddedLater: existing.isAddedLater || isQuantityIncreased
+            };
+        } else {
+            // Completely new item
+            return { ...newItem, completed: false, isAddedLater: true };
+        }
+    });
+
     // Reset timestamp to bring it to top, but keep ID
-    const updatedOrder = { ...order, items: newItems.map(i => ({...i, completed: false})), timestamp: Date.now() };
+    const updatedOrder = { 
+        ...order, 
+        items: processedItems, 
+        timestamp: Date.now() 
+    };
     const newOrders = orders.map(o => o.id === orderId ? updatedOrder : o);
 
     saveLocallyAndNotify(newOrders);

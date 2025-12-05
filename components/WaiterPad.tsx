@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Category, MenuItem, Order, OrderItem, OrderStatus } from '../types';
 import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, getWaiterName, logoutWaiter, getMenuItems, freeTable, updateOrderStatus } from '../services/storageService';
 import { askChefAI } from '../services/geminiService';
@@ -288,7 +288,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const [allRestaurantOrders, setAllRestaurantOrders] = useState<Order[]>([]);
   
   // Notification State
-  const [totalReadyItems, setTotalReadyItems] = useState(0);
   const [notificationToast, setNotificationToast] = useState<string | null>(null);
   
   // We track the status of EVERY ITEM unique by OrderID and Index
@@ -355,7 +354,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       
       prevItemStatusRef.current = currentItemStatus;
       isFirstLoad.current = false;
-      setTotalReadyItems(totalReadyCount);
 
       // Update table-specific orders if a table is selected
       if (table) {
@@ -390,6 +388,24 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       window.removeEventListener('local-menu-update', handleMenuUpdate);
     };
   }, [table]); 
+
+  // --- DERIVED STATE: CHECK FOR UNSEEN NOTIFICATIONS ---
+  const hasUnseenNotifications = useMemo(() => {
+      let count = 0;
+      allRestaurantOrders.forEach(order => {
+          if(order.status !== OrderStatus.DELIVERED) {
+             let readyInOrder = 0;
+             order.items.forEach(i => { if(i.completed) readyInOrder++; });
+             
+             if(readyInOrder > 0) {
+                 const seen = seenReadyCounts[order.tableNumber] || 0;
+                 if (readyInOrder > seen) count++;
+             }
+          }
+      });
+      return count > 0;
+  }, [allRestaurantOrders, seenReadyCounts]);
+
 
   // --- Sorting Logic for Cart ---
   const sortedCart = [...cart].sort((a, b) => {
@@ -753,21 +769,20 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                     ${!table 
                         ? 'bg-slate-800 border-slate-700 hover:border-slate-600' 
                         : 'bg-slate-900 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.6)] scale-105 ring-1 ring-orange-500/20'
-                    }`}
+                    }
+                    ${hasUnseenNotifications && !tableManagerOpen && 'animate-pulse border-orange-500 shadow-[0_0_20px_rgba(249,115,22,0.6)]'}
+                `}
             >
                 <div className="flex flex-col items-end mr-3">
-                     <span className={`text-[10px] font-black uppercase tracking-wider leading-none ${!table ? 'text-slate-500' : 'text-white'}`}>TAVOLO</span>
+                     <span className={`text-[10px] font-black uppercase tracking-wider leading-none ${!table ? 'text-slate-500' : 'text-white'} ${hasUnseenNotifications && !tableManagerOpen ? 'text-orange-500' : ''}`}>TAVOLO</span>
                      {table && <span className="font-black text-xl text-orange-500 leading-none drop-shadow-[0_0_8px_rgba(249,115,22,0.8)]">{table}</span>}
                 </div>
                 
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all relative ${!table ? 'bg-slate-700 text-slate-400' : 'bg-orange-500 text-white shadow-lg'}`}>
-                    <LayoutGrid size={20} className={!table ? "opacity-50" : ""} />
-                    
-                    {totalReadyItems > 0 && !tableManagerOpen && (
-                        <div className="absolute -top-2 -right-2 w-5 h-5 bg-red-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center border border-slate-900 animate-bounce z-50">
-                            {totalReadyItems}
-                        </div>
-                    )}
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all relative 
+                    ${!table ? 'bg-slate-700 text-slate-400' : 'bg-orange-500 text-white shadow-lg'}
+                    ${hasUnseenNotifications && !tableManagerOpen ? 'bg-orange-500 text-white' : ''}
+                `}>
+                    <LayoutGrid size={20} className={!table && !hasUnseenNotifications ? "opacity-50" : ""} />
                 </div>
             </button>
         </div>

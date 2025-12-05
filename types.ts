@@ -27,6 +27,7 @@ export interface OrderItem {
   quantity: number;
   notes?: string;
   completed?: boolean;
+  isAddedLater?: boolean; // New: Tracks items added via modification
 }
 
 export interface Order {
