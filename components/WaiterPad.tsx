@@ -250,6 +250,9 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const [waiterName, setWaiterName] = useState<string>('');
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   
+  // NEW: Track seen ready counts to handle "click to acknowledge"
+  const [seenReadyCounts, setSeenReadyCounts] = useState<Record<string, number>>({});
+
   // Sheet Drag State
   const [sheetHeight, setSheetHeight] = useState(80); // Default collapsed height in px
   const [isDraggingSheet, setIsDraggingSheet] = useState(false);
@@ -431,9 +434,29 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
   // --- Table Selection & Order Recovery ---
   const handleSelectTable = (tId: string) => {
+      // 1. DESELECT IF ALREADY SELECTED
+      if (table === tId) {
+          setTable('');
+          setCart([]);
+          setEditingOrderId(null);
+          // If in modal, we stay in modal but with no table selected
+          return; 
+      }
+
+      // 2. ACKNOWLEDGE READY ITEMS (Stop blinking)
+      const tableOrders = allRestaurantOrders.filter(o => o.tableNumber === tId);
+      let rawReadyCount = 0;
+      tableOrders.forEach(o => {
+          if (o.status !== OrderStatus.DELIVERED) {
+              o.items.forEach(i => { if(i.completed) rawReadyCount++; });
+          }
+      });
+      // Mark these items as "seen" for this table
+      setSeenReadyCounts(prev => ({ ...prev, [tId]: rawReadyCount }));
+
+      // 3. SELECT TABLE
       setTable(tId);
       
-      // Determine what to show in the Cart based on existing orders
       // Look for active orders for this table
       const activeOrder = allRestaurantOrders.find(o => o.tableNumber === tId && o.status !== OrderStatus.DELIVERED);
       
@@ -447,7 +470,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
           setEditingOrderId(null);
       }
       
-      // Open Manager Modal to let user choose action
+      // Open Manager Modal
       setTableManagerOpen(true);
   };
 
@@ -622,13 +645,16 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       const activeOrders = tableOrders.filter(o => o.status !== OrderStatus.DELIVERED);
 
       if (activeOrders.length > 0) {
-          // If there are active orders, the table is definitely BUSY (In Attesa)
-          // Check if any specific item is READY to be served
-          let readyCount = 0;
-          activeOrders.forEach(o => o.items.forEach(i => { if(i.completed) readyCount++; }));
+          // Check for ready items
+          let rawReadyCount = 0;
+          activeOrders.forEach(o => o.items.forEach(i => { if(i.completed) rawReadyCount++; }));
           
-          if (readyCount > 0) {
-              return { status: 'ready', count: readyCount, owner: activeOrders[0].waiterName };
+          // Check if we have seen these ready items
+          const seenCount = seenReadyCounts[tableNum] || 0;
+          const unseenReadyCount = Math.max(0, rawReadyCount - seenCount);
+
+          if (unseenReadyCount > 0) {
+              return { status: 'ready', count: unseenReadyCount, owner: activeOrders[0].waiterName };
           }
           
           return { status: 'busy', count: 0, owner: activeOrders[0].waiterName };
