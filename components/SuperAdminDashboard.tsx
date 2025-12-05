@@ -52,20 +52,33 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     };
     
     const copySQL = () => {
-        const sql = `-- PULIZIA TOTALE E RIPRISTINO PERMESSI
+        const sql = `-- 1. PULIZIA TOTALE (Rimuove ogni traccia di regole vecchie)
 drop policy if exists "Super Admin View All" on public.profiles;
 drop policy if exists "Super Admin Update All" on public.profiles;
+drop policy if exists "Super Admin View All Gmail" on public.profiles;
+drop policy if exists "Super Admin View All 2" on public.profiles;
 
--- CREA NUOVI PERMESSI (Usa auth.jwt() per vedere TUTTI)
-create policy "Super Admin View All" on public.profiles for select
-using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );
+-- 2. CREAZIONE REGOLE BLINDATE (Case-Insensitive)
+-- Questa funzione lower() assicura che funzioni anche se hai scritto l'email con maiuscole
+create policy "Super Admin View All"
+on public.profiles
+for select
+using ( 
+  lower(auth.jwt() ->> 'email') = 'castro.massimo@yahoo.com' 
+);
 
-create policy "Super Admin Update All" on public.profiles for update
-using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );`;
+create policy "Super Admin Update All"
+on public.profiles
+for update
+using ( 
+  lower(auth.jwt() ->> 'email') = 'castro.massimo@yahoo.com' 
+);`;
         navigator.clipboard.writeText(sql);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
     };
+
+    const isEmailCorrect = currentEmail.toLowerCase() === 'castro.massimo@yahoo.com';
 
     return (
         <div className="min-h-screen bg-slate-900 text-white font-sans p-4 md:p-8">
@@ -79,8 +92,15 @@ using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );`;
                             <h1 className="text-3xl font-black">SUPER ADMIN</h1>
                             <div className="flex items-center gap-2 text-slate-400 text-sm">
                                 <User size={14}/> 
-                                {currentEmail ? <span>Loggato come: <strong className="text-white">{currentEmail}</strong></span> : 'Verifica utente...'}
+                                {currentEmail ? (
+                                    <span>Loggato come: <strong className={isEmailCorrect ? "text-green-400" : "text-red-400"}>{currentEmail}</strong></span>
+                                ) : 'Verifica utente...'}
                             </div>
+                            {!isEmailCorrect && currentEmail && (
+                                <p className="text-xs text-red-500 font-bold mt-1 bg-red-900/20 px-2 py-1 rounded border border-red-500/20">
+                                    ⚠️ Attenzione: Non sei loggato come castro.massimo@yahoo.com
+                                </p>
+                            )}
                         </div>
                     </div>
                     
@@ -175,8 +195,7 @@ using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );`;
                                                 <AlertTriangle size={40} className="text-orange-500 mb-2"/>
                                                 <p className="font-bold text-white text-lg">Permessi Database Mancanti</p>
                                                 <p className="text-sm">
-                                                    Non vedo nessun ristorante. Significa che il database sta bloccando il tuo accesso. 
-                                                    Per risolvere, copia e incolla questo codice nell'<strong>SQL Editor</strong> di Supabase:
+                                                    Non vedo nessun ristorante. Copia il codice qui sotto ed eseguilo nell'SQL Editor di Supabase.
                                                 </p>
                                                 
                                                 <div className="bg-slate-950 p-4 rounded-xl border border-slate-700 w-full mt-4 relative group">
@@ -185,20 +204,23 @@ using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );`;
 drop policy if exists "Super Admin Update All" on public.profiles;
 
 create policy "Super Admin View All" on public.profiles for select
-using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );
+using ( lower(auth.jwt() ->> 'email') = 'castro.massimo@yahoo.com' );
 
 create policy "Super Admin Update All" on public.profiles for update
-using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );`}
+using ( lower(auth.jwt() ->> 'email') = 'castro.massimo@yahoo.com' );`}
                                                     </pre>
                                                     <button 
                                                         onClick={copySQL}
-                                                        className="absolute top-2 right-2 p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-white"
+                                                        className="absolute top-2 right-2 p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-white flex items-center gap-2 font-bold text-xs"
                                                         title="Copia SQL"
                                                     >
-                                                        {copied ? <Check size={16} className="text-green-500"/> : <Copy size={16}/>}
+                                                        {copied ? <Check size={14} className="text-green-500"/> : <Copy size={14}/>}
+                                                        {copied ? 'COPIATO' : 'COPIA TUTTO'}
                                                     </button>
                                                 </div>
-                                                <p className="text-xs text-slate-500 mt-2">Dopo aver cliccato "RUN" su Supabase, clicca "Aggiorna Lista".</p>
+                                                <p className="text-xs text-slate-500 mt-2">
+                                                    <strong>Istruzioni:</strong> Vai su Supabase SQL Editor {'>'} Cancella tutto il testo esistente {'>'} Incolla {'>'} Premi RUN.
+                                                </p>
                                             </div>
                                         </td>
                                     </tr>

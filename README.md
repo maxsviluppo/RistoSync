@@ -75,23 +75,22 @@ create policy "Manage own menu" on menu_items for all using (auth.uid() = user_i
 
 ### 3. Super Admin Setup (CRITICAL)
 To enable the Super Admin dashboard for `castro.massimo@yahoo.com`, run this specific SQL command in Supabase Editor.
-**Use this "Nuclear Option" to ensure clean permissions:**
+**Use this "Nuclear Option" to ensure clean permissions (Case Insensitive):**
 
 ```sql
--- 1. CLEAN UP
+-- 1. CLEAN UP (Remove any existing variations)
 drop policy if exists "Super Admin View All" on public.profiles;
 drop policy if exists "Super Admin Update All" on public.profiles;
+drop policy if exists "Super Admin View All Gmail" on public.profiles;
 
--- 2. CREATE CORRECT PERMISSIONS
--- Allow Viewing All (Check JWT Email)
+-- 2. CREATE CORRECT PERMISSIONS (Case Insensitive)
 create policy "Super Admin View All"
 on public.profiles for select
-using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );
+using ( lower(auth.jwt() ->> 'email') = 'castro.massimo@yahoo.com' );
 
--- Allow Editing All
 create policy "Super Admin Update All"
 on public.profiles for update
-using ( auth.jwt() ->> 'email' = 'castro.massimo@yahoo.com' );
+using ( lower(auth.jwt() ->> 'email') = 'castro.massimo@yahoo.com' );
 ```
 
 ### 4. Environment Variables (Vercel)
