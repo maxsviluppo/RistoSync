@@ -3,7 +3,7 @@ import KitchenDisplay from './components/KitchenDisplay';
 import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { MenuItem, Category } from './types';
@@ -36,7 +36,8 @@ const capitalize = (str: string) => {
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [loadingSession, setLoadingSession] = useState(true);
-  const [isSuspended, setIsSuspended] = useState(false); // NEW: Stato di sospensione
+  const [isSuspended, setIsSuspended] = useState(false); 
+  const [accountDeleted, setAccountDeleted] = useState(false); // NEW: Stato Account Rimosso
   
   const [role, setRole] = useState<'kitchen' | 'waiter' | null>(null);
   const [showLogin, setShowLogin] = useState(false);
@@ -81,37 +82,53 @@ const App: React.FC = () => {
   // CHECK AUTH SESSION ON LOAD
   useEffect(() => {
       if (supabase) {
-          const checkUserStatus = async (userId: string) => {
+          const checkUserStatus = async (user: any) => {
              try {
-                 // Controllo se l'utente è sospeso nel database
-                 const { data, error } = await supabase.from('profiles').select('restaurant_name, subscription_status').eq('id', userId).single();
+                 // Controllo se l'utente esiste in profiles
+                 const { data, error } = await supabase.from('profiles').select('restaurant_name, subscription_status').eq('id', user.id).single();
                  
                  if (data) {
+                     // Caso 1: Profilo Esiste
                      if (data.subscription_status === 'suspended') {
                          setIsSuspended(true);
-                         if (data.restaurant_name) setRestaurantName(data.restaurant_name); // Carica nome anche se sospeso
-                         return false; // Utente bloccato
+                         if (data.restaurant_name) setRestaurantName(data.restaurant_name);
+                         return false; // Bloccato (Sospeso)
                      }
                      if (data.restaurant_name) setRestaurantName(data.restaurant_name);
                      setIsSuspended(false);
-                     return true; // Utente attivo
+                     setAccountDeleted(false);
+                     return true; // Attivo
+                 } else {
+                     // Caso 2: Profilo NON Esiste (Cancellato dall'admin o Registrazione in corso)
+                     // Controlliamo l'età dell'account Auth
+                     const createdAt = new Date(user.created_at).getTime();
+                     const now = Date.now();
+                     const ageInSeconds = (now - createdAt) / 1000;
+
+                     if (ageInSeconds > 60) {
+                         // Se l'account è vecchio (> 60s) ma non ha profilo, significa che è stato CANCELLATO.
+                         setAccountDeleted(true);
+                         return false; // Bloccato (Cancellato)
+                     }
+
+                     // Se è nuovo (< 60s), probabilmente il trigger sta ancora girando. Lasciamo passare.
+                     return true; 
                  }
-                 return true; // Fallback se il profilo non esiste ancora (o errore RLS prima del trigger)
              } catch (e) {
                  console.error("Check status failed", e);
-                 return true; // Fail open to avoid blocking valid users on network glitches
+                 return true; 
              }
           };
 
           supabase.auth.getSession().then(async ({ data: { session } }) => {
               try {
                   if (session) {
-                      const isActive = await checkUserStatus(session.user.id);
+                      const isActive = await checkUserStatus(session.user);
                       if (isActive) {
                           setSession(session);
                           initSupabaseSync();
                       } else {
-                          // Se sospeso, impostiamo sessione ma flaggiamo come sospeso per UI
+                          // Se bloccato (sospeso o cancellato), impostiamo comunque la sessione per mostrare la UI di errore
                           setSession(session); 
                       }
                   } else {
@@ -130,15 +147,19 @@ const App: React.FC = () => {
           } = supabase.auth.onAuthStateChange(async (_event, session) => {
               if (session) {
                   // Don't block UI on auth state change, handle async
-                  checkUserStatus(session.user.id).then(isActive => {
+                  checkUserStatus(session.user).then(isActive => {
                        // Update local state if needed
-                       if (!isActive) setIsSuspended(true);
+                       if (!isActive && !isSuspended && !accountDeleted) {
+                           // Force re-render if status changed to inactive
+                           // Note: logic handled inside checkUserStatus setters
+                       }
                   });
                   setSession(session);
                   initSupabaseSync();
               } else {
                   setSession(null);
                   setIsSuspended(false);
+                  setAccountDeleted(false);
               }
               // Ensure loading is off if auth state changes
               setLoadingSession(false);
@@ -241,34 +262,38 @@ const App: React.FC = () => {
       );
   }
 
-  // 0. ACCOUNT SUSPENDED SCREEN
-  if (isSuspended && !isSuperAdmin) {
+  // 0. ACCOUNT SUSPENDED / DELETED SCREEN
+  if ((isSuspended || accountDeleted) && !isSuperAdmin) {
       return (
           <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-full bg-[repeating-linear-gradient(45deg,transparent,transparent_20px,#334155_20px,#334155_40px)] opacity-5"></div>
               
               <div className="bg-slate-900 p-8 rounded-3xl border border-red-900/50 shadow-2xl max-w-lg w-full relative z-10 animate-fade-in">
                   <div className="w-24 h-24 bg-red-500/10 rounded-full border-2 border-red-500 flex items-center justify-center mx-auto mb-6 animate-pulse">
-                      <Lock size={48} className="text-red-500" />
+                      {accountDeleted ? <UserX size={48} className="text-red-500" /> : <Lock size={48} className="text-red-500" />}
                   </div>
                   
-                  <h1 className="text-3xl font-black text-white mb-2 uppercase tracking-wide">Account Sospeso</h1>
+                  <h1 className="text-3xl font-black text-white mb-2 uppercase tracking-wide">
+                      {accountDeleted ? 'Account Rimosso' : 'Account Sospeso'}
+                  </h1>
                   <p className="text-slate-400 mb-6">
-                      L'accesso per <strong>{restaurantName}</strong> è stato temporaneamente bloccato.
+                      {accountDeleted 
+                        ? `L'account per ${session?.user?.email} non è più attivo.` 
+                        : `L'accesso per ${restaurantName} è stato temporaneamente bloccato.`}
                   </p>
 
                   <div className="bg-slate-800 rounded-xl p-4 text-left mb-8 border border-slate-700">
-                      <h3 className="text-white font-bold mb-2 flex items-center gap-2"><AlertTriangle size={16} className="text-orange-400"/> Cosa fare?</h3>
-                      <ul className="text-slate-400 text-sm space-y-2 list-disc list-inside">
-                          <li>Verifica lo stato del tuo abbonamento.</li>
-                          <li>Controlla se ci sono pagamenti in sospeso.</li>
-                          <li>Contatta l'amministrazione per chiarimenti.</li>
-                      </ul>
+                      <h3 className="text-white font-bold mb-2 flex items-center gap-2"><AlertTriangle size={16} className="text-orange-400"/> Stato Attuale</h3>
+                      <p className="text-slate-400 text-sm">
+                          {accountDeleted 
+                            ? "Il profilo del ristorante è stato eliminato dal sistema amministrativo. Se ritieni sia un errore, contatta il supporto."
+                            : "L'abbonamento risulta sospeso o in attesa di verifica."}
+                      </p>
                   </div>
 
                   <div className="flex flex-col gap-3">
                       <a 
-                          href="mailto:support@ristosync.com?subject=Riattivazione Account" 
+                          href="mailto:support@ristosync.com?subject=Assistenza Account" 
                           className="w-full bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2"
                       >
                           <Mail size={18}/> Contatta Supporto
@@ -284,7 +309,7 @@ const App: React.FC = () => {
               </div>
               
               <div className="mt-8 text-slate-600 text-xs font-mono">
-                  Session ID: {session?.user?.id.substring(0, 8)}...
+                  ID: {session?.user?.id.substring(0, 8)}... | Status: {accountDeleted ? 'DELETED' : 'SUSPENDED'}
               </div>
           </div>
       );

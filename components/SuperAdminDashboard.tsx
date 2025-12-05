@@ -76,7 +76,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
         }
 
         // 2. Confirm Deletion
-        if (!confirm(`⚠️ ATTENZIONE: ELIMINAZIONE RISTORANTE\n\nStai per cancellare definitivamente:\nNome: "${name}"\nEmail: ${email}\n\nTutti i dati associati (menu, ordini, impostazioni) andranno persi.\n\nSei assolutamente sicuro?`)) {
+        if (!confirm(`⚠️ ATTENZIONE: ELIMINAZIONE RISTORANTE\n\nStai per cancellare definitivamente:\nNome: "${name}"\nEmail: ${email}\n\nCOSA SUCCEDE:\n1. Tutti i dati del menu e ordini verranno PERSI.\n2. L'utente non potrà più accedere all'app (vedrà "Account Rimosso").\n\nSe vuoi solo bloccare l'accesso momentaneamente, usa il tasto 'Pausa'.\n\nSei assolutamente sicuro di voler ELIMINARE?`)) {
             return;
         }
 
