@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Category, MenuItem, Order, OrderItem, OrderStatus } from '../types';
 import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, getWaiterName, logoutWaiter, getMenuItems, freeTable } from '../services/storageService';
 import { askChefAI } from '../services/geminiService';
-import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen, Bell, ArrowRight, Lock } from 'lucide-react';
+import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen, Bell, ArrowRight, Lock, PlusCircle } from 'lucide-react';
 
 // --- CONSTANTS ---
 const CATEGORY_ORDER = [
@@ -1111,14 +1111,16 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                         {/* ACTION BUTTONS FOR SELECTED TABLE */}
                         {table && (
                             <div className="flex gap-3">
-                                <button 
+                                <button
                                     onClick={proceedToOrder}
-                                    className={`flex-1 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors shadow-lg
-                                        ${editingOrderId ? 'bg-blue-600 hover:bg-blue-500 shadow-blue-900/20 text-white' : 'bg-orange-500 hover:bg-orange-600 shadow-orange-900/20 text-white'}
+                                    className={`flex-1 py-4 rounded-xl font-black text-sm tracking-wide flex items-center justify-center gap-2 transition-all transform active:scale-[0.98] shadow-xl border
+                                        ${editingOrderId
+                                            ? 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 shadow-blue-900/30 text-white border-blue-400/20'
+                                            : 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-400 hover:to-orange-500 shadow-orange-900/30 text-white border-orange-400/20'}
                                     `}
                                 >
-                                    {editingOrderId ? <Edit2 size={20}/> : <ArrowRight size={20} />} 
-                                    {editingOrderId ? 'MODIFICA ORDINE' : "VAI ALL'ORDINE"}
+                                    {editingOrderId ? <Edit2 size={20} strokeWidth={2.5}/> : <PlusCircle size={20} strokeWidth={2.5} />}
+                                    {editingOrderId ? 'MODIFICA ORDINE' : "NUOVO ORDINE"}
                                 </button>
                                 
                                 <button 
