@@ -3,7 +3,7 @@ import KitchenDisplay from './components/KitchenDisplay';
 import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { MenuItem, Category } from './types';
@@ -36,6 +36,7 @@ const capitalize = (str: string) => {
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [loadingSession, setLoadingSession] = useState(true);
+  const [isSuspended, setIsSuspended] = useState(false); // NEW: Stato di sospensione
   
   const [role, setRole] = useState<'kitchen' | 'waiter' | null>(null);
   const [showLogin, setShowLogin] = useState(false);
@@ -66,25 +67,49 @@ const App: React.FC = () => {
   // CHECK AUTH SESSION ON LOAD
   useEffect(() => {
       if (supabase) {
-          supabase.auth.getSession().then(({ data: { session } }) => {
-              setSession(session);
+          const checkUserStatus = async (userId: string) => {
+             // Controllo se l'utente è sospeso nel database
+             const { data, error } = await supabase.from('profiles').select('restaurant_name, subscription_status').eq('id', userId).single();
+             
+             if (data) {
+                 if (data.subscription_status === 'suspended') {
+                     setIsSuspended(true);
+                     return false; // Utente bloccato
+                 }
+                 if (data.restaurant_name) setRestaurantName(data.restaurant_name);
+                 setIsSuspended(false);
+                 return true; // Utente attivo
+             }
+             return true; // Fallback se il profilo non esiste ancora (o errore RLS prima del trigger)
+          };
+
+          supabase.auth.getSession().then(async ({ data: { session } }) => {
               if (session) {
-                  initSupabaseSync();
-                  // Fetch updated restaurant name from DB source of truth
-                  supabase.from('profiles').select('restaurant_name').eq('id', session.user.id).single()
-                    .then(({ data }) => {
-                        if (data?.restaurant_name) setRestaurantName(data.restaurant_name);
-                        else setRestaurantName(session.user.user_metadata?.restaurant_name || 'Ristorante');
-                    });
+                  const isActive = await checkUserStatus(session.user.id);
+                  if (isActive) {
+                      setSession(session);
+                      initSupabaseSync();
+                  } else {
+                      // Se sospeso, impostiamo sessione ma flaggiamo come sospeso per UI
+                      setSession(session); 
+                  }
+              } else {
+                  setSession(null);
               }
               setLoadingSession(false);
           });
 
           const {
               data: { subscription },
-          } = supabase.auth.onAuthStateChange((_event, session) => {
-              setSession(session);
-              if (session) initSupabaseSync();
+          } = supabase.auth.onAuthStateChange(async (_event, session) => {
+              if (session) {
+                  const isActive = await checkUserStatus(session.user.id);
+                  setSession(session);
+                  if (isActive) initSupabaseSync();
+              } else {
+                  setSession(null);
+                  setIsSuspended(false);
+              }
           });
 
           return () => subscription.unsubscribe();
@@ -177,6 +202,27 @@ const App: React.FC = () => {
 
   if (loadingSession) {
       return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-orange-500 font-bold">Caricamento...</div>;
+  }
+
+  // 0. ACCOUNT SUSPENDED SCREEN
+  if (isSuspended && !isSuperAdmin) {
+      return (
+          <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
+              <div className="p-6 bg-red-500/10 rounded-full border-2 border-red-500 mb-6 animate-pulse">
+                  <Lock size={64} className="text-red-500" />
+              </div>
+              <h1 className="text-3xl font-black text-white mb-2 uppercase tracking-wide">Account Sospeso</h1>
+              <p className="text-slate-400 max-w-md mb-8">
+                  L'accesso a <strong>{restaurantName}</strong> è stato temporaneamente bloccato dall'amministratore.
+              </p>
+              <button 
+                  onClick={signOut}
+                  className="bg-slate-800 hover:bg-slate-700 text-white px-8 py-3 rounded-xl font-bold transition-colors border border-slate-700 flex items-center gap-2"
+              >
+                  <LogOut size={18}/> Esci dall'applicazione
+              </button>
+          </div>
+      );
   }
 
   // 1. SHOW AUTH SCREEN IF NOT LOGGED IN (SaaS Mode)

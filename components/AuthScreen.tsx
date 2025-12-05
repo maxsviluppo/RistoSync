@@ -24,8 +24,17 @@ const AuthScreen: React.FC = () => {
         try {
             if (isLogin) {
                 // LOGIN
-                const { error } = await supabase.auth.signInWithPassword({ email, password });
+                const { data: loginData, error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) throw error;
+                
+                // CHECK IF SUSPENDED IMMEDIATELY
+                if (loginData.user) {
+                     const { data: profile } = await supabase.from('profiles').select('subscription_status').eq('id', loginData.user.id).single();
+                     if (profile?.subscription_status === 'suspended') {
+                         await supabase.auth.signOut();
+                         throw new Error("L'accesso a questo account è stato sospeso dall'amministratore.");
+                     }
+                }
             } else {
                 // REGISTER
                 const { data, error: signUpError } = await supabase.auth.signUp({
