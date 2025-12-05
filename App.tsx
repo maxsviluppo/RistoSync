@@ -64,53 +64,84 @@ const App: React.FC = () => {
 
   const isSuperAdmin = session?.user?.email === SUPER_ADMIN_EMAIL;
 
+  // SAFETY TIMEOUT TO PREVENT INFINITE LOADING
+  useEffect(() => {
+      const timer = setTimeout(() => {
+          setLoadingSession((prev) => {
+              if (prev) {
+                  console.warn("Session check timed out. Forcing app load.");
+                  return false;
+              }
+              return prev;
+          });
+      }, 5000); // 5 seconds max wait
+      return () => clearTimeout(timer);
+  }, []);
+
   // CHECK AUTH SESSION ON LOAD
   useEffect(() => {
       if (supabase) {
           const checkUserStatus = async (userId: string) => {
-             // Controllo se l'utente è sospeso nel database
-             const { data, error } = await supabase.from('profiles').select('restaurant_name, subscription_status').eq('id', userId).single();
-             
-             if (data) {
-                 if (data.subscription_status === 'suspended') {
-                     setIsSuspended(true);
-                     if (data.restaurant_name) setRestaurantName(data.restaurant_name); // Carica nome anche se sospeso
-                     return false; // Utente bloccato
+             try {
+                 // Controllo se l'utente è sospeso nel database
+                 const { data, error } = await supabase.from('profiles').select('restaurant_name, subscription_status').eq('id', userId).single();
+                 
+                 if (data) {
+                     if (data.subscription_status === 'suspended') {
+                         setIsSuspended(true);
+                         if (data.restaurant_name) setRestaurantName(data.restaurant_name); // Carica nome anche se sospeso
+                         return false; // Utente bloccato
+                     }
+                     if (data.restaurant_name) setRestaurantName(data.restaurant_name);
+                     setIsSuspended(false);
+                     return true; // Utente attivo
                  }
-                 if (data.restaurant_name) setRestaurantName(data.restaurant_name);
-                 setIsSuspended(false);
-                 return true; // Utente attivo
+                 return true; // Fallback se il profilo non esiste ancora (o errore RLS prima del trigger)
+             } catch (e) {
+                 console.error("Check status failed", e);
+                 return true; // Fail open to avoid blocking valid users on network glitches
              }
-             return true; // Fallback se il profilo non esiste ancora (o errore RLS prima del trigger)
           };
 
           supabase.auth.getSession().then(async ({ data: { session } }) => {
-              if (session) {
-                  const isActive = await checkUserStatus(session.user.id);
-                  if (isActive) {
-                      setSession(session);
-                      initSupabaseSync();
+              try {
+                  if (session) {
+                      const isActive = await checkUserStatus(session.user.id);
+                      if (isActive) {
+                          setSession(session);
+                          initSupabaseSync();
+                      } else {
+                          // Se sospeso, impostiamo sessione ma flaggiamo come sospeso per UI
+                          setSession(session); 
+                      }
                   } else {
-                      // Se sospeso, impostiamo sessione ma flaggiamo come sospeso per UI
-                      setSession(session); 
+                      setSession(null);
                   }
-              } else {
+              } catch (err) {
+                  console.error("Session initialization error:", err);
                   setSession(null);
+              } finally {
+                  setLoadingSession(false);
               }
-              setLoadingSession(false);
           });
 
           const {
               data: { subscription },
           } = supabase.auth.onAuthStateChange(async (_event, session) => {
               if (session) {
-                  const isActive = await checkUserStatus(session.user.id);
+                  // Don't block UI on auth state change, handle async
+                  checkUserStatus(session.user.id).then(isActive => {
+                       // Update local state if needed
+                       if (!isActive) setIsSuspended(true);
+                  });
                   setSession(session);
-                  if (isActive) initSupabaseSync();
+                  initSupabaseSync();
               } else {
                   setSession(null);
                   setIsSuspended(false);
               }
+              // Ensure loading is off if auth state changes
+              setLoadingSession(false);
           });
 
           return () => subscription.unsubscribe();
@@ -202,7 +233,12 @@ const App: React.FC = () => {
   };
 
   if (loadingSession) {
-      return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-orange-500 font-bold">Caricamento...</div>;
+      return (
+          <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-orange-500 gap-4">
+              <div className="w-10 h-10 border-4 border-orange-500 border-t-transparent rounded-full animate-spin"></div>
+              <div className="font-bold text-lg animate-pulse">Avvio Sistema...</div>
+          </div>
+      );
   }
 
   // 0. ACCOUNT SUSPENDED SCREEN
