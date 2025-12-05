@@ -3,7 +3,7 @@ import KitchenDisplay from './components/KitchenDisplay';
 import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { MenuItem, Category } from './types';
@@ -74,6 +74,7 @@ const App: React.FC = () => {
              if (data) {
                  if (data.subscription_status === 'suspended') {
                      setIsSuspended(true);
+                     if (data.restaurant_name) setRestaurantName(data.restaurant_name); // Carica nome anche se sospeso
                      return false; // Utente bloccato
                  }
                  if (data.restaurant_name) setRestaurantName(data.restaurant_name);
@@ -207,20 +208,48 @@ const App: React.FC = () => {
   // 0. ACCOUNT SUSPENDED SCREEN
   if (isSuspended && !isSuperAdmin) {
       return (
-          <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
-              <div className="p-6 bg-red-500/10 rounded-full border-2 border-red-500 mb-6 animate-pulse">
-                  <Lock size={64} className="text-red-500" />
+          <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-full bg-[repeating-linear-gradient(45deg,transparent,transparent_20px,#334155_20px,#334155_40px)] opacity-5"></div>
+              
+              <div className="bg-slate-900 p-8 rounded-3xl border border-red-900/50 shadow-2xl max-w-lg w-full relative z-10 animate-fade-in">
+                  <div className="w-24 h-24 bg-red-500/10 rounded-full border-2 border-red-500 flex items-center justify-center mx-auto mb-6 animate-pulse">
+                      <Lock size={48} className="text-red-500" />
+                  </div>
+                  
+                  <h1 className="text-3xl font-black text-white mb-2 uppercase tracking-wide">Account Sospeso</h1>
+                  <p className="text-slate-400 mb-6">
+                      L'accesso per <strong>{restaurantName}</strong> è stato temporaneamente bloccato.
+                  </p>
+
+                  <div className="bg-slate-800 rounded-xl p-4 text-left mb-8 border border-slate-700">
+                      <h3 className="text-white font-bold mb-2 flex items-center gap-2"><AlertTriangle size={16} className="text-orange-400"/> Cosa fare?</h3>
+                      <ul className="text-slate-400 text-sm space-y-2 list-disc list-inside">
+                          <li>Verifica lo stato del tuo abbonamento.</li>
+                          <li>Controlla se ci sono pagamenti in sospeso.</li>
+                          <li>Contatta l'amministrazione per chiarimenti.</li>
+                      </ul>
+                  </div>
+
+                  <div className="flex flex-col gap-3">
+                      <a 
+                          href="mailto:support@ristosync.com?subject=Riattivazione Account" 
+                          className="w-full bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2"
+                      >
+                          <Mail size={18}/> Contatta Supporto
+                      </a>
+                      
+                      <button 
+                          onClick={signOut}
+                          className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 px-6 py-3 rounded-xl font-bold transition-colors border border-slate-700 flex items-center justify-center gap-2"
+                      >
+                          <LogOut size={18}/> Esci e torna al Login
+                      </button>
+                  </div>
               </div>
-              <h1 className="text-3xl font-black text-white mb-2 uppercase tracking-wide">Account Sospeso</h1>
-              <p className="text-slate-400 max-w-md mb-8">
-                  L'accesso a <strong>{restaurantName}</strong> è stato temporaneamente bloccato dall'amministratore.
-              </p>
-              <button 
-                  onClick={signOut}
-                  className="bg-slate-800 hover:bg-slate-700 text-white px-8 py-3 rounded-xl font-bold transition-colors border border-slate-700 flex items-center gap-2"
-              >
-                  <LogOut size={18}/> Esci dall'applicazione
-              </button>
+              
+              <div className="mt-8 text-slate-600 text-xs font-mono">
+                  Session ID: {session?.user?.id.substring(0, 8)}...
+              </div>
           </div>
       );
   }

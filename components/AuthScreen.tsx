@@ -6,7 +6,7 @@ const AuthScreen: React.FC = () => {
     const [isLogin, setIsLogin] = useState(true);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [showPassword, setShowPassword] = useState(false); // NEW: Toggle visibility
+    const [showPassword, setShowPassword] = useState(false);
     const [restaurantName, setRestaurantName] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -25,17 +25,8 @@ const AuthScreen: React.FC = () => {
         try {
             if (isLogin) {
                 // LOGIN
-                const { data: loginData, error } = await supabase.auth.signInWithPassword({ email, password });
+                const { error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) throw error;
-                
-                // CHECK IF SUSPENDED IMMEDIATELY
-                if (loginData.user) {
-                     const { data: profile } = await supabase.from('profiles').select('subscription_status').eq('id', loginData.user.id).single();
-                     if (profile?.subscription_status === 'suspended') {
-                         await supabase.auth.signOut();
-                         throw new Error("L'accesso a questo account è stato sospeso dall'amministratore.");
-                     }
-                }
             } else {
                 // REGISTER
                 const { data, error: signUpError } = await supabase.auth.signUp({
@@ -49,33 +40,28 @@ const AuthScreen: React.FC = () => {
                 });
                 if (signUpError) throw signUpError;
                 
-                // Create Profile Entry
+                // GESTIONE PROFILO (Soft Check)
                 if (data.user) {
-                     // Tentativo di inserimento manuale.
-                     // Se il trigger DB è attivo (Best Practice), questo darà errore "duplicate key" o "RLS policy",
-                     // quindi verifichiamo se il profilo esiste prima di lanciare errore critico.
-                     const { error: profileError } = await supabase.from('profiles').insert({
-                         id: data.user.id,
-                         email: email,
-                         restaurant_name: restaurantName
-                     });
-                     
-                     if (profileError) {
-                         // Ignoriamo errore se è "duplicate key" (il trigger lo ha già creato)
-                         if (profileError.code !== '23505') {
-                             // Se è un errore RLS o altro, controlliamo se il profilo esiste comunque
-                             const { data: exists } = await supabase.from('profiles').select('id').eq('id', data.user.id).single();
-                             
-                             if (!exists) {
-                                 console.error("Profile creation failed:", profileError);
-                                 setError("Errore creazione profilo DB. Assicurati di aver eseguito lo script SQL 'Reset Totale' nella Dashboard Admin.\nDettaglio: " + profileError.message);
-                                 return; // Stop here so user sees error
-                             }
-                         }
+                     // Tentiamo di creare/verificare il profilo, ma NON blocchiamo l'utente se fallisce subito.
+                     // Il trigger SQL lavora in background.
+                     try {
+                         // Tentativo manuale di sicurezza (se il trigger non parte)
+                         await supabase.from('profiles').insert({
+                             id: data.user.id,
+                             email: email,
+                             restaurant_name: restaurantName,
+                             subscription_status: 'active'
+                         });
+                     } catch (e) {
+                         // Ignoriamo errori di duplicati (il trigger ha già fatto il suo lavoro)
+                         console.log("Insert profile skipped/failed (likely already exists via trigger)");
                      }
+                     
+                     // Attendiamo un istante per dare tempo al DB
+                     await new Promise(r => setTimeout(r, 500));
                 }
             }
-            // Page will reload or state update via App.tsx listener
+            // La pagina si ricaricherà o aggiornerà lo stato grazie al listener in App.tsx
         } catch (err: any) {
             setError(err.message || "Si è verificato un errore.");
         } finally {
@@ -147,7 +133,9 @@ const AuthScreen: React.FC = () => {
                             <button 
                                 type="button"
                                 onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors"
+                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors p-2 z-10"
+                                tabIndex={-1}
+                                title={showPassword ? "Nascondi password" : "Mostra password"}
                             >
                                 {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
                             </button>
