@@ -41,6 +41,9 @@ const App: React.FC = () => {
   const [showLogin, setShowLogin] = useState(false);
   const [waiterNameInput, setWaiterNameInput] = useState('');
   
+  // Restaurant Info
+  const [restaurantName, setRestaurantName] = useState('Ristorante');
+
   // Admin State
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminTab, setAdminTab] = useState<'menu' | 'notif' | 'info' | 'ai' | 'db'>('menu');
@@ -65,7 +68,15 @@ const App: React.FC = () => {
       if (supabase) {
           supabase.auth.getSession().then(({ data: { session } }) => {
               setSession(session);
-              if (session) initSupabaseSync();
+              if (session) {
+                  initSupabaseSync();
+                  // Fetch updated restaurant name from DB source of truth
+                  supabase.from('profiles').select('restaurant_name').eq('id', session.user.id).single()
+                    .then(({ data }) => {
+                        if (data?.restaurant_name) setRestaurantName(data.restaurant_name);
+                        else setRestaurantName(session.user.user_metadata?.restaurant_name || 'Ristorante');
+                    });
+              }
               setLoadingSession(false);
           });
 
@@ -190,7 +201,7 @@ const App: React.FC = () => {
                 <div className="w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center">
                     <ChefHat size={18} className="text-white"/>
                 </div>
-                <span className="text-white font-bold">{session?.user?.user_metadata?.restaurant_name || 'Ristorante'}</span>
+                <span className="text-white font-bold">{restaurantName}</span>
                 {isSuperAdmin && (
                     <span className="bg-red-600 text-white text-[10px] font-bold px-2 py-0.5 rounded uppercase ml-2">Admin Mode</span>
                 )}
