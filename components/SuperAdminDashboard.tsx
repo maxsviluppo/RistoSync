@@ -214,22 +214,42 @@ set subscription_status = 'active';`;
         }
     };
 
-    const resetSQL = `-- 1. RESET TOTALE POLICY
+    const resetSQL = `-- 1. ABILITA RLS E TRIGGER
+create extension if not exists pgcrypto;
 alter table public.profiles enable row level security;
-drop policy if exists "Super Admin View All" on public.profiles;
-drop policy if exists "Super Admin Update All" on public.profiles;
-drop policy if exists "Super Admin Delete" on public.profiles;
-drop policy if exists "Public profiles are viewable by everyone" on public.profiles;
-drop policy if exists "Users can insert their own profile" on public.profiles;
-drop policy if exists "Users can update own profile" on public.profiles;
 
--- 2. PERMESSI UTENTI STANDARD
+-- 2. TRIGGER CREAZIONE AUTOMATICA PROFILO
+-- Risolve l'errore "violates row-level security" durante la registrazione
+create or replace function public.handle_new_user()
+returns trigger as $$
+begin
+  insert into public.profiles (id, email, restaurant_name, subscription_status)
+  values (new.id, new.email, new.raw_user_meta_data->>'restaurant_name', 'active')
+  on conflict (id) do nothing;
+  return new;
+end;
+$$ language plpgsql security definer;
+
+-- Collega il trigger alla tabella auth.users
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute procedure public.handle_new_user();
+
+-- 3. RESET POLICY (SOLO LETTURA/MODIFICA)
+drop policy if exists "Public profiles are viewable by everyone" on public.profiles;
 create policy "Public profiles are viewable by everyone" on public.profiles for select using (true);
-create policy "Users can insert their own profile" on public.profiles for insert with check (auth.uid() = id);
+
+drop policy if exists "Users can update own profile" on public.profiles;
 create policy "Users can update own profile" on public.profiles for update using (auth.uid() = id);
 
--- 3. PERMESSI SUPER ADMIN (Modifica e CANCELLAZIONE)
+-- NOTA: Non serve policy INSERT perché ci pensa il Trigger.
+
+-- 4. PERMESSI SUPER ADMIN
+drop policy if exists "Super Admin Update All" on public.profiles;
 create policy "Super Admin Update All" on public.profiles for update using ( lower(auth.jwt() ->> 'email') = '${SUPER_ADMIN_EMAIL}' );
+
+drop policy if exists "Super Admin Delete" on public.profiles;
 create policy "Super Admin Delete" on public.profiles for delete using ( lower(auth.jwt() ->> 'email') = '${SUPER_ADMIN_EMAIL}' );`;
 
     const isEmailCorrect = currentEmail.toLowerCase() === SUPER_ADMIN_EMAIL;
@@ -417,7 +437,7 @@ create policy "Super Admin Delete" on public.profiles for delete using ( lower(a
                                                     <PlusCircle size={20} /> Crea Profilo
                                                 </button>
                                                 <div className="bg-slate-950 p-4 rounded-xl border border-slate-700 w-full mt-4 relative group text-left">
-                                                    <div className="mb-2 text-xs text-slate-400 uppercase font-bold">SQL Reset Totale:</div>
+                                                    <div className="mb-2 text-xs text-slate-400 uppercase font-bold">SQL Reset Totale (con Trigger):</div>
                                                     <pre className="text-left text-xs text-green-400 font-mono whitespace-pre-wrap overflow-x-auto h-20 custom-scroll">
 {resetSQL}
                                                     </pre>

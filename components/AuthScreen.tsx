@@ -41,6 +41,9 @@ const AuthScreen: React.FC = () => {
                 
                 // Create Profile Entry
                 if (data.user) {
+                     // Tentativo di inserimento manuale.
+                     // Se il trigger DB è attivo (Best Practice), questo darà errore "duplicate key" o "RLS policy",
+                     // quindi verifichiamo se il profilo esiste prima di lanciare errore critico.
                      const { error: profileError } = await supabase.from('profiles').insert({
                          id: data.user.id,
                          email: email,
@@ -48,10 +51,17 @@ const AuthScreen: React.FC = () => {
                      });
                      
                      if (profileError) {
-                         // Fallback: se fallisce la creazione profilo (es. tabella non esiste), mostriamo l'errore
-                         console.error("Profile creation failed:", profileError);
-                         setError("Account creato ma errore nel profilo: " + profileError.message);
-                         return; // Stop here so user sees error
+                         // Ignoriamo errore se è "duplicate key" (il trigger lo ha già creato)
+                         if (profileError.code !== '23505') {
+                             // Se è un errore RLS o altro, controlliamo se il profilo esiste comunque
+                             const { data: exists } = await supabase.from('profiles').select('id').eq('id', data.user.id).single();
+                             
+                             if (!exists) {
+                                 console.error("Profile creation failed:", profileError);
+                                 setError("Errore creazione profilo DB. Assicurati di aver eseguito lo script SQL 'Reset Totale' nella Dashboard Admin.\nDettaglio: " + profileError.message);
+                                 return; // Stop here so user sees error
+                             }
+                         }
                      }
                 }
             }
@@ -82,7 +92,7 @@ const AuthScreen: React.FC = () => {
                     </h2>
 
                     {error && (
-                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl text-sm mb-6 font-bold text-center">
+                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl text-sm mb-6 font-bold text-center whitespace-pre-wrap">
                             {error}
                         </div>
                     )}
