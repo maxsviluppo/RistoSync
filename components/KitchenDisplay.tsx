@@ -198,8 +198,10 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
              <ChefHat className="w-8 h-8 text-white" />
           </div>
           <div>
-              <h1 className="text-3xl font-bold tracking-tight leading-none">CUCINA</h1>
-              <p className="text-slate-400 text-xs uppercase tracking-widest font-semibold">Dashboard</p>
+              <h1 className="text-3xl font-bold tracking-tight leading-none text-white">
+                  Risto<span className="text-orange-500">Sync</span>
+              </h1>
+              <p className="text-slate-400 text-xs uppercase tracking-widest font-semibold">Kitchen Dashboard</p>
           </div>
           
           {/* Refresh Manuale (Sync Check) */}

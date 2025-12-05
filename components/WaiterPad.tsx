@@ -732,6 +732,30 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
             50% { transform: scale(1.03); box-shadow: 0 0 20px rgba(34, 197, 94, 0.4); border-color: rgba(34, 197, 94, 0.8); background-color: rgba(34, 197, 94, 0.1); }
             100% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); }
         }
+        
+        /* STRONG NEON PULSE FOR NOTIFICATIONS */
+        @keyframes neon-pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7);
+                border-color: rgba(249, 115, 22, 0.8);
+                transform: scale(1);
+            }
+            50% {
+                box-shadow: 0 0 20px 5px rgba(249, 115, 22, 0.8), inset 0 0 10px rgba(249, 115, 22, 0.4);
+                border-color: rgba(249, 115, 22, 1);
+                transform: scale(1.03);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7);
+                border-color: rgba(249, 115, 22, 0.8);
+                transform: scale(1);
+            }
+        }
+        
+        .animate-neon-pulse {
+            animation: neon-pulse 1s infinite cubic-bezier(0.4, 0, 0.6, 1);
+        }
+
         .animate-card-swipe { animation: swipe-card 2.5s ease-in-out; }
         .animate-bg-color { animation: swipe-bg 2.5s ease-in-out; }
         .animate-fade-edit { animation: fade-edit 2.5s ease-in-out; }
@@ -770,7 +794,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                         ? 'bg-slate-800 border-slate-700 hover:border-slate-600' 
                         : 'bg-slate-900 border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.6)] scale-105 ring-1 ring-orange-500/20'
                     }
-                    ${hasUnseenNotifications && !tableManagerOpen && 'animate-pulse border-orange-500 shadow-[0_0_20px_rgba(249,115,22,0.6)]'}
+                    ${hasUnseenNotifications && !tableManagerOpen && 'animate-neon-pulse'}
                 `}
             >
                 <div className="flex flex-col items-end mr-3">
