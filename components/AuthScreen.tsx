@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../services/supabase';
-import { ChefHat, Mail, Lock, ArrowRight, Loader, Eye, EyeOff } from 'lucide-react';
+import { ChefHat, Mail, Lock, ArrowRight, Loader, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 
 const AuthScreen: React.FC = () => {
     const [isLogin, setIsLogin] = useState(true);
@@ -10,11 +10,13 @@ const AuthScreen: React.FC = () => {
     const [restaurantName, setRestaurantName] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [confirmationPending, setConfirmationPending] = useState(false);
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         setError(null);
+        setConfirmationPending(false);
         
         if (!supabase) {
             setError("Connessione al database non configurata. Verifica le chiavi API.");
@@ -38,7 +40,15 @@ const AuthScreen: React.FC = () => {
                         }
                     }
                 });
+
                 if (signUpError) throw signUpError;
+                
+                // Check if email confirmation is required by Supabase settings
+                if (data.user && !data.session) {
+                    setConfirmationPending(true);
+                    setLoading(false);
+                    return;
+                }
                 
                 // GESTIONE PROFILO (Soft Check)
                 if (data.user) {
@@ -63,9 +73,22 @@ const AuthScreen: React.FC = () => {
             }
             // La pagina si ricaricherà o aggiornerà lo stato grazie al listener in App.tsx
         } catch (err: any) {
-            setError(err.message || "Si è verificato un errore.");
+            let msg = err.message || "Si è verificato un errore.";
+            
+            // Traduzione errori comuni Supabase
+            if (msg.includes("security purposes")) {
+                msg = "Troppi tentativi. Attendi circa 60 secondi prima di riprovare.";
+            } else if (msg.includes("Invalid login credentials")) {
+                msg = "Email o password non corretti.";
+            } else if (msg.includes("User already registered")) {
+                msg = "Utente già registrato. Prova ad accedere.";
+            } else if (msg.includes("Rate limit exceeded")) {
+                msg = "Troppe richieste. Rallenta un attimo.";
+            }
+
+            setError(msg);
         } finally {
-            setLoading(false);
+            if (!confirmationPending) setLoading(false);
         }
     };
 
@@ -87,80 +110,106 @@ const AuthScreen: React.FC = () => {
                         {isLogin ? 'Accedi al Ristorante' : 'Registra Nuovo Locale'}
                     </h2>
 
-                    {error && (
-                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl text-sm mb-6 font-bold text-center whitespace-pre-wrap">
-                            {error}
+                    {/* CONFIRMATION PENDING MESSAGE */}
+                    {confirmationPending && (
+                        <div className="bg-blue-500/10 border border-blue-500/20 text-blue-300 p-6 rounded-xl text-center mb-6 animate-fade-in">
+                            <Mail size={32} className="mx-auto mb-3 text-blue-400" />
+                            <h3 className="font-bold text-lg text-white mb-2">Controlla la tua Email</h3>
+                            <p className="text-sm">
+                                Ti abbiamo inviato un link di conferma a <strong>{email}</strong>.
+                                Cliccalo per attivare l'account.
+                            </p>
+                            <div className="mt-4 text-xs text-slate-500 bg-slate-950 p-2 rounded border border-slate-800">
+                                <strong>Suggerimento Dev:</strong> Se non arriva l'email, vai su Supabase &gt; Authentication &gt; Providers &gt; Email e disabilita "Confirm email".
+                            </div>
+                            <button 
+                                onClick={() => setConfirmationPending(false)}
+                                className="mt-4 text-blue-400 font-bold hover:underline text-sm"
+                            >
+                                Torna al login
+                            </button>
                         </div>
                     )}
 
-                    <form onSubmit={handleAuth} className="space-y-4">
-                        {!isLogin && (
-                             <div className="relative">
-                                <ChefHat className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
+                    {!confirmationPending && error && (
+                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl text-sm mb-6 font-bold text-center flex items-center gap-3 justify-center">
+                           <AlertTriangle size={18} className="shrink-0"/>
+                           <span>{error}</span>
+                        </div>
+                    )}
+
+                    {!confirmationPending && (
+                        <form onSubmit={handleAuth} className="space-y-4">
+                            {!isLogin && (
+                                <div className="relative">
+                                    <ChefHat className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
+                                    <input 
+                                        type="text" 
+                                        placeholder="Nome Ristorante"
+                                        value={restaurantName}
+                                        onChange={e => setRestaurantName(e.target.value)}
+                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-4 pl-12 pr-4 text-white outline-none focus:border-orange-500 transition-colors"
+                                        required={!isLogin}
+                                    />
+                                </div>
+                            )}
+                            
+                            <div className="relative">
+                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
                                 <input 
-                                    type="text" 
-                                    placeholder="Nome Ristorante"
-                                    value={restaurantName}
-                                    onChange={e => setRestaurantName(e.target.value)}
+                                    type="email" 
+                                    placeholder="Email"
+                                    value={email}
+                                    onChange={e => setEmail(e.target.value)}
                                     className="w-full bg-slate-950 border border-slate-800 rounded-xl py-4 pl-12 pr-4 text-white outline-none focus:border-orange-500 transition-colors"
-                                    required={!isLogin}
+                                    required
                                 />
                             </div>
-                        )}
-                        
-                        <div className="relative">
-                            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
-                            <input 
-                                type="email" 
-                                placeholder="Email"
-                                value={email}
-                                onChange={e => setEmail(e.target.value)}
-                                className="w-full bg-slate-950 border border-slate-800 rounded-xl py-4 pl-12 pr-4 text-white outline-none focus:border-orange-500 transition-colors"
-                                required
-                            />
-                        </div>
 
-                        <div className="relative">
-                            <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
-                            <input 
-                                type={showPassword ? "text" : "password"}
-                                placeholder="Password"
-                                value={password}
-                                onChange={e => setPassword(e.target.value)}
-                                className="w-full bg-slate-950 border border-slate-800 rounded-xl py-4 pl-12 pr-12 text-white outline-none focus:border-orange-500 transition-colors"
-                                required
-                            />
+                            <div className="relative">
+                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
+                                <input 
+                                    type={showPassword ? "text" : "password"}
+                                    placeholder="Password"
+                                    value={password}
+                                    onChange={e => setPassword(e.target.value)}
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-4 pl-12 pr-12 text-white outline-none focus:border-orange-500 transition-colors"
+                                    required
+                                />
+                                <button 
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors p-2 z-10"
+                                    tabIndex={-1}
+                                    title={showPassword ? "Nascondi password" : "Mostra password"}
+                                >
+                                    {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
+                                </button>
+                            </div>
+
                             <button 
-                                type="button"
-                                onClick={() => setShowPassword(!showPassword)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors p-2 z-10"
-                                tabIndex={-1}
-                                title={showPassword ? "Nascondi password" : "Mostra password"}
+                                type="submit" 
+                                disabled={loading}
+                                className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-orange-500/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
                             >
-                                {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
+                                {loading ? <Loader className="animate-spin" /> : (isLogin ? 'Entra' : 'Crea Account')} {!loading && <ArrowRight size={20} />}
                             </button>
+                        </form>
+                    )}
+
+                    {!confirmationPending && (
+                        <div className="mt-8 text-center">
+                            <p className="text-slate-500 text-sm">
+                                {isLogin ? 'Non hai un account?' : 'Hai già un ristorante?'}
+                                <button 
+                                    onClick={() => setIsLogin(!isLogin)} 
+                                    className="ml-2 text-white font-bold hover:underline"
+                                >
+                                    {isLogin ? 'Registrati ora' : 'Accedi'}
+                                </button>
+                            </p>
                         </div>
-
-                        <button 
-                            type="submit" 
-                            disabled={loading}
-                            className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-orange-500/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
-                        >
-                            {loading ? <Loader className="animate-spin" /> : (isLogin ? 'Entra' : 'Crea Account')} {!loading && <ArrowRight size={20} />}
-                        </button>
-                    </form>
-
-                    <div className="mt-8 text-center">
-                        <p className="text-slate-500 text-sm">
-                            {isLogin ? 'Non hai un account?' : 'Hai già un ristorante?'}
-                            <button 
-                                onClick={() => setIsLogin(!isLogin)} 
-                                className="ml-2 text-white font-bold hover:underline"
-                            >
-                                {isLogin ? 'Registrati ora' : 'Accedi'}
-                            </button>
-                        </p>
-                    </div>
+                    )}
                 </div>
             </div>
         </div>
