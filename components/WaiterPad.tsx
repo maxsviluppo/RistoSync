@@ -618,31 +618,24 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       
       if (tableOrders.length === 0) return { status: 'free', count: 0, owner: null };
       
-      // Get the owner of the active order (if any)
-      const activeOrder = tableOrders.find(o => o.status !== OrderStatus.DELIVERED);
-      const owner = activeOrder ? activeOrder.waiterName : tableOrders[0].waiterName;
+      // Filter Active Orders (Not Delivered)
+      const activeOrders = tableOrders.filter(o => o.status !== OrderStatus.DELIVERED);
 
-      // Count specifically COMPLETED items (that are ready to be served)
-      let readyItemsCount = 0;
-      let activeItemsCount = 0;
-
-      tableOrders.forEach(o => {
-          if (o.status !== OrderStatus.DELIVERED) {
-              o.items.forEach(i => {
-                  activeItemsCount++;
-                  if (i.completed) readyItemsCount++;
-              });
+      if (activeOrders.length > 0) {
+          // If there are active orders, the table is definitely BUSY (In Attesa)
+          // Check if any specific item is READY to be served
+          let readyCount = 0;
+          activeOrders.forEach(o => o.items.forEach(i => { if(i.completed) readyCount++; }));
+          
+          if (readyCount > 0) {
+              return { status: 'ready', count: readyCount, owner: activeOrders[0].waiterName };
           }
-      });
+          
+          return { status: 'busy', count: 0, owner: activeOrders[0].waiterName };
+      }
       
-      if (readyItemsCount > 0) return { status: 'ready', count: readyItemsCount, owner };
-      
-      const hasPending = tableOrders.some(o => o.status === OrderStatus.PENDING || o.status === OrderStatus.COOKING);
-      
-      if (hasPending || activeItemsCount > 0) return { status: 'busy', count: 0, owner };
-      
-      // If table has orders but all are Delivered, it's occupied by eating customers
-      return { status: 'eating', count: 0, owner };
+      // If no active orders (pending/cooking), but orders exist in history -> EATING (Al Tavolo)
+      return { status: 'eating', count: 0, owner: tableOrders[0].waiterName };
   };
 
   const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
@@ -1110,24 +1103,23 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                         
                         {/* ACTION BUTTONS FOR SELECTED TABLE */}
                         {table && (
-                            <div className="flex gap-3">
+                            <div className="flex gap-4 mt-2">
+                                {/* Primary Action: ORDER/EDIT */}
                                 <button
                                     onClick={proceedToOrder}
-                                    className={`flex-1 py-4 rounded-xl font-black text-sm tracking-wide flex items-center justify-center gap-2 transition-all transform active:scale-[0.98] shadow-xl border
-                                        ${editingOrderId
-                                            ? 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 shadow-blue-900/30 text-white border-blue-400/20'
-                                            : 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-400 hover:to-orange-500 shadow-orange-900/30 text-white border-orange-400/20'}
-                                    `}
+                                    className="flex-[2] py-5 rounded-2xl font-black text-xl tracking-wide text-white shadow-xl bg-gradient-to-br from-blue-600 to-blue-500 hover:scale-[1.02] transition-transform flex flex-col items-center justify-center gap-1 leading-none"
                                 >
-                                    {editingOrderId ? <Edit2 size={20} strokeWidth={2.5}/> : <PlusCircle size={20} strokeWidth={2.5} />}
-                                    {editingOrderId ? 'MODIFICA ORDINE' : "NUOVO ORDINE"}
+                                    {editingOrderId ? <Edit2 size={28}/> : <Utensils size={28}/>}
+                                    <span>{editingOrderId ? 'MODIFICA' : 'ORDINE'}</span>
                                 </button>
                                 
+                                {/* Secondary Action: FREE TABLE (Neon Orange) */}
                                 <button 
                                     onClick={requestFreeTable}
-                                    className="flex-1 bg-slate-800 border border-red-900/50 text-red-400 hover:bg-red-900/20 hover:text-red-300 py-3 rounded-xl font-bold flex items-center justify-center gap-2 transition-colors"
+                                    className="flex-1 bg-slate-900 border-2 border-orange-500 text-orange-500 rounded-2xl font-black text-sm uppercase tracking-widest shadow-[0_0_20px_rgba(249,115,22,0.3)] hover:shadow-[0_0_30px_rgba(249,115,22,0.6)] hover:bg-orange-500/10 transition-all flex flex-col items-center justify-center gap-2"
                                 >
-                                    <DoorOpen size={20} /> LIBERA
+                                    <DoorOpen size={24} />
+                                    LIBERA
                                 </button>
                             </div>
                         )}
