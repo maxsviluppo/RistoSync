@@ -3,7 +3,7 @@ import KitchenDisplay from './components/KitchenDisplay';
 import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { MenuItem, Category } from './types';
@@ -37,7 +37,8 @@ const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
   const [loadingSession, setLoadingSession] = useState(true);
   const [isSuspended, setIsSuspended] = useState(false); 
-  const [accountDeleted, setAccountDeleted] = useState(false); // NEW: Stato Account Rimosso
+  const [isBanned, setIsBanned] = useState(false); // NEW: Stato per richiesta inviata/bannato
+  const [accountDeleted, setAccountDeleted] = useState(false);
   
   const [role, setRole] = useState<'kitchen' | 'waiter' | null>(null);
   const [showLogin, setShowLogin] = useState(false);
@@ -91,27 +92,32 @@ const App: React.FC = () => {
                      // Caso 1: Profilo Esiste
                      if (data.subscription_status === 'suspended') {
                          setIsSuspended(true);
+                         setIsBanned(false);
                          if (data.restaurant_name) setRestaurantName(data.restaurant_name);
-                         return false; // Bloccato (Sospeso)
+                         return false; 
                      }
+                     if (data.subscription_status === 'banned') {
+                         setIsBanned(true); // Richiesta inviata o ban esplicito
+                         setIsSuspended(false);
+                         if (data.restaurant_name) setRestaurantName(data.restaurant_name);
+                         return false;
+                     }
+
                      if (data.restaurant_name) setRestaurantName(data.restaurant_name);
                      setIsSuspended(false);
+                     setIsBanned(false);
                      setAccountDeleted(false);
                      return true; // Attivo
                  } else {
                      // Caso 2: Profilo NON Esiste (Cancellato dall'admin o Registrazione in corso)
-                     // Controlliamo l'età dell'account Auth
                      const createdAt = new Date(user.created_at).getTime();
                      const now = Date.now();
                      const ageInSeconds = (now - createdAt) / 1000;
 
                      if (ageInSeconds > 60) {
-                         // Se l'account è vecchio (> 60s) ma non ha profilo, significa che è stato CANCELLATO.
                          setAccountDeleted(true);
                          return false; // Bloccato (Cancellato)
                      }
-
-                     // Se è nuovo (< 60s), probabilmente il trigger sta ancora girando. Lasciamo passare.
                      return true; 
                  }
              } catch (e) {
@@ -128,7 +134,6 @@ const App: React.FC = () => {
                           setSession(session);
                           initSupabaseSync();
                       } else {
-                          // Se bloccato (sospeso o cancellato), impostiamo comunque la sessione per mostrare la UI di errore
                           setSession(session); 
                       }
                   } else {
@@ -146,12 +151,9 @@ const App: React.FC = () => {
               data: { subscription },
           } = supabase.auth.onAuthStateChange(async (_event, session) => {
               if (session) {
-                  // Don't block UI on auth state change, handle async
                   checkUserStatus(session.user).then(isActive => {
-                       // Update local state if needed
-                       if (!isActive && !isSuspended && !accountDeleted) {
-                           // Force re-render if status changed to inactive
-                           // Note: logic handled inside checkUserStatus setters
+                       if (!isActive && !isSuspended && !accountDeleted && !isBanned) {
+                           // Force re-render handled inside checkUserStatus setters
                        }
                   });
                   setSession(session);
@@ -160,8 +162,8 @@ const App: React.FC = () => {
                   setSession(null);
                   setIsSuspended(false);
                   setAccountDeleted(false);
+                  setIsBanned(false);
               }
-              // Ensure loading is off if auth state changes
               setLoadingSession(false);
           });
 
@@ -200,6 +202,31 @@ const App: React.FC = () => {
 
   const handleExitApp = () => {
       setRole(null);
+  };
+
+  const handleReactivationRequest = async () => {
+      if (!supabase || !session) return;
+      
+      try {
+          // Tentiamo di recuperare il nome originale dai metadati, altrimenti usiamo un placeholder
+          const originalName = session.user.user_metadata?.restaurant_name || "Richiesta Sblocco";
+          
+          // Inseriamo una riga "Zombie" con stato 'banned'
+          // Questo farà riapparire l'utente nella lista Admin!
+          const { error } = await supabase.from('profiles').insert({
+              id: session.user.id,
+              email: session.user.email,
+              restaurant_name: `${originalName} (RICHIESTA)`,
+              subscription_status: 'banned' // Questo stato segnala all'admin che serve un'azione
+          });
+
+          if (error) throw error;
+          
+          alert("Richiesta inviata all'amministratore! Attendi l'approvazione.");
+          window.location.reload(); // Ricarica per aggiornare lo stato locale
+      } catch (e: any) {
+          alert("Errore invio richiesta: " + e.message);
+      }
   };
 
   // --- ADMIN FUNCTIONS ---
@@ -262,42 +289,70 @@ const App: React.FC = () => {
       );
   }
 
-  // 0. ACCOUNT SUSPENDED / DELETED SCREEN
-  if ((isSuspended || accountDeleted) && !isSuperAdmin) {
+  // 0. ACCOUNT SUSPENDED / DELETED / BANNED SCREEN
+  if ((isSuspended || accountDeleted || isBanned) && !isSuperAdmin) {
       return (
           <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center relative overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-full bg-[repeating-linear-gradient(45deg,transparent,transparent_20px,#334155_20px,#334155_40px)] opacity-5"></div>
               
               <div className="bg-slate-900 p-8 rounded-3xl border border-red-900/50 shadow-2xl max-w-lg w-full relative z-10 animate-fade-in">
                   <div className="w-24 h-24 bg-red-500/10 rounded-full border-2 border-red-500 flex items-center justify-center mx-auto mb-6 animate-pulse">
-                      {accountDeleted ? <UserX size={48} className="text-red-500" /> : <Lock size={48} className="text-red-500" />}
+                      {isBanned ? <RefreshCw size={48} className="text-orange-500 animate-spin-slow" /> : 
+                       accountDeleted ? <UserX size={48} className="text-red-500" /> : <Lock size={48} className="text-red-500" />}
                   </div>
                   
                   <h1 className="text-3xl font-black text-white mb-2 uppercase tracking-wide">
-                      {accountDeleted ? 'Account Rimosso' : 'Account Sospeso'}
+                      {isBanned ? 'Richiesta Inviata' : accountDeleted ? 'Account Rimosso' : 'Account Sospeso'}
                   </h1>
                   <p className="text-slate-400 mb-6">
-                      {accountDeleted 
-                        ? `L'account per ${session?.user?.email} non è più attivo.` 
-                        : `L'accesso per ${restaurantName} è stato temporaneamente bloccato.`}
+                      {isBanned 
+                        ? `La tua richiesta di riattivazione per ${session?.user?.email} è in attesa di approvazione.` 
+                        : accountDeleted 
+                            ? `L'account per ${session?.user?.email} è stato rimosso dal sistema.` 
+                            : `L'accesso per ${restaurantName} è stato temporaneamente bloccato.`}
                   </p>
 
                   <div className="bg-slate-800 rounded-xl p-4 text-left mb-8 border border-slate-700">
-                      <h3 className="text-white font-bold mb-2 flex items-center gap-2"><AlertTriangle size={16} className="text-orange-400"/> Stato Attuale</h3>
+                      <h3 className="text-white font-bold mb-2 flex items-center gap-2">
+                          <AlertTriangle size={16} className="text-orange-400"/> {isBanned ? 'Stato Richiesta' : 'Stato Attuale'}
+                      </h3>
                       <p className="text-slate-400 text-sm">
-                          {accountDeleted 
-                            ? "Il profilo del ristorante è stato eliminato dal sistema amministrativo. Se ritieni sia un errore, contatta il supporto."
-                            : "L'abbonamento risulta sospeso o in attesa di verifica."}
+                          {isBanned 
+                            ? "L'amministratore ha ricevuto la tua notifica. Riprova ad accedere tra poco." 
+                            : accountDeleted 
+                                ? "Il profilo non esiste più. Puoi richiedere il ripristino all'amministratore cliccando qui sotto."
+                                : "L'abbonamento risulta sospeso. Contatta l'amministrazione."}
                       </p>
                   </div>
 
                   <div className="flex flex-col gap-3">
-                      <a 
-                          href="mailto:support@ristosync.com?subject=Assistenza Account" 
-                          className="w-full bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2"
-                      >
-                          <Mail size={18}/> Contatta Supporto
-                      </a>
+                      {/* TASTO MAGIC DI RECUPERO */}
+                      {accountDeleted && (
+                          <button 
+                            onClick={handleReactivationRequest}
+                            className="w-full bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2 shadow-lg shadow-green-900/20 animate-pulse"
+                          >
+                              <Send size={18}/> Richiedi Riattivazione Immediata
+                          </button>
+                      )}
+
+                      {isBanned && (
+                          <button 
+                              onClick={() => window.location.reload()}
+                              className="w-full bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2"
+                          >
+                              <RefreshCw size={18}/> Controlla Stato
+                          </button>
+                      )}
+
+                      {!isBanned && !accountDeleted && (
+                        <a 
+                            href="mailto:support@ristosync.com?subject=Assistenza Account" 
+                            className="w-full bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold transition-colors flex items-center justify-center gap-2"
+                        >
+                            <Mail size={18}/> Contatta Supporto
+                        </a>
+                      )}
                       
                       <button 
                           onClick={signOut}
@@ -309,7 +364,7 @@ const App: React.FC = () => {
               </div>
               
               <div className="mt-8 text-slate-600 text-xs font-mono">
-                  ID: {session?.user?.id.substring(0, 8)}... | Status: {accountDeleted ? 'DELETED' : 'SUSPENDED'}
+                  ID: {session?.user?.id.substring(0, 8)}... | Status: {isBanned ? 'BANNED/PENDING' : accountDeleted ? 'DELETED' : 'SUSPENDED'}
               </div>
           </div>
       );
@@ -321,7 +376,6 @@ const App: React.FC = () => {
   }
   
   // 2. SHOW SUPER ADMIN DASHBOARD
-  // Mostra dashboard SOLO se adminMode è 'dashboard'. Se è 'app', mostra l'app normale.
   if (isSuperAdmin && !role && adminViewMode === 'dashboard') { 
       return <SuperAdminDashboard onEnterApp={() => setAdminViewMode('app')} />;
   }

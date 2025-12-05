@@ -56,7 +56,9 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
         }
 
         if (!supabase) return;
+        // SE è banned -> diventa active. SE è active -> diventa suspended. SE è suspended -> diventa active.
         const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
+        
         const { error } = await supabase.from('profiles').update({ subscription_status: newStatus }).eq('id', id);
         if (!error) fetchProfiles();
         else alert("Errore modifica stato: " + error.message);
@@ -349,6 +351,7 @@ create policy "Super Admin Delete" on public.profiles for delete using ( lower(a
                                 {profiles.map(p => {
                                     const isFake = p.id.toString().startsWith('demo-');
                                     const isSuperAdminProfile = p.email === SUPER_ADMIN_EMAIL;
+                                    const isBanned = p.subscription_status === 'banned';
                                     
                                     return (
                                         <tr key={p.id} className={`transition-colors ${isFake ? 'bg-orange-500/5 hover:bg-orange-500/10' : 'hover:bg-slate-700/30'} ${isSuperAdminProfile ? 'bg-blue-900/10' : ''}`}>
@@ -372,6 +375,7 @@ create policy "Super Admin Delete" on public.profiles for delete using ( lower(a
                                                                 <div className="font-bold text-white text-lg">{p.restaurant_name || 'N/A'}</div>
                                                                 {isFake && <span className="bg-orange-500 text-white text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">Simulato</span>}
                                                                 {isSuperAdminProfile && <span className="bg-blue-600 text-white text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">HQ</span>}
+                                                                {isBanned && <span className="bg-orange-500 text-white text-[9px] px-1.5 py-0.5 rounded font-bold uppercase animate-pulse">RICHIESTA SBLOCCO</span>}
                                                             </div>
                                                             <div className="text-xs font-mono text-slate-500 mt-1">{p.id}</div>
                                                         </div>
@@ -385,7 +389,10 @@ create policy "Super Admin Delete" on public.profiles for delete using ( lower(a
                                             </td>
                                             <td className="p-6 text-slate-300 font-medium">{p.email}</td>
                                             <td className="p-6">
-                                                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${p.subscription_status === 'active' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
+                                                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase 
+                                                    ${p.subscription_status === 'active' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 
+                                                      p.subscription_status === 'banned' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 
+                                                      'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
                                                     {p.subscription_status}
                                                 </span>
                                             </td>
