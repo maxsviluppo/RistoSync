@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, signOut } from '../services/supabase';
-import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal } from 'lucide-react';
+import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2 } from 'lucide-react';
 
 interface SuperAdminDashboardProps {
     onEnterApp: () => void;
@@ -38,9 +38,8 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     };
 
     const toggleStatus = async (id: string, currentStatus: string) => {
-        // Prevent action on fake demo items
         if (id.startsWith('demo-')) {
-            alert("Questa è una riga simulata. Crea il vero utente demo con l'SQL per gestirlo.");
+            alert("Questa è una riga simulata. Non puoi modificarne lo stato reale.");
             return;
         }
 
@@ -49,6 +48,31 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
         const { error } = await supabase.from('profiles').update({ subscription_status: newStatus }).eq('id', id);
         if (!error) fetchProfiles();
         else alert("Errore modifica stato: " + error.message);
+    };
+
+    const deleteProfile = async (id: string, name: string) => {
+        // 1. Handle Fake Demo Rows
+        if (id.startsWith('demo-')) {
+            setProfiles(prev => prev.filter(p => p.id !== id));
+            return;
+        }
+
+        // 2. Confirm Deletion
+        if (!confirm(`SEI SICURO?\n\nStai per eliminare definitivamente il ristorante:\n"${name}"\n\nQuesta azione non può essere annullata.`)) {
+            return;
+        }
+
+        if (!supabase) return;
+
+        // 3. Delete from DB
+        const { error } = await supabase.from('profiles').delete().eq('id', id);
+        
+        if (!error) {
+            fetchProfiles(); // Refresh list
+        } else {
+            console.error(error);
+            alert("ERRORE CANCELLAZIONE: " + error.message + "\n\nAssicurati di aver aggiornato le policy SQL premendo 'Copia SQL' in basso e eseguendolo su Supabase.");
+        }
     };
 
     const startEdit = (profile: any) => {
@@ -157,24 +181,23 @@ set restaurant_name = 'Ristorante Demo';`;
         }
     };
 
-    const resetSQL = `-- 1. RESET TOTALE (Rimuove TUTTE le policy precedenti)
+    const resetSQL = `-- 1. RESET TOTALE POLICY
 alter table public.profiles enable row level security;
 drop policy if exists "Super Admin View All" on public.profiles;
 drop policy if exists "Super Admin Update All" on public.profiles;
-drop policy if exists "Super Admin View All Gmail" on public.profiles;
+drop policy if exists "Super Admin Delete" on public.profiles;
 drop policy if exists "Public profiles are viewable by everyone" on public.profiles;
 drop policy if exists "Users can insert their own profile" on public.profiles;
 drop policy if exists "Users can update own profile" on public.profiles;
 
--- 2. REGOLA VISIBILITÀ TOTALE
+-- 2. PERMESSI UTENTI STANDARD
 create policy "Public profiles are viewable by everyone" on public.profiles for select using (true);
-
--- 3. REGOLE UTENTI
 create policy "Users can insert their own profile" on public.profiles for insert with check (auth.uid() = id);
 create policy "Users can update own profile" on public.profiles for update using (auth.uid() = id);
 
--- 4. POTERI SUPER ADMIN
-create policy "Super Admin Update All" on public.profiles for update using ( lower(auth.jwt() ->> 'email') = 'castro.massimo@yahoo.com' );`;
+-- 3. PERMESSI SUPER ADMIN (Modifica e CANCELLAZIONE)
+create policy "Super Admin Update All" on public.profiles for update using ( lower(auth.jwt() ->> 'email') = 'castro.massimo@yahoo.com' );
+create policy "Super Admin Delete" on public.profiles for delete using ( lower(auth.jwt() ->> 'email') = 'castro.massimo@yahoo.com' );`;
 
     const isEmailCorrect = currentEmail.toLowerCase() === 'castro.massimo@yahoo.com';
 
@@ -302,17 +325,27 @@ create policy "Super Admin Update All" on public.profiles for update using ( low
                                                 </span>
                                             </td>
                                             <td className="p-6 text-right">
-                                                <button 
-                                                    onClick={() => toggleStatus(p.id, p.subscription_status)}
-                                                    className={`inline-flex items-center gap-1 px-4 py-2 rounded-lg text-xs font-bold uppercase transition-colors
-                                                        ${isFake ? 'opacity-50 cursor-not-allowed bg-slate-700 text-slate-400' : 
-                                                            (p.subscription_status === 'active' 
-                                                            ? 'bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white border border-red-500/20' 
-                                                            : 'bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white border border-green-500/20')}
-                                                    `}
-                                                >
-                                                    {p.subscription_status === 'active' ? 'Sospendi' : 'Attiva'}
-                                                </button>
+                                                <div className="flex justify-end gap-2">
+                                                    <button 
+                                                        onClick={() => toggleStatus(p.id, p.subscription_status)}
+                                                        className={`inline-flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold uppercase transition-colors
+                                                            ${isFake ? 'opacity-50 cursor-not-allowed bg-slate-700 text-slate-400' : 
+                                                                (p.subscription_status === 'active' 
+                                                                ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white border border-blue-500/20' 
+                                                                : 'bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white border border-green-500/20')}
+                                                        `}
+                                                        title={p.subscription_status === 'active' ? 'Sospendi Account' : 'Attiva Account'}
+                                                    >
+                                                        {p.subscription_status === 'active' ? <PauseCircle size={14}/> : <PlayCircle size={14}/>}
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => deleteProfile(p.id, p.restaurant_name)}
+                                                        className="inline-flex items-center justify-center p-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-600 hover:text-white border border-red-500/20 transition-colors"
+                                                        title="Elimina Definitivamente"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                     );
