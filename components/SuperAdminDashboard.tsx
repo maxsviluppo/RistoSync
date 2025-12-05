@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, signOut } from '../services/supabase';
-import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User } from 'lucide-react';
+import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle } from 'lucide-react';
 
 interface SuperAdminDashboardProps {
     onEnterApp: () => void;
@@ -50,29 +50,67 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
             alert("Errore modifica stato: " + error.message);
         }
     };
+
+    const ensureAdminProfile = async () => {
+        if (!supabase) return;
+        setLoading(true);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+            alert("Utente non autenticato.");
+            setLoading(false);
+            return;
+        }
+
+        // Check if exists
+        const { data } = await supabase.from('profiles').select('id').eq('id', user.id).single();
+        if (!data) {
+            // Create it
+            const { error } = await supabase.from('profiles').insert({
+                id: user.id,
+                email: user.email,
+                restaurant_name: 'Super Admin HQ',
+                subscription_status: 'active'
+            });
+            if (error) alert("Errore creazione profilo: " + error.message);
+            else {
+                alert("Profilo Admin creato con successo! La lista si aggiornerà.");
+                fetchProfiles();
+            }
+        } else {
+            alert("Il profilo Admin esiste già nel database. Il problema sono i permessi di lettura.");
+        }
+        setLoading(false);
+    };
     
     const copySQL = () => {
-        const sql = `-- 1. PULIZIA TOTALE (Rimuove ogni traccia di regole vecchie)
+        const sql = `-- 1. RESET TOTALE (Rimuove TUTTE le policy precedenti per evitare conflitti)
+alter table public.profiles enable row level security;
 drop policy if exists "Super Admin View All" on public.profiles;
 drop policy if exists "Super Admin Update All" on public.profiles;
 drop policy if exists "Super Admin View All Gmail" on public.profiles;
-drop policy if exists "Super Admin View All 2" on public.profiles;
+drop policy if exists "Public profiles are viewable by everyone" on public.profiles;
+drop policy if exists "Users can insert their own profile" on public.profiles;
+drop policy if exists "Users can update own profile" on public.profiles;
 
--- 2. CREAZIONE REGOLE BLINDATE (Case-Insensitive)
--- Questa funzione lower() assicura che funzioni anche se hai scritto l'email con maiuscole
-create policy "Super Admin View All"
-on public.profiles
-for select
-using ( 
-  lower(auth.jwt() ->> 'email') = 'castro.massimo@yahoo.com' 
-);
+-- 2. REGOLA VISIBILITÀ TOTALE (Risolve il problema "Non vedo nulla")
+-- Permette a chiunque sia loggato di vedere i nomi dei ristoranti (essenziale per l'admin)
+create policy "Public profiles are viewable by everyone" 
+on public.profiles for select 
+using (true);
 
+-- 3. REGOLE GESTIONE UTENTI
+create policy "Users can insert their own profile" 
+on public.profiles for insert 
+with check (auth.uid() = id);
+
+create policy "Users can update own profile" 
+on public.profiles for update 
+using (auth.uid() = id);
+
+-- 4. REGOLA POTERI SUPER ADMIN (Solo tu puoi modificare gli altri)
 create policy "Super Admin Update All"
-on public.profiles
-for update
-using ( 
-  lower(auth.jwt() ->> 'email') = 'castro.massimo@yahoo.com' 
-);`;
+on public.profiles for update
+using ( lower(auth.jwt() ->> 'email') = 'castro.massimo@yahoo.com' );`;
         navigator.clipboard.writeText(sql);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
@@ -193,20 +231,47 @@ using (
                                         <td colSpan={5} className="p-10 text-center">
                                             <div className="flex flex-col items-center gap-3 text-slate-500 max-w-lg mx-auto">
                                                 <AlertTriangle size={40} className="text-orange-500 mb-2"/>
-                                                <p className="font-bold text-white text-lg">Permessi Database Mancanti</p>
+                                                <p className="font-bold text-white text-lg">Nessun Ristorante Trovato</p>
                                                 <p className="text-sm">
-                                                    Non vedo nessun ristorante. Copia il codice qui sotto ed eseguilo nell'SQL Editor di Supabase.
+                                                    Possibili cause: permessi database errati OPPURE il database è vuoto.
                                                 </p>
                                                 
-                                                <div className="bg-slate-950 p-4 rounded-xl border border-slate-700 w-full mt-4 relative group">
-                                                    <pre className="text-left text-xs text-green-400 font-mono whitespace-pre-wrap overflow-x-auto">
-{`drop policy if exists "Super Admin View All" on public.profiles;
+                                                <button 
+                                                    onClick={ensureAdminProfile}
+                                                    className="bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-green-600/20 my-4 animate-bounce"
+                                                >
+                                                    <PlusCircle size={20} /> CREA MIO PROFILO (Se Manca)
+                                                </button>
+
+                                                <div className="bg-slate-950 p-4 rounded-xl border border-slate-700 w-full mt-4 relative group text-left">
+                                                    <div className="mb-2 text-xs text-slate-400 uppercase font-bold">SQL Reset Totale (Soluzione Definitiva):</div>
+                                                    <pre className="text-left text-xs text-green-400 font-mono whitespace-pre-wrap overflow-x-auto h-32 custom-scroll">
+{`-- 1. RESET TOTALE (Rimuove TUTTE le policy precedenti)
+alter table public.profiles enable row level security;
+drop policy if exists "Super Admin View All" on public.profiles;
 drop policy if exists "Super Admin Update All" on public.profiles;
+drop policy if exists "Super Admin View All Gmail" on public.profiles;
+drop policy if exists "Public profiles are viewable by everyone" on public.profiles;
+drop policy if exists "Users can insert their own profile" on public.profiles;
+drop policy if exists "Users can update own profile" on public.profiles;
 
-create policy "Super Admin View All" on public.profiles for select
-using ( lower(auth.jwt() ->> 'email') = 'castro.massimo@yahoo.com' );
+-- 2. REGOLA VISIBILITÀ TOTALE (Risolve il problema "Non vedo nulla")
+create policy "Public profiles are viewable by everyone" 
+on public.profiles for select 
+using (true);
 
-create policy "Super Admin Update All" on public.profiles for update
+-- 3. ALTRE REGOLE
+create policy "Users can insert their own profile" 
+on public.profiles for insert 
+with check (auth.uid() = id);
+
+create policy "Users can update own profile" 
+on public.profiles for update 
+using (auth.uid() = id);
+
+-- 4. POTERI SUPER ADMIN
+create policy "Super Admin Update All"
+on public.profiles for update
 using ( lower(auth.jwt() ->> 'email') = 'castro.massimo@yahoo.com' );`}
                                                     </pre>
                                                     <button 
@@ -218,9 +283,6 @@ using ( lower(auth.jwt() ->> 'email') = 'castro.massimo@yahoo.com' );`}
                                                         {copied ? 'COPIATO' : 'COPIA TUTTO'}
                                                     </button>
                                                 </div>
-                                                <p className="text-xs text-slate-500 mt-2">
-                                                    <strong>Istruzioni:</strong> Vai su Supabase SQL Editor {'>'} Cancella tutto il testo esistente {'>'} Incolla {'>'} Premi RUN.
-                                                </p>
                                             </div>
                                         </td>
                                     </tr>

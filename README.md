@@ -27,7 +27,7 @@
 - A Google Cloud Account (for Gemini API)
 
 ### 2. Database Setup (Supabase)
-Create a new Supabase project and run the following SQL query in the **SQL Editor** to set up the tables and security policies:
+Create a new Supabase project and run the following SQL query in the **SQL Editor** to set up the tables.
 
 ```sql
 -- 1. Profiles Table (Tenants)
@@ -39,10 +39,6 @@ create table if not exists public.profiles (
   google_api_key text, -- Stores user's AI Key
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
-alter table public.profiles enable row level security;
-create policy "Public profiles are viewable by everyone" on profiles for select using (true);
-create policy "Users can insert their own profile" on profiles for insert with check (auth.uid() = id);
-create policy "Users can update own profile" on profiles for update using (auth.uid() = id);
 
 -- 2. Orders Table
 create table if not exists public.orders (
@@ -73,21 +69,35 @@ alter table public.menu_items enable row level security;
 create policy "Manage own menu" on menu_items for all using (auth.uid() = user_id);
 ```
 
-### 3. Super Admin Setup (CRITICAL)
-To enable the Super Admin dashboard for `castro.massimo@yahoo.com`, run this specific SQL command in Supabase Editor.
-**Use this "Nuclear Option" to ensure clean permissions (Case Insensitive):**
+### 3. Super Admin & Permissions Setup (RESET)
+If you are facing "Missing Permissions" issues, use this command to reset all policies on the profiles table.
+**Run this in Supabase SQL Editor:**
 
 ```sql
--- 1. CLEAN UP (Remove any existing variations)
+-- 1. RESET TOTALE (Rimuove TUTTE le policy precedenti)
+alter table public.profiles enable row level security;
 drop policy if exists "Super Admin View All" on public.profiles;
 drop policy if exists "Super Admin Update All" on public.profiles;
 drop policy if exists "Super Admin View All Gmail" on public.profiles;
+drop policy if exists "Public profiles are viewable by everyone" on public.profiles;
+drop policy if exists "Users can insert their own profile" on public.profiles;
+drop policy if exists "Users can update own profile" on public.profiles;
 
--- 2. CREATE CORRECT PERMISSIONS (Case Insensitive)
-create policy "Super Admin View All"
-on public.profiles for select
-using ( lower(auth.jwt() ->> 'email') = 'castro.massimo@yahoo.com' );
+-- 2. REGOLA VISIBILITÀ TOTALE (Risolve il problema "Non vedo nulla")
+create policy "Public profiles are viewable by everyone" 
+on public.profiles for select 
+using (true);
 
+-- 3. ALTRE REGOLE
+create policy "Users can insert their own profile" 
+on public.profiles for insert 
+with check (auth.uid() = id);
+
+create policy "Users can update own profile" 
+on public.profiles for update 
+using (auth.uid() = id);
+
+-- 4. POTERI SUPER ADMIN
 create policy "Super Admin Update All"
 on public.profiles for update
 using ( lower(auth.jwt() ->> 'email') = 'castro.massimo@yahoo.com' );
