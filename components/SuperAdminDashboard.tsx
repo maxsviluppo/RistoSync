@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, signOut } from '../services/supabase';
-import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock } from 'lucide-react';
+import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy } from 'lucide-react';
 
 interface SuperAdminDashboardProps {
     onEnterApp: () => void;
@@ -13,9 +13,14 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     const [loading, setLoading] = useState(false);
     const [copiedSQL, setCopiedSQL] = useState(false);
     const [copiedDemo, setCopiedDemo] = useState(false);
+    const [copiedRecovery, setCopiedRecovery] = useState(false);
     const [currentEmail, setCurrentEmail] = useState<string>('');
     const [showSqlModal, setShowSqlModal] = useState(false);
+    const [showRecoveryModal, setShowRecoveryModal] = useState(false);
     
+    // Recovery State
+    const [recoveryEmail, setRecoveryEmail] = useState('');
+
     // Editing State
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editName, setEditName] = useState('');
@@ -182,15 +187,30 @@ values (
 ) on conflict (id) do update 
 set restaurant_name = 'Ristorante Demo';`;
     };
+
+    const getRecoverySQL = (email: string) => {
+        if (!email) return '-- Inserisci un indirizzo email sopra per generare lo script';
+        return `-- Recupera Utente: ${email}
+-- Inserisce una riga in profiles se l'utente esiste in auth.users
+insert into public.profiles (id, email, restaurant_name, subscription_status)
+select id, email, 'Ristorante Ripristinato', 'active'
+from auth.users
+where email = '${email}'
+on conflict (id) do update 
+set subscription_status = 'active';`;
+    };
     
-    const copySQL = (sql: string, type: 'reset' | 'demo') => {
+    const copySQL = (sql: string, type: 'reset' | 'demo' | 'recovery') => {
         navigator.clipboard.writeText(sql);
         if (type === 'reset') {
             setCopiedSQL(true);
             setTimeout(() => setCopiedSQL(false), 2000);
-        } else {
+        } else if (type === 'demo') {
             setCopiedDemo(true);
             setTimeout(() => setCopiedDemo(false), 2000);
+        } else {
+            setCopiedRecovery(true);
+            setTimeout(() => setCopiedRecovery(false), 2000);
         }
     };
 
@@ -257,12 +277,21 @@ create policy "Super Admin Delete" on public.profiles for delete using ( lower(a
                         <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity"><FlaskConical size={80} /></div>
                         <div className="flex justify-between items-start mb-4">
                             <div className="p-3 bg-orange-500/10 rounded-xl text-orange-400"><FlaskConical /></div>
-                            <button 
-                                onClick={() => setShowSqlModal(true)}
-                                className="text-xs bg-orange-600 hover:bg-orange-500 text-white px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors"
-                            >
-                                <Terminal size={12}/> CREA VERO DEMO
-                            </button>
+                            <div className="flex gap-2">
+                                <button 
+                                    onClick={() => setShowRecoveryModal(true)}
+                                    className="text-xs bg-slate-700 hover:bg-slate-600 text-white w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
+                                    title="SOS Recovery Utente"
+                                >
+                                    <LifeBuoy size={16} className="text-blue-400"/>
+                                </button>
+                                <button 
+                                    onClick={() => setShowSqlModal(true)}
+                                    className="text-xs bg-orange-600 hover:bg-orange-500 text-white px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors"
+                                >
+                                    <Terminal size={12}/> CREA DEMO
+                                </button>
+                            </div>
                         </div>
                         <h3 className="text-slate-400 font-bold uppercase text-xs tracking-wider mb-2">Area Demo & Test</h3>
                         <button onClick={simulateDemoRow} className="text-orange-400 text-xs hover:underline text-left">
@@ -434,16 +463,54 @@ create policy "Super Admin Delete" on public.profiles for delete using ( lower(a
                             </button>
                         </div>
                         
-                        <div className="bg-slate-800 p-4 rounded-xl border border-slate-700 text-sm space-y-2">
-                            <p className="font-bold text-white">Credenziali generate:</p>
-                            <div className="flex gap-4 text-slate-300 font-mono text-xs">
-                                <span>Email: <strong>demo@ristosync.com</strong></span>
-                                <span>Password: <strong>password123</strong></span>
-                            </div>
-                        </div>
-
                         <div className="mt-6 flex justify-end">
                             <button onClick={() => setShowSqlModal(false)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold">Chiudi</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* RECOVERY SQL MODAL */}
+            {showRecoveryModal && (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+                    <div className="bg-slate-900 border border-blue-500/30 rounded-3xl p-6 w-full max-w-2xl shadow-2xl animate-slide-up relative">
+                        <button onClick={() => setShowRecoveryModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white"><X /></button>
+                        
+                        <div className="flex items-center gap-3 mb-4 text-blue-400">
+                             <div className="p-2 bg-blue-500/10 rounded-lg"><LifeBuoy size={24} /></div>
+                             <h2 className="text-xl font-bold text-white">SOS Recovery</h2>
+                        </div>
+                        
+                        <p className="text-slate-400 text-sm mb-4">
+                            Hai eliminato per sbaglio un utente dalla lista, ma esiste ancora in Auth? <br/>
+                            Inserisci la sua email qui sotto per generare il codice di ripristino.
+                        </p>
+
+                        <input 
+                            type="email" 
+                            placeholder="Email utente da recuperare (es. castromassimo@gmail.com)"
+                            value={recoveryEmail}
+                            onChange={(e) => setRecoveryEmail(e.target.value)}
+                            className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white mb-4 focus:border-blue-500 outline-none"
+                        />
+                        
+                        {recoveryEmail && (
+                            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 relative group text-left mb-6">
+                                <pre className="text-left text-xs text-green-400 font-mono whitespace-pre-wrap overflow-x-auto h-40 custom-scroll p-2">
+{getRecoverySQL(recoveryEmail)}
+                                </pre>
+                                <button 
+                                    onClick={() => copySQL(getRecoverySQL(recoveryEmail), 'recovery')}
+                                    className="absolute top-4 right-4 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 shadow-lg transition-all"
+                                >
+                                    {copiedRecovery ? <Check size={16} className="text-green-500"/> : <Copy size={16}/>}
+                                    {copiedRecovery ? 'COPIATO!' : 'COPIA SQL'}
+                                </button>
+                            </div>
+                        )}
+                        
+                        <div className="mt-6 flex justify-end">
+                            <button onClick={() => setShowRecoveryModal(false)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold">Chiudi</button>
                         </div>
                     </div>
                 </div>
