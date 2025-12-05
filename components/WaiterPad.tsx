@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Category, MenuItem, Order, OrderItem, OrderStatus } from '../types';
-import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, getWaiterName, logoutWaiter, getMenuItems, freeTable } from '../services/storageService';
+import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, getWaiterName, logoutWaiter, getMenuItems, freeTable, updateOrderStatus } from '../services/storageService';
 import { askChefAI } from '../services/geminiService';
 import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen, Bell, ArrowRight, Lock, PlusCircle } from 'lucide-react';
 
@@ -457,15 +457,19 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       // 3. SELECT TABLE
       setTable(tId);
       
-      // Look for active orders for this table
-      const activeOrder = allRestaurantOrders.find(o => o.tableNumber === tId && o.status !== OrderStatus.DELIVERED);
+      // 4. CHECK FOR EXISTING ORDER (Active OR Delivered but table not freed)
+      // Since 'freeTable' deletes the order, if an order exists for this table, it is occupied.
+      // We grab the most relevant one (usually there's only one per table in this model).
+      const activeOrder = allRestaurantOrders.find(o => o.tableNumber === tId);
       
-      if (activeOrder && activeOrder.status === OrderStatus.PENDING) {
-          // RECOVERY MODE: Load existing items into cart for editing
+      if (activeOrder) {
+          // MODIFICA/INTEGRAZIONE MODE
+          // Load existing items into cart for adding more
           setCart(activeOrder.items);
           setEditingOrderId(activeOrder.id);
       } else {
-          // INTEGRATION MODE: Clean cart for new additions
+          // NEW ORDER MODE
+          // Clean cart for new additions
           setCart([]);
           setEditingOrderId(null);
       }
@@ -561,8 +565,11 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
     setIsSending(true);
 
     if (editingOrderId) {
-        // UPDATE EXISTING ORDER
+        // UPDATE EXISTING ORDER (INTEGRAZIONE)
+        // 1. Update items (appends new ones)
         updateOrderItems(editingOrderId, cart);
+        // 2. Force status to PENDING so Kitchen sees it even if it was DELIVERED
+        updateOrderStatus(editingOrderId, OrderStatus.PENDING);
     } else {
         // CREATE NEW ORDER
         const newOrder: Order = {
@@ -1133,7 +1140,9 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                 {/* Primary Action: ORDER/EDIT */}
                                 <button
                                     onClick={proceedToOrder}
-                                    className="flex-[2] py-5 rounded-2xl font-black text-xl tracking-wide text-white shadow-xl bg-gradient-to-br from-blue-600 to-blue-500 hover:scale-[1.02] transition-transform flex flex-col items-center justify-center gap-1 leading-none"
+                                    className={`flex-[2] py-5 rounded-2xl font-black text-xl tracking-wide text-white shadow-xl bg-gradient-to-br transition-transform flex flex-col items-center justify-center gap-1 leading-none hover:scale-[1.02]
+                                        ${editingOrderId ? 'from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 shadow-blue-900/30' : 'from-orange-500 to-orange-600 hover:from-orange-400 hover:to-orange-500 shadow-orange-900/30'}
+                                    `}
                                 >
                                     {editingOrderId ? <Edit2 size={28}/> : <Utensils size={28}/>}
                                     <span>{editingOrderId ? 'MODIFICA' : 'ORDINE'}</span>
