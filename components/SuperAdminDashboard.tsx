@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, signOut } from '../services/supabase';
-import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2 } from 'lucide-react';
+import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock } from 'lucide-react';
 
 interface SuperAdminDashboardProps {
     onEnterApp: () => void;
 }
+
+const SUPER_ADMIN_EMAIL = 'castro.massimo@yahoo.com';
 
 const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp }) => {
     const [profiles, setProfiles] = useState<any[]>([]);
@@ -37,9 +39,14 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
         setLoading(false);
     };
 
-    const toggleStatus = async (id: string, currentStatus: string) => {
+    const toggleStatus = async (id: string, currentStatus: string, email: string) => {
         if (id.startsWith('demo-')) {
             alert("Questa è una riga simulata. Non puoi modificarne lo stato reale.");
+            return;
+        }
+
+        if (email === SUPER_ADMIN_EMAIL) {
+            alert("Non puoi sospendere l'account Super Admin principale.");
             return;
         }
 
@@ -50,7 +57,13 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
         else alert("Errore modifica stato: " + error.message);
     };
 
-    const deleteProfile = async (id: string, name: string) => {
+    const deleteProfile = async (id: string, name: string, email: string) => {
+        // 0. SECURITY CHECK: Block deletion of Super Admin
+        if (email === SUPER_ADMIN_EMAIL) {
+            alert("OPERAZIONE NEGATA\n\nNon è possibile eliminare l'account Super Admin principale.\nQuesto causerebbe la perdita di accesso alla Dashboard.");
+            return;
+        }
+
         // 1. Handle Fake Demo Rows
         if (id.startsWith('demo-')) {
             setProfiles(prev => prev.filter(p => p.id !== id));
@@ -58,7 +71,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
         }
 
         // 2. Confirm Deletion
-        if (!confirm(`SEI SICURO?\n\nStai per eliminare definitivamente il ristorante:\n"${name}"\n\nQuesta azione non può essere annullata.`)) {
+        if (!confirm(`⚠️ ATTENZIONE: ELIMINAZIONE RISTORANTE\n\nStai per cancellare definitivamente:\nNome: "${name}"\nEmail: ${email}\n\nTutti i dati associati (menu, ordini, impostazioni) andranno persi.\n\nSei assolutamente sicuro?`)) {
             return;
         }
 
@@ -196,10 +209,10 @@ create policy "Users can insert their own profile" on public.profiles for insert
 create policy "Users can update own profile" on public.profiles for update using (auth.uid() = id);
 
 -- 3. PERMESSI SUPER ADMIN (Modifica e CANCELLAZIONE)
-create policy "Super Admin Update All" on public.profiles for update using ( lower(auth.jwt() ->> 'email') = 'castro.massimo@yahoo.com' );
-create policy "Super Admin Delete" on public.profiles for delete using ( lower(auth.jwt() ->> 'email') = 'castro.massimo@yahoo.com' );`;
+create policy "Super Admin Update All" on public.profiles for update using ( lower(auth.jwt() ->> 'email') = '${SUPER_ADMIN_EMAIL}' );
+create policy "Super Admin Delete" on public.profiles for delete using ( lower(auth.jwt() ->> 'email') = '${SUPER_ADMIN_EMAIL}' );`;
 
-    const isEmailCorrect = currentEmail.toLowerCase() === 'castro.massimo@yahoo.com';
+    const isEmailCorrect = currentEmail.toLowerCase() === SUPER_ADMIN_EMAIL;
 
     return (
         <div className="min-h-screen bg-slate-900 text-white font-sans p-4 md:p-8">
@@ -286,8 +299,10 @@ create policy "Super Admin Delete" on public.profiles for delete using ( lower(a
                             <tbody className="divide-y divide-slate-700">
                                 {profiles.map(p => {
                                     const isFake = p.id.toString().startsWith('demo-');
+                                    const isSuperAdminProfile = p.email === SUPER_ADMIN_EMAIL;
+                                    
                                     return (
-                                        <tr key={p.id} className={`transition-colors ${isFake ? 'bg-orange-500/5 hover:bg-orange-500/10' : 'hover:bg-slate-700/30'}`}>
+                                        <tr key={p.id} className={`transition-colors ${isFake ? 'bg-orange-500/5 hover:bg-orange-500/10' : 'hover:bg-slate-700/30'} ${isSuperAdminProfile ? 'bg-blue-900/10' : ''}`}>
                                             <td className="p-6">
                                                 {editingId === p.id ? (
                                                     <div className="flex items-center gap-2">
@@ -307,6 +322,7 @@ create policy "Super Admin Delete" on public.profiles for delete using ( lower(a
                                                             <div className="flex items-center gap-2">
                                                                 <div className="font-bold text-white text-lg">{p.restaurant_name || 'N/A'}</div>
                                                                 {isFake && <span className="bg-orange-500 text-white text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">Simulato</span>}
+                                                                {isSuperAdminProfile && <span className="bg-blue-600 text-white text-[9px] px-1.5 py-0.5 rounded font-bold uppercase">HQ</span>}
                                                             </div>
                                                             <div className="text-xs font-mono text-slate-500 mt-1">{p.id}</div>
                                                         </div>
@@ -326,25 +342,34 @@ create policy "Super Admin Delete" on public.profiles for delete using ( lower(a
                                             </td>
                                             <td className="p-6 text-right">
                                                 <div className="flex justify-end gap-2">
-                                                    <button 
-                                                        onClick={() => toggleStatus(p.id, p.subscription_status)}
-                                                        className={`inline-flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold uppercase transition-colors
-                                                            ${isFake ? 'opacity-50 cursor-not-allowed bg-slate-700 text-slate-400' : 
-                                                                (p.subscription_status === 'active' 
-                                                                ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white border border-blue-500/20' 
-                                                                : 'bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white border border-green-500/20')}
-                                                        `}
-                                                        title={p.subscription_status === 'active' ? 'Sospendi Account' : 'Attiva Account'}
-                                                    >
-                                                        {p.subscription_status === 'active' ? <PauseCircle size={14}/> : <PlayCircle size={14}/>}
-                                                    </button>
-                                                    <button 
-                                                        onClick={() => deleteProfile(p.id, p.restaurant_name)}
-                                                        className="inline-flex items-center justify-center p-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-600 hover:text-white border border-red-500/20 transition-colors"
-                                                        title="Elimina Definitivamente"
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
+                                                    {!isSuperAdminProfile && (
+                                                        <button 
+                                                            onClick={() => toggleStatus(p.id, p.subscription_status, p.email)}
+                                                            className={`inline-flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold uppercase transition-colors
+                                                                ${isFake ? 'opacity-50 cursor-not-allowed bg-slate-700 text-slate-400' : 
+                                                                    (p.subscription_status === 'active' 
+                                                                    ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white border border-blue-500/20' 
+                                                                    : 'bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white border border-green-500/20')}
+                                                            `}
+                                                            title={p.subscription_status === 'active' ? 'Sospendi Account' : 'Attiva Account'}
+                                                        >
+                                                            {p.subscription_status === 'active' ? <PauseCircle size={14}/> : <PlayCircle size={14}/>}
+                                                        </button>
+                                                    )}
+                                                    
+                                                    {isSuperAdminProfile ? (
+                                                        <div className="inline-flex items-center justify-center p-2 rounded-lg bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed" title="Protetto da cancellazione">
+                                                            <Lock size={14} />
+                                                        </div>
+                                                    ) : (
+                                                        <button 
+                                                            onClick={() => deleteProfile(p.id, p.restaurant_name, p.email)}
+                                                            className="inline-flex items-center justify-center p-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-600 hover:text-white border border-red-500/20 transition-colors"
+                                                            title="Elimina Definitivamente"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
