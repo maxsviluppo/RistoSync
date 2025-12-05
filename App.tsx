@@ -797,8 +797,8 @@ const App: React.FC = () => {
         )}
 
         <div className="text-center mb-12 z-10">
-            <h1 className="text-4xl md:text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-green-400 mb-4">
-                RistoSync AI
+            <h1 className="text-4xl md:text-6xl font-extrabold text-white mb-4">
+                Risto<span className="text-orange-500">Sync</span> <span className="text-slate-500 text-3xl">AI</span>
             </h1>
             <p className="text-slate-400 text-lg">Scegli la modalità per questo dispositivo</p>
         </div>

@@ -733,27 +733,27 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
             100% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); }
         }
         
-        /* STRONG NEON PULSE FOR NOTIFICATIONS */
+        /* ULTRA STRONG NEON PULSE FOR NOTIFICATIONS */
         @keyframes neon-pulse {
             0% {
-                box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7);
+                box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4);
                 border-color: rgba(249, 115, 22, 0.8);
                 transform: scale(1);
             }
             50% {
-                box-shadow: 0 0 20px 5px rgba(249, 115, 22, 0.8), inset 0 0 10px rgba(249, 115, 22, 0.4);
-                border-color: rgba(249, 115, 22, 1);
-                transform: scale(1.03);
+                box-shadow: 0 0 40px 15px rgba(249, 115, 22, 0.9), inset 0 0 20px rgba(249, 115, 22, 0.5);
+                border-color: #ffffff; /* Bordo bianco per simulare saturazione neon */
+                transform: scale(1.05);
             }
             100% {
-                box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.7);
+                box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4);
                 border-color: rgba(249, 115, 22, 0.8);
                 transform: scale(1);
             }
         }
         
         .animate-neon-pulse {
-            animation: neon-pulse 1s infinite cubic-bezier(0.4, 0, 0.6, 1);
+            animation: neon-pulse 0.8s infinite cubic-bezier(0.4, 0, 0.6, 1);
         }
 
         .animate-card-swipe { animation: swipe-card 2.5s ease-in-out; }
