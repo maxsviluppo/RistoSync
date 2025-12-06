@@ -385,6 +385,16 @@ const App: React.FC = () => {
     return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 relative overflow-hidden font-sans">
         
+        <style>{`
+            @keyframes float-hat {
+                0%, 100% { transform: translateY(0) rotate(-15deg); }
+                50% { transform: translateY(-12px) rotate(-5deg); }
+            }
+            .animate-float-hat {
+                animation: float-hat 3.5s ease-in-out infinite;
+            }
+        `}</style>
+
         {/* Header Bar */}
         <div className="absolute top-0 left-0 right-0 p-6 flex justify-between items-center z-30">
             <div className="flex items-center gap-2">
@@ -796,10 +806,15 @@ const App: React.FC = () => {
              </div>
         )}
 
-        <div className="text-center mb-12 z-10">
-            <h1 className="text-4xl md:text-6xl font-extrabold text-white mb-4">
-                Risto<span className="text-orange-500">Sync</span> <span className="text-slate-500 text-3xl">AI</span>
-            </h1>
+        <div className="text-center mb-12 z-10 relative">
+            <div className="relative inline-block">
+                <div className="absolute -top-8 -left-8 text-orange-500 animate-float-hat z-20">
+                    <ChefHat size={48} strokeWidth={2.5} />
+                </div>
+                <h1 className="text-4xl md:text-6xl font-extrabold text-white mb-4 relative z-10">
+                    Risto<span className="text-orange-500">Sync</span> <span className="text-slate-500 text-3xl">AI</span>
+                </h1>
+            </div>
             <p className="text-slate-400 text-lg">Scegli la modalità per questo dispositivo</p>
         </div>
 
