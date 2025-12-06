@@ -443,7 +443,7 @@ const App: React.FC = () => {
                         </div>
                     </div>
                     <h2 className="text-2xl font-bold text-white text-center mb-2">Chi sei?</h2>
-                    <p className="text-slate-400 text-center text-sm mb-6">Inserisci il tuo nome per accedere all'app cameriere.</p>
+                    <p className="text-slate-400 text-center text-sm mb-6">Inserisci il tuo nome per accedere all'app sala.</p>
                     
                     <input 
                         type="text" 
@@ -843,7 +843,7 @@ const App: React.FC = () => {
                     <Smartphone className="w-12 h-12 text-slate-300 group-hover:text-blue-400" />
                 </div>
                 <div className="text-center">
-                    <h2 className="text-2xl font-bold text-white mb-2">App Cameriere</h2>
+                    <h2 className="text-2xl font-bold text-white mb-2">App Sala</h2>
                     <p className="text-slate-400 text-sm">Interfaccia 9:16 per smartphone. Presa comande veloce e assistente AI.</p>
                 </div>
                 <div className="absolute bottom-4 text-xs text-slate-600 uppercase tracking-widest font-semibold">Portrait Mode</div>

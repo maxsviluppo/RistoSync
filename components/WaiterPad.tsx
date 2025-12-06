@@ -1211,7 +1211,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                       <div className="w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center border border-blue-500 text-blue-500 mb-3">
                           <User size={32} />
                       </div>
-                      <h3 className="text-xl font-bold text-white">Profilo Cameriere</h3>
+                      <h3 className="text-xl font-bold text-white">Profilo Sala</h3>
                       <p className="text-slate-400 text-sm mt-1">Stai operando come <span className="text-white font-bold">{waiterName}</span></p>
                   </div>
                   
