@@ -13,17 +13,18 @@ const CATEGORY_ORDER = [
     Category.BEVANDE
 ];
 
-// Helper to get icon for allergen
+// Helper to get icon for allergen - INCREASED SIZE
 const getAllergenIcon = (id: string) => {
+    const size = 18; // Increased size for visibility
     switch (id) {
-        case 'Glutine': return <Wheat size={10} />;
-        case 'Latticini': return <Milk size={10} />;
-        case 'Uova': return <Egg size={10} />;
-        case 'Frutta a guscio': return <Nut size={10} />;
-        case 'Pesce': return <Fish size={10} />;
-        case 'Soia': return <Bean size={10} />;
-        case 'Piccante': return <Flame size={10} className="text-orange-500" />;
-        case 'Vegano': return <Leaf size={10} className="text-green-500" />;
+        case 'Glutine': return <Wheat size={size} />;
+        case 'Latticini': return <Milk size={size} />;
+        case 'Uova': return <Egg size={size} />;
+        case 'Frutta a guscio': return <Nut size={size} />;
+        case 'Pesce': return <Fish size={size} />;
+        case 'Soia': return <Bean size={size} />;
+        case 'Piccante': return <Flame size={size} className="text-orange-500" />;
+        case 'Vegano': return <Leaf size={size} className="text-green-500" />;
         default: return null;
     }
 };
@@ -870,8 +871,8 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                 <h3 className="font-black text-gray-100 text-2xl leading-none tracking-tight text-center line-clamp-3 z-10 w-full drop-shadow-lg">
                                     {item.name}
                                 </h3>
-                                {/* Tiny allergens mini row at bottom */}
-                                <div className="flex gap-1 flex-wrap justify-center mt-2 opacity-50">
+                                {/* Tiny allergens mini row at bottom - INCREASED SPACING */}
+                                <div className="flex gap-2 flex-wrap justify-center mt-3 opacity-50">
                                      {item.allergens?.slice(0, 3).map(algId => (
                                         <div key={algId} className="text-slate-300">
                                              {getAllergenIcon(algId)}
@@ -883,27 +884,34 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
                         {isEditing && (
                               <div className="bg-white rounded-xl p-3 animate-slide-up shadow-inner w-full cursor-default" onClick={e => e.stopPropagation()}>
-                                  <div className="flex items-center justify-between mb-3">
-                                      <h3 className="font-bold text-slate-800 text-sm truncate mr-2 flex-1">{item.name}</h3>
-                                      <div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1">
-                                          <button onClick={() => setEditQty(Math.max(1, editQty - 1))} className="w-8 h-8 flex items-center justify-center bg-white rounded shadow-sm text-slate-600 active:scale-95">
-                                              <Minus size={16} />
-                                          </button>
-                                          <span className="font-bold text-slate-800 w-6 text-center text-lg">{editQty}</span>
-                                          <button onClick={() => setEditQty(editQty + 1)} className="w-8 h-8 flex items-center justify-center bg-white rounded shadow-sm text-slate-600 active:scale-95">
-                                              <Plus size={16} />
-                                          </button>
+                                  <div className="flex flex-col mb-3">
+                                      {/* HUGE DISH NAME IN EDIT MODE */}
+                                      <h3 className="font-black text-slate-900 text-3xl leading-none tracking-tight mb-4 w-full break-words">
+                                        {item.name}
+                                      </h3>
+
+                                      <div className="flex items-center justify-between bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                          <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Quantità</span>
+                                          <div className="flex items-center gap-3">
+                                              <button onClick={() => setEditQty(Math.max(1, editQty - 1))} className="w-8 h-8 flex items-center justify-center bg-white rounded shadow-sm text-slate-600 active:scale-95 border border-slate-200">
+                                                  <Minus size={16} />
+                                              </button>
+                                              <span className="font-black text-slate-800 w-6 text-center text-xl">{editQty}</span>
+                                              <button onClick={() => setEditQty(editQty + 1)} className="w-8 h-8 flex items-center justify-center bg-white rounded shadow-sm text-slate-600 active:scale-95 border border-slate-200">
+                                                  <Plus size={16} />
+                                              </button>
+                                          </div>
                                       </div>
                                   </div>
 
                                   <div className="mb-3">
-                                      <label className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1 block">Note Cucina</label>
+                                      <label className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1 block">Note Cucina</label>
                                       <input 
                                           type="text" 
                                           value={editNotes}
                                           onChange={(e) => setEditNotes(capitalize(e.target.value))}
                                           placeholder="Es. Ben cotto..."
-                                          className="w-full bg-slate-100 border-none rounded-lg px-3 py-3 text-slate-800 text-sm focus:ring-2 focus:ring-orange-200 outline-none"
+                                          className="w-full bg-slate-100 border-none rounded-lg px-3 py-3 text-slate-800 text-sm focus:ring-2 focus:ring-orange-200 outline-none placeholder-slate-400"
                                       />
                                   </div>
 
