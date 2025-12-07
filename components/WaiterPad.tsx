@@ -278,7 +278,9 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       if (activeOrders.length === 0) return { status: 'free', count: 0, owner: null };
       
       const activeOrder = activeOrders[0];
-      
+      const orderDelayMinutes = (Date.now() - activeOrder.timestamp) / 60000;
+      const isLate = orderDelayMinutes > 25;
+
       // Calculate ready but not served
       let readyToServeCount = 0;
       activeOrder.items.forEach(i => {
@@ -287,7 +289,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
       if (readyToServeCount > 0) return { status: 'ready', count: readyToServeCount, owner: activeOrder.waiterName };
       
-      return { status: 'occupied', count: 0, owner: activeOrder.waiterName };
+      return { status: isLate ? 'late' : 'occupied', count: 0, owner: activeOrder.waiterName };
   };
 
   const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
@@ -326,13 +328,13 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                   const isEditing = editingItemId === item.id;
                   const isPopping = justAddedId === item.id;
                   return (
-                    <button key={item.id} onClick={() => startEditing(item)} className={`group relative overflow-hidden transition-all duration-300 rounded-2xl border flex flex-col items-center justify-center text-center ${isEditing ? 'col-span-2 aspect-auto bg-slate-800 border-orange-500/50 shadow-[0_0_30px_rgba(249,115,22,0.15)] ring-1 ring-orange-500/30 p-4' : isPopping ? 'animate-success-pop bg-slate-700 border-green-500 aspect-square' : 'bg-gradient-to-br from-slate-800 to-slate-900 border-white/10 shadow-lg active:scale-95 p-2 aspect-square'}`}>
+                    <button key={item.id} onClick={() => startEditing(item)} className={`group relative overflow-hidden transition-all duration-300 rounded-2xl border flex flex-col items-center justify-center text-center ${isEditing ? 'col-span-2 aspect-auto bg-slate-800 border-orange-500/50 shadow-[0_0_30px_rgba(249,115,22,0.15)] ring-1 ring-orange-500/30 p-4' : isPopping ? 'animate-success-pop bg-slate-700 border-green-500 aspect-square' : 'bg-gradient-to-br from-gray-700 to-gray-800 border-gray-600 shadow-lg active:scale-95 p-2 aspect-square'}`}>
                         {!isEditing && <div className="absolute inset-0 flex items-center justify-center opacity-5 pointer-events-none">{getCategoryIcon(item.category, 80)}</div>}
                         <div className="w-full relative z-10">
-                            {!isEditing && <h3 className="font-extrabold text-white text-2xl md:text-3xl leading-tight tracking-tight drop-shadow-md break-words w-full px-2">{item.name}</h3>}
+                            {!isEditing && <h3 className="font-extrabold text-white text-lg md:text-xl leading-tight tracking-tight drop-shadow-md break-words w-full px-2">{item.name}</h3>}
                             {isEditing && (
                               <div className="bg-white rounded-xl p-3 animate-slide-up shadow-inner w-full cursor-default text-left" onClick={e => e.stopPropagation()}>
-                                  <h3 className="font-black text-slate-800 text-2xl mb-2 text-center border-b border-slate-100 pb-2">{item.name}</h3>
+                                  <h3 className="font-black text-slate-800 text-xl mb-2 text-center border-b border-slate-100 pb-2">{item.name}</h3>
                                   <div className="flex items-center justify-between mb-3">
                                       <label className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Quantità</label>
                                       <div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1">
@@ -425,7 +427,12 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                 const isLocked = info.owner && info.owner !== waiterName; 
                                 let bgClass = 'bg-slate-800 border-slate-700 text-slate-400';
                                 let statusText = 'LIBERO';
-                                if (isLocked) { bgClass = 'bg-slate-900 border-slate-800 text-slate-600 opacity-70 cursor-not-allowed'; statusText = 'BLOCCATO'; } else if (isSelected) { bgClass = 'bg-slate-800 border-green-500 text-green-500 ring-2 ring-green-500/30 shadow-[0_0_15px_rgba(34,197,94,0.4)]'; } else if (info.status === 'ready') { bgClass = 'bg-green-600/20 border-green-500 text-green-400 animate-pulse'; statusText = 'SERVIMI'; } else if (info.status === 'occupied') { bgClass = 'bg-slate-700 border-slate-600 text-slate-200'; statusText = 'OCCUPATO'; }
+                                if (isLocked) { bgClass = 'bg-slate-900 border-slate-800 text-slate-600 opacity-70 cursor-not-allowed'; statusText = 'BLOCCATO'; } 
+                                else if (isSelected) { bgClass = 'bg-slate-800 border-green-500 text-green-500 ring-2 ring-green-500/30 shadow-[0_0_15px_rgba(34,197,94,0.4)]'; } 
+                                else if (info.status === 'ready') { bgClass = 'bg-green-600/20 border-green-500 text-green-400 animate-pulse'; statusText = 'SERVIMI'; } 
+                                else if (info.status === 'late') { bgClass = 'bg-red-900/40 border-red-500 text-red-100 shadow-[0_0_20px_rgba(220,38,38,0.6)] animate-pulse'; statusText = 'RITARDO'; }
+                                else if (info.status === 'occupied') { bgClass = 'bg-orange-900/40 border-orange-500 text-orange-100 shadow-[0_0_15px_rgba(249,115,22,0.5)]'; statusText = 'OCCUPATO'; }
+                                
                                 return (
                                     <button key={tId} onClick={() => !isLocked && handleSelectTable(tId)} disabled={!!isLocked} className={`aspect-square rounded-2xl border-2 flex flex-col items-center justify-center relative transition-all active:scale-95 ${bgClass}`}>
                                         {isLocked ? (<><Lock size={20} className="mb-1"/><span className="text-xl font-black text-slate-500">{tId}</span><div className="absolute bottom-2 text-[8px] uppercase font-bold bg-slate-800 px-2 py-0.5 rounded text-slate-400 max-w-[90%] truncate">{info.owner}</div></>) : (<><span className="text-2xl font-black">{tId}</span><span className="text-[9px] uppercase font-bold mt-1 leading-none text-center px-1">{statusText}</span>{info.count > 0 && <div className={`absolute top-2 right-2 px-1.5 py-0.5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-md border ${info.status === 'ready' ? 'bg-green-600 border-green-400 animate-bounce' : 'bg-slate-600 border-slate-500'}`}>{info.count} DA SERVIRE</div>}</>)}
@@ -450,7 +457,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                                         <div key={idx} className="flex justify-between items-center bg-slate-900 p-2 rounded-xl border border-slate-700">
                                                             <div className="flex flex-col">
                                                                 <span className="text-sm font-bold text-white">{item.quantity}x {item.menuItem.name}</span>
-                                                                <span className={`text-[9px] uppercase font-bold ${isReady ? 'text-green-400' : 'text-slate-500'}`}>{isReady ? 'PRONTO IN CUCINA' : 'IN PREPARAZIONE'}</span>
+                                                                <span className={`text-[9px] uppercase font-bold ${isReady ? 'text-green-400' : 'text-slate-500'}`}>{isReady ? 'PRONTO' : 'IN PREPARAZIONE'}</span>
                                                             </div>
                                                             {isReady ? (
                                                                 <button onClick={() => handleServeItem(existingOrders[0].id, idx)} className="bg-green-600 hover:bg-green-500 text-white text-[10px] font-bold uppercase px-3 py-2 rounded-lg shadow-lg shadow-green-600/20 flex items-center gap-1 animate-pulse"><CheckCircle size={12}/> SERVIRE</button>

@@ -160,9 +160,20 @@ export const saveOrders = (orders: Order[]) => {
 
 export const addOrder = (order: Order) => {
   const orders = getOrders();
+  const settings = getAppSettings(); // Get settings
+
   const cleanOrder = {
       ...order,
-      items: order.items.map(i => ({ ...i, completed: false, served: false, isAddedLater: false }))
+      items: order.items.map(i => {
+          // AUTO-COMPLETE logic for Sala items
+          const isSala = settings.categoryDestinations[i.menuItem.category] === 'Sala';
+          return { 
+              ...i, 
+              completed: isSala, // Sala items are automatically "cooked/ready"
+              served: false, 
+              isAddedLater: false 
+          };
+      })
   };
   const newOrders = [...orders, cleanOrder];
   
@@ -185,6 +196,7 @@ export const updateOrderStatus = (orderId: string, status: OrderStatus) => {
 export const updateOrderItems = (orderId: string, newItems: OrderItem[]) => {
     const orders = getOrders();
     const order = orders.find(o => o.id === orderId);
+    const settings = getAppSettings(); // Get settings
     if (!order) return;
 
     // Smart Merge Logic to Detect "Added" Items vs Existing
@@ -209,7 +221,14 @@ export const updateOrderItems = (orderId: string, newItems: OrderItem[]) => {
             };
         } else {
             // Completely new item
-            return { ...newItem, completed: false, served: false, isAddedLater: true };
+            // AUTO-COMPLETE logic for Sala items
+            const isSala = settings.categoryDestinations[newItem.menuItem.category] === 'Sala';
+            return { 
+                ...newItem, 
+                completed: isSala, // Auto-ready if for Sala
+                served: false, 
+                isAddedLater: true 
+            };
         }
     });
 

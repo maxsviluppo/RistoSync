@@ -454,7 +454,7 @@ const App: React.FC = () => {
                                                                 
                                                                 {/* Header: Name and Price */}
                                                                 <div className="flex justify-between items-start gap-4">
-                                                                    <div className="font-bold text-white text-lg leading-tight w-3/4">{item.name}</div>
+                                                                    <div className="font-bold text-white text-2xl leading-tight w-3/4">{item.name}</div>
                                                                     <div className="text-2xl font-black text-orange-500 whitespace-nowrap">€ {item.price.toFixed(2)}</div>
                                                                 </div>
 
