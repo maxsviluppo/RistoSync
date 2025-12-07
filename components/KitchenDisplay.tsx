@@ -281,10 +281,10 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
             )}
             <button 
                 onClick={onExit}
-                className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white p-2.5 rounded-lg transition-colors border border-slate-700"
+                className="bg-red-600 hover:bg-red-500 text-white px-4 py-2.5 rounded-lg transition-colors border border-red-500 shadow-lg shadow-red-900/20 font-bold flex items-center gap-2"
                 title="Esci"
             >
-                <LogOut size={20} />
+                <LogOut size={20} /> <span className="hidden sm:inline">ESCI</span>
             </button>
         </div>
       </div>

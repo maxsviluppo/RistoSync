@@ -425,7 +425,7 @@ const App: React.FC = () => {
                 </button>
                 <button 
                     onClick={signOut}
-                    className="p-3 rounded-full bg-slate-800 text-red-500 hover:text-white hover:bg-red-600 transition-colors"
+                    className="p-3 rounded-full bg-red-600 text-white hover:bg-red-500 shadow-lg shadow-red-900/20 transition-colors"
                     title="Esci"
                 >
                     <LogOut size={24} />

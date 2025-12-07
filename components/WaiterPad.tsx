@@ -504,6 +504,16 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const handleServeItems = (activeOrderId: string, isLastDish: boolean) => {
       if (!activeOrderId) return;
 
+      // 1. IMMEDIATELY MUTE NOTIFICATIONS (Aggiorna visto = totale)
+      const activeOrder = allRestaurantOrders.find(o => o.id === activeOrderId);
+      if (activeOrder) {
+          // Conta quanti piatti sono pronti ora
+          const currentTotalReady = activeOrder.items.filter(i => i.completed).length;
+          // Imposta il "visto" a questo numero, così unseenReadyCount diventa 0
+          // Questo ferma il lampeggiamento del tavolo e il pulsare dell'icona gestioni
+          setSeenReadyCounts(prev => ({ ...prev, [table]: currentTotalReady }));
+      }
+
       if (isLastDish) {
           // ULTIMO PIATTO: Completiamo l'ordine (status DELIVERED)
           // Questo rimuoverà l'ordine dalla vista cucina (ma non libera il tavolo)
@@ -516,7 +526,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
           // SERVIRE (Parziale):
           // In questa app non abbiamo uno stato intermedio "Item Delivered".
           // L'azione serve per "prendere in carico" (feedback visivo) e chiudere il modal per lavorare.
-          // La notifica "RITIRO" smette di lampeggiare grazie a 'seenReadyCounts' aggiornato in handleSelectTable.
+          // La notifica "RITIRO" smette di lampeggiare grazie a 'seenReadyCounts' aggiornato qui sopra.
           setNotificationToast(`Piatti serviti al Tavolo ${table}`);
           setTableManagerOpen(false); // Chiudi e torna al lavoro
       }
@@ -825,7 +835,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
              {/* Profile/Exit Button */}
              <button 
                 onClick={() => setProfileOpen(true)}
-                className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all active:scale-95"
+                className="w-10 h-10 rounded-xl bg-slate-700 text-white flex items-center justify-center hover:bg-slate-600 transition-all active:scale-95 shadow-lg border border-slate-600"
             >
                 <User size={18} />
             </button>
