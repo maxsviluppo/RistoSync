@@ -511,7 +511,8 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       setEditNotes('');
   };
 
-  const cancelEditing = () => {
+  const cancelEditing = (e?: React.MouseEvent) => {
+      if(e) e.stopPropagation();
       setEditingItemId(null);
       setEditQty(1);
       setEditNotes('');
@@ -648,14 +649,14 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
     setAiModalOpen(true);
   };
 
-  const getCategoryIcon = (cat: Category) => {
+  const getCategoryIcon = (cat: Category, size: number = 18) => {
     switch (cat) {
-        case Category.ANTIPASTI: return <Pizza size={18} />;
-        case Category.PRIMI: return <ChefHat size={18} />;
-        case Category.SECONDI: return <Utensils size={18} />;
-        case Category.DOLCI: return <CakeSlice size={18} />;
-        case Category.BEVANDE: return <Wine size={18} />;
-        default: return <Utensils size={18} />;
+        case Category.ANTIPASTI: return <Pizza size={size} />;
+        case Category.PRIMI: return <ChefHat size={size} />;
+        case Category.SECONDI: return <Utensils size={size} />;
+        case Category.DOLCI: return <CakeSlice size={size} />;
+        case Category.BEVANDE: return <Wine size={size} />;
+        default: return <Utensils size={size} />;
     }
   };
   
@@ -840,74 +841,68 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
             </div>
           </div>
 
-          <div className="px-4 space-y-3 pt-1">
+          <div className="px-3 pt-1 grid grid-cols-2 gap-3 pb-6">
               {menuItems.filter(i => i.category === selectedCategory).map(item => {
                   const isEditing = editingItemId === item.id;
                   const isPopping = justAddedId === item.id;
                   
                   return (
-                    <div 
+                    <button 
                         key={item.id} 
+                        onClick={() => startEditing(item)}
                         className={`
-                            group relative overflow-hidden transition-all duration-300 rounded-[1.5rem] border
+                            group relative overflow-hidden transition-all duration-300 rounded-2xl border text-left flex flex-col justify-between
                             ${isEditing 
-                                ? 'bg-slate-800 border-orange-500/50 shadow-[0_0_30px_rgba(249,115,22,0.15)] ring-1 ring-orange-500/30' 
+                                ? 'col-span-2 bg-slate-800 border-orange-500/50 shadow-[0_0_30px_rgba(249,115,22,0.15)] ring-1 ring-orange-500/30' 
                                 : isPopping
                                     ? 'animate-success-pop bg-slate-700 border-green-500'
-                                    : 'bg-gradient-to-br from-slate-700/60 to-slate-800/60 border-white/10 shadow-xl'
+                                    : 'bg-gradient-to-br from-slate-800 to-slate-900 border-white/10 shadow-lg active:scale-95'
                             }
                         `}
                     >
-                      <div className="p-4">
-                          <div className="flex justify-between items-start gap-4">
-                              <div className="flex-1 z-10">
-                                  <div className="flex items-center gap-2 mb-1">
-                                      <h3 className="font-bold text-white text-base leading-tight tracking-tight shadow-black drop-shadow-md">{item.name}</h3>
-                                  </div>
-                                  {!isEditing && (
-                                    <>
-                                        <p className="text-slate-300 text-[10px] leading-relaxed mb-3 pr-2 line-clamp-2 font-medium">{item.description}</p>
-                                        <div className="flex items-center justify-between mt-2">
-                                            <div className="flex gap-1.5 flex-wrap opacity-70">
-                                                {item.allergens?.map(algId => (
-                                                    <div key={algId} className="bg-slate-800 p-1 rounded-full border border-slate-700 text-slate-400" title={algId}>
-                                                        {getAllergenIcon(algId)}
-                                                    </div>
-                                                ))}
-                                            </div>
+                        {/* Watermark Icon */}
+                        <div className="absolute -bottom-2 -right-2 opacity-5 text-white transform rotate-12 pointer-events-none transition-opacity group-hover:opacity-10">
+                            {getCategoryIcon(item.category, 60)}
+                        </div>
 
-                                            <button 
-                                                onClick={(e) => { e.stopPropagation(); openAiFor(item); }} 
-                                                className="bg-transparent text-slate-500 hover:text-orange-400 transition-colors flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide"
-                                            >
-                                                INFO <Search size={10} strokeWidth={3} />
-                                            </button>
+                        <div className="p-3 w-full relative z-10">
+                            <div className="flex justify-between items-start gap-2 mb-1">
+                                <h3 className="font-extrabold text-white text-xl leading-none tracking-tight shadow-black drop-shadow-md line-clamp-2">
+                                    {item.name}
+                                </h3>
+                                {/* Category Icon Mini */}
+                                <div className="text-orange-500/70 shrink-0 mt-0.5">
+                                    {getCategoryIcon(item.category, 14)}
+                                </div>
+                            </div>
+                            
+                            {!isEditing && (
+                                <div className="flex items-end justify-between mt-2">
+                                    <div className="flex flex-col gap-1">
+                                        <p className="text-slate-500 text-[9px] line-clamp-1 h-3">{item.description}</p>
+                                        <div className="flex gap-1 flex-wrap opacity-50">
+                                            {item.allergens?.slice(0, 3).map(algId => (
+                                                <div key={algId} className="text-slate-400">
+                                                    {getAllergenIcon(algId)}
+                                                </div>
+                                            ))}
                                         </div>
-                                    </>
-                                  )}
-                              </div>
-                              
-                              {!isEditing && (
-                                  <button
-                                    onClick={() => startEditing(item)}
-                                    className="flex-shrink-0 w-10 h-10 rounded-xl bg-orange-500 text-white flex items-center justify-center shadow-lg shadow-orange-500/20 active:scale-95 transition-transform z-20 hover:bg-orange-400 mt-1"
-                                  >
-                                    <Plus size={20} strokeWidth={3} />
-                                  </button>
-                              )}
-                          </div>
+                                    </div>
+                                    <span className="text-orange-400 font-bold font-mono text-sm">€{item.price}</span>
+                                </div>
+                            )}
 
-                          {isEditing && (
-                              <div className="mt-3 bg-white rounded-xl p-3 animate-slide-up shadow-inner">
+                            {isEditing && (
+                              <div className="mt-3 bg-white rounded-xl p-3 animate-slide-up shadow-inner w-full cursor-default" onClick={e => e.stopPropagation()}>
                                   <div className="flex items-center justify-between mb-3">
                                       <label className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Quantità</label>
                                       <div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1">
-                                          <button onClick={() => setEditQty(Math.max(1, editQty - 1))} className="w-7 h-7 flex items-center justify-center bg-white rounded shadow-sm text-slate-600 active:scale-95">
-                                              <Minus size={14} />
+                                          <button onClick={() => setEditQty(Math.max(1, editQty - 1))} className="w-8 h-8 flex items-center justify-center bg-white rounded shadow-sm text-slate-600 active:scale-95">
+                                              <Minus size={16} />
                                           </button>
-                                          <span className="font-bold text-slate-800 w-4 text-center text-base">{editQty}</span>
-                                          <button onClick={() => setEditQty(editQty + 1)} className="w-7 h-7 flex items-center justify-center bg-white rounded shadow-sm text-slate-600 active:scale-95">
-                                              <Plus size={14} />
+                                          <span className="font-bold text-slate-800 w-6 text-center text-lg">{editQty}</span>
+                                          <button onClick={() => setEditQty(editQty + 1)} className="w-8 h-8 flex items-center justify-center bg-white rounded shadow-sm text-slate-600 active:scale-95">
+                                              <Plus size={16} />
                                           </button>
                                       </div>
                                   </div>
@@ -919,28 +914,37 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                           value={editNotes}
                                           onChange={(e) => setEditNotes(capitalize(e.target.value))}
                                           placeholder="Es. Ben cotto..."
-                                          className="w-full bg-slate-100 border-none rounded-lg px-3 py-2 text-slate-800 text-xs focus:ring-2 focus:ring-orange-200 outline-none"
+                                          className="w-full bg-slate-100 border-none rounded-lg px-3 py-3 text-slate-800 text-sm focus:ring-2 focus:ring-orange-200 outline-none"
                                       />
                                   </div>
 
                                   <div className="flex gap-2">
                                       <button 
                                         onClick={cancelEditing}
-                                        className="flex-1 py-2.5 rounded-lg border border-slate-200 text-slate-500 font-bold text-xs hover:bg-slate-50 transition-colors"
+                                        className="flex-1 py-3 rounded-lg border border-slate-200 text-slate-500 font-bold text-xs hover:bg-slate-50 transition-colors"
                                       >
                                           Annulla
                                       </button>
                                       <button 
                                         onClick={() => confirmItem(item)}
-                                        className="flex-[2] py-2.5 rounded-lg bg-orange-500 text-white font-bold text-xs hover:bg-orange-600 shadow-md shadow-orange-200 flex items-center justify-center gap-2"
+                                        className="flex-[2] py-3 rounded-lg bg-orange-500 text-white font-bold text-xs hover:bg-orange-600 shadow-md shadow-orange-200 flex items-center justify-center gap-2"
                                       >
-                                          <Check size={16} /> Conferma
+                                          <Check size={18} /> Conferma
                                       </button>
                                   </div>
+                                  
+                                  <div className="mt-3 pt-2 border-t border-slate-100 flex justify-center">
+                                     <button 
+                                        onClick={() => openAiFor(item)} 
+                                        className="text-indigo-500 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide hover:underline"
+                                     >
+                                        <Bot size={12}/> Chiedi all'AI info su questo piatto
+                                     </button>
+                                  </div>
                               </div>
-                          )}
-                      </div>
-                    </div>
+                            )}
+                        </div>
+                    </button>
                   );
               })}
           </div>
