@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Order, OrderStatus, Category } from '../types';
 import { getOrders, updateOrderStatus, clearHistory, toggleOrderItemCompletion } from '../services/storageService';
-import { Clock, CheckCircle, ChefHat, Trash2, History, UtensilsCrossed, Bell, User, LogOut, Square, CheckSquare, AlertCircle } from 'lucide-react';
+import { CheckCircle, ChefHat, Trash2, History, UtensilsCrossed, Bell, User, LogOut, Square, CheckSquare, AlertCircle, Clock } from 'lucide-react';
 
 // --- SORT PRIORITY ---
 const CATEGORY_PRIORITY: Record<Category, number> = {
@@ -101,8 +101,22 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
 
   const loadOrders = () => {
     const allOrders = getOrders();
-    // Sort by time: oldest first
-    const sorted = allOrders.sort((a, b) => a.timestamp - b.timestamp);
+    
+    // --- SORTING LOGIC ---
+    // 1. Ordini READY vanno in fondo (coda di uscita)
+    // 2. Ordini PENDING/COOKING ordinati per timestamp (vecchi prima)
+    // NOTA: Le modifiche non cambiano il timestamp originale, quindi mantengono la posizione!
+    const sorted = allOrders.sort((a, b) => {
+        // Logica per viewMode Active
+        const isReadyA = a.status === OrderStatus.READY;
+        const isReadyB = b.status === OrderStatus.READY;
+
+        if (isReadyA && !isReadyB) return 1; // A (Ready) va dopo B (Non Ready)
+        if (!isReadyA && isReadyB) return -1; // B (Ready) va dopo A (Non Ready)
+
+        // Se entrambi hanno lo stesso macro-stato (es. entrambi non pronti), vince il tempo
+        return a.timestamp - b.timestamp;
+    });
 
     // --- CHANGE DETECTION LOGIC ---
     if (!isFirstLoad.current) {
@@ -291,7 +305,8 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-10">
+        // CHANGED: 3 Columns Max for big screens to allow wider cards
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-10">
           {displayedOrders.map((order) => {
              // Live Timer Calculation
              const elapsedMs = currentTime - order.timestamp;
@@ -315,36 +330,40 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
                 key={order.id} 
                 className={`flex flex-col rounded-xl shadow-xl border-t-8 ${getStatusColor(order.status).replace('text', 'border').replace('bg-','border-')} bg-slate-800 text-slate-200 overflow-hidden transform transition-all duration-300 relative
                     ${viewMode === 'active' ? 'hover:-translate-y-1' : 'opacity-75'}
-                    ${isReady ? 'ring-2 ring-green-500/50 shadow-green-900/20' : ''}
+                    ${isReady ? 'ring-2 ring-green-500/50 shadow-green-900/20 opacity-90 scale-[0.98]' : ''}
                     ${isLate ? 'shadow-[0_0_30px_rgba(239,68,68,0.4)] border-red-600 animate-pulse' : ''}
                 `}
               >
                 {/* Header Card */}
-                <div className={`p-3 border-b border-slate-700 flex justify-between items-start 
+                <div className={`p-4 border-b border-slate-700 flex justify-between items-start 
                     ${isLate ? 'bg-red-900/40' : 'bg-slate-800/50'}
                 `}>
                   <div className="flex flex-col">
-                    <h2 className="text-3xl font-black text-white leading-none">Tav. {order.tableNumber}</h2>
-                    <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide mt-1 shadow-sm w-fit ${getStatusColor(order.status)}`}>
+                    <h2 className="text-4xl font-black text-white leading-none tracking-tight">Tav. {order.tableNumber}</h2>
+                    <span className={`inline-block px-3 py-1 rounded text-[10px] font-bold uppercase tracking-wide mt-2 shadow-sm w-fit ${getStatusColor(order.status)}`}>
                       {order.status}
                     </span>
                   </div>
                   
-                  <div className="text-right flex flex-col items-end">
-                    {/* Active Timer */}
-                    <div className={`flex items-center justify-end gap-1 font-mono text-xl font-black 
+                  <div className="text-right flex flex-col items-end gap-2">
+                    {/* Active Timer - Massive */}
+                    <div className={`flex items-center justify-end gap-1 font-mono text-3xl font-black 
                         ${isLate ? 'text-red-500 animate-pulse' : 'text-slate-300'}
                     `}>
-                        {isLate && <Bell size={18} className="animate-swing text-red-500 mr-1" />}
+                        {isLate && <Bell size={24} className="animate-swing text-red-500 mr-2" />}
                         {formatDuration(elapsedMs)}
                     </div>
                     
-                    <div className="flex items-center justify-end gap-1 text-slate-500 text-xs mt-1 font-bold opacity-70">
-                        Inserito: {new Date(order.timestamp).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                    {/* Registration Time - High Visibility Badge */}
+                    <div className="flex items-center justify-end gap-2 bg-slate-900/60 px-2 py-1 rounded border border-slate-700/50">
+                        <Clock size={12} className="text-slate-400"/>
+                        <span className="text-slate-300 font-bold font-mono text-sm">
+                            {new Date(order.timestamp).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
                     </div>
-                    
+
                     {/* Waiter Info */}
-                    <div className="flex items-center justify-end gap-1 text-slate-500 text-xs mt-0.5 font-bold opacity-70">
+                    <div className="flex items-center justify-end gap-1 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
                         <User size={10} /> {order.waiterName || 'Staff'}
                     </div>
                   </div>
@@ -371,15 +390,19 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
                                     </span>
                                 </div>
                             )}
-                            <div className="flex gap-3 items-start w-full">
-                                <div className={`mt-1 transition-colors ${item.completed ? 'text-green-500' : 'text-slate-600'}`}>
-                                        {item.completed ? <CheckSquare size={28} /> : <Square size={28} />}
+                            <div className="flex gap-4 items-start w-full">
+                                {/* Checkbox and Quantity Group - Aligned with text via top margin */}
+                                <div className="flex items-center gap-3 mt-1.5">
+                                    <div className={`transition-colors ${item.completed ? 'text-green-500' : 'text-slate-600'}`}>
+                                            {item.completed ? <CheckSquare size={32} /> : <Square size={32} />}
+                                    </div>
+                                    <span className={`font-black text-3xl w-12 h-12 flex items-center justify-center rounded-xl shadow-inner transition-colors shrink-0
+                                            ${item.completed ? 'bg-green-900/30 text-green-400' : 'bg-slate-700 text-white'}
+                                    `}>
+                                        {item.quantity}
+                                    </span>
                                 </div>
-                                <span className={`font-black text-2xl w-10 h-10 flex items-center justify-center rounded-lg shadow-inner transition-colors shrink-0
-                                        ${item.completed ? 'bg-green-900/30 text-green-400' : 'bg-slate-700 text-white'}
-                                `}>
-                                    {item.quantity}
-                                </span>
+                                
                                 <div className="flex-1 min-w-0">
                                     {/* Category Label */}
                                     <p className="text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-0.5">
@@ -387,16 +410,16 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
                                     </p>
                                     
                                     {/* DISH NAME - GIANT */}
-                                    <p className={`font-black text-4xl leading-[0.9] tracking-tight mb-1 transition-all break-words
-                                        ${item.completed ? 'text-slate-600 line-through decoration-2 decoration-green-500/50' : 'text-slate-100'}
+                                    <p className={`font-black text-4xl leading-[0.9] tracking-tight mb-2 transition-all break-words
+                                        ${item.completed ? 'text-slate-600 line-through decoration-4 decoration-green-500/30' : 'text-slate-100'}
                                     `}>
                                         {item.menuItem.name}
                                     </p>
                                     
                                     {item.notes && (
                                         <div className="flex items-start gap-1 mt-1">
-                                            <AlertCircle size={14} className="text-red-400 mt-0.5 shrink-0" />
-                                            <p className="text-red-300 text-base font-bold bg-red-900/20 px-2 rounded border border-red-900/30 leading-tight">
+                                            <AlertCircle size={16} className="text-red-400 mt-0.5 shrink-0" />
+                                            <p className="text-red-300 text-lg font-bold bg-red-900/20 px-2 rounded border border-red-900/30 leading-tight">
                                                 {item.notes}
                                             </p>
                                         </div>
