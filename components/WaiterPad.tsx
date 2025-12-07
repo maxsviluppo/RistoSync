@@ -851,12 +851,12 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                         key={item.id} 
                         onClick={() => startEditing(item)}
                         className={`
-                            group relative overflow-hidden transition-all duration-300 rounded-2xl border flex flex-col items-center justify-center aspect-square text-center
+                            group relative overflow-hidden transition-all duration-300 rounded-2xl border flex flex-col items-center justify-center text-center
                             ${isEditing 
                                 ? 'col-span-2 aspect-auto bg-slate-800 border-orange-500/50 shadow-[0_0_30px_rgba(249,115,22,0.15)] ring-1 ring-orange-500/30 p-4' 
                                 : isPopping
-                                    ? 'animate-success-pop bg-slate-700 border-green-500'
-                                    : 'bg-gradient-to-br from-slate-800 to-slate-900 border-white/10 shadow-lg active:scale-95 p-2'
+                                    ? 'animate-success-pop bg-slate-700 border-green-500 aspect-square'
+                                    : 'bg-gradient-to-br from-slate-800 to-slate-900 border-white/10 shadow-lg active:scale-95 p-2 aspect-square'
                             }
                         `}
                     >
@@ -870,14 +870,14 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                         <div className="w-full relative z-10">
                             
                             {!isEditing && (
-                                <h3 className="font-extrabold text-white text-xl md:text-2xl leading-tight tracking-tight drop-shadow-md break-words w-full px-2">
+                                <h3 className="font-extrabold text-white text-2xl md:text-3xl leading-tight tracking-tight drop-shadow-md break-words w-full px-2">
                                     {item.name}
                                 </h3>
                             )}
 
                             {isEditing && (
                               <div className="bg-white rounded-xl p-3 animate-slide-up shadow-inner w-full cursor-default text-left" onClick={e => e.stopPropagation()}>
-                                  <h3 className="font-black text-slate-800 text-lg mb-2 text-center border-b border-slate-100 pb-2">{item.name}</h3>
+                                  <h3 className="font-black text-slate-800 text-2xl mb-2 text-center border-b border-slate-100 pb-2">{item.name}</h3>
                                   <div className="flex items-center justify-between mb-3">
                                       <label className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Quantità</label>
                                       <div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1">

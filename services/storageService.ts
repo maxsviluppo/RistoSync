@@ -390,7 +390,7 @@ const DEFAULT_SETTINGS: AppSettings = {
         [Category.PRIMI]: 'Cucina',
         [Category.SECONDI]: 'Cucina',
         [Category.DOLCI]: 'Cucina',
-        [Category.BEVANDE]: 'Bar'
+        [Category.BEVANDE]: 'Sala' // Changed from Bar to Sala
     }
 };
 

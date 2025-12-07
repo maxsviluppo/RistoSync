@@ -13,7 +13,7 @@ export enum Category {
   BEVANDE = 'Bevande'
 }
 
-export type Department = 'Cucina' | 'Bar' | 'Pizzeria';
+export type Department = 'Cucina' | 'Sala' | 'Pizzeria';
 
 export interface AppSettings {
   categoryDestinations: Record<Category, Department>;

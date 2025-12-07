@@ -509,7 +509,7 @@ const App: React.FC = () => {
                     {/* Sidebar */}
                     <div className="w-64 bg-slate-900 border-r border-slate-800 p-4 space-y-2 hidden md:block">
                          <button onClick={() => setAdminTab('menu')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'menu' ? 'bg-orange-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
-                             <Utensils size={20}/> Gestione Menu & Destinazioni
+                             <Utensils size={20}/> Menu & Destinazioni
                          </button>
                          <button onClick={() => setAdminTab('notif')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'notif' ? 'bg-green-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
                              <Bell size={20}/> Notifiche
@@ -662,7 +662,7 @@ const App: React.FC = () => {
                                 {/* DESTINATION CONFIGURATION (MOVED HERE) */}
                                 <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 mb-8 overflow-x-auto">
                                     <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                        <Printer size={16}/> Destinazioni Categorie
+                                        <Printer size={16}/> Destinazioni Categorie (Cucina / Sala)
                                     </h4>
                                     <div className="flex gap-3">
                                         {Object.values(Category).map(cat => {
@@ -678,10 +678,10 @@ const App: React.FC = () => {
                                                             CUCINA
                                                         </button>
                                                         <button 
-                                                            onClick={() => updateDestination(cat, 'Bar')}
-                                                            className={`flex-1 py-1 rounded text-[10px] font-bold transition-all ${currentDest === 'Bar' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}
+                                                            onClick={() => updateDestination(cat, 'Sala')}
+                                                            className={`flex-1 py-1 rounded text-[10px] font-bold transition-all ${currentDest === 'Sala' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}
                                                         >
-                                                            BAR
+                                                            SALA
                                                         </button>
                                                     </div>
                                                 </div>
