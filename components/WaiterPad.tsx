@@ -851,12 +851,12 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                         key={item.id} 
                         onClick={() => startEditing(item)}
                         className={`
-                            group relative overflow-hidden transition-all duration-300 rounded-2xl border text-left flex flex-col justify-between
+                            group relative overflow-hidden transition-all duration-200 rounded-2xl border flex flex-col
                             ${isEditing 
-                                ? 'col-span-2 bg-slate-800 border-orange-500/50 shadow-[0_0_30px_rgba(249,115,22,0.15)] ring-1 ring-orange-500/30' 
+                                ? 'col-span-2 bg-slate-800 border-orange-500/50 shadow-[0_0_30px_rgba(249,115,22,0.15)] ring-1 ring-orange-500/30 p-3 text-left' 
                                 : isPopping
-                                    ? 'animate-success-pop bg-slate-700 border-green-500'
-                                    : 'bg-gradient-to-br from-slate-800 to-slate-900 border-white/10 shadow-lg active:scale-95'
+                                    ? 'aspect-square animate-success-pop bg-slate-700 border-green-500 items-center justify-center p-2'
+                                    : 'aspect-square bg-gradient-to-br from-slate-800 to-slate-900 border-white/10 shadow-lg active:scale-95 items-center justify-center p-2'
                             }
                         `}
                     >
@@ -865,37 +865,26 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                             {getCategoryIcon(item.category, 60)}
                         </div>
 
-                        <div className="p-3 w-full relative z-10">
-                            <div className="flex justify-between items-start gap-2 mb-1">
-                                <h3 className="font-extrabold text-white text-xl leading-none tracking-tight shadow-black drop-shadow-md line-clamp-2">
+                        {!isEditing && (
+                             <>
+                                <h3 className="font-extrabold text-white text-xl leading-tight tracking-tight shadow-black drop-shadow-md text-center line-clamp-3 z-10 w-full">
                                     {item.name}
                                 </h3>
-                                {/* Category Icon Mini */}
-                                <div className="text-orange-500/70 shrink-0 mt-0.5">
-                                    {getCategoryIcon(item.category, 14)}
+                                {/* Tiny allergens mini row at bottom */}
+                                <div className="flex gap-1 flex-wrap justify-center mt-2 opacity-60">
+                                     {item.allergens?.slice(0, 3).map(algId => (
+                                        <div key={algId} className="text-slate-400">
+                                             {getAllergenIcon(algId)}
+                                         </div>
+                                     ))}
                                 </div>
-                            </div>
-                            
-                            {!isEditing && (
-                                <div className="flex items-end justify-between mt-2">
-                                    <div className="flex flex-col gap-1">
-                                        <p className="text-slate-500 text-[9px] line-clamp-1 h-3">{item.description}</p>
-                                        <div className="flex gap-1 flex-wrap opacity-50">
-                                            {item.allergens?.slice(0, 3).map(algId => (
-                                                <div key={algId} className="text-slate-400">
-                                                    {getAllergenIcon(algId)}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <span className="text-orange-400 font-bold font-mono text-sm">€{item.price}</span>
-                                </div>
-                            )}
+                             </>
+                        )}
 
-                            {isEditing && (
-                              <div className="mt-3 bg-white rounded-xl p-3 animate-slide-up shadow-inner w-full cursor-default" onClick={e => e.stopPropagation()}>
+                        {isEditing && (
+                              <div className="bg-white rounded-xl p-3 animate-slide-up shadow-inner w-full cursor-default" onClick={e => e.stopPropagation()}>
                                   <div className="flex items-center justify-between mb-3">
-                                      <label className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Quantità</label>
+                                      <h3 className="font-bold text-slate-800 text-sm truncate mr-2 flex-1">{item.name}</h3>
                                       <div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1">
                                           <button onClick={() => setEditQty(Math.max(1, editQty - 1))} className="w-8 h-8 flex items-center justify-center bg-white rounded shadow-sm text-slate-600 active:scale-95">
                                               <Minus size={16} />
@@ -943,7 +932,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                   </div>
                               </div>
                             )}
-                        </div>
                     </button>
                   );
               })}
