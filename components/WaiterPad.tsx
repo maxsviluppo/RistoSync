@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Category, MenuItem, Order, OrderItem, OrderStatus, AppSettings } from '../types';
 import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, getWaiterName, logoutWaiter, getMenuItems, freeTable, updateOrderStatus, getAppSettings, serveItem } from '../services/storageService';
 import { askChefAI } from '../services/geminiService';
-import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen, Bell, ArrowRight, Lock, PlusCircle, Coffee, CheckCircle } from 'lucide-react';
+import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen, Bell, ArrowRight, Lock, PlusCircle, Coffee, CheckCircle, Mic, MicOff } from 'lucide-react';
 
 const CATEGORY_ORDER = [Category.ANTIPASTI, Category.PRIMI, Category.SECONDI, Category.DOLCI, Category.BEVANDE];
 
@@ -116,6 +116,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const [isSettingTables, setIsSettingTables] = useState(false);
   const [tempTableCount, setTempTableCount] = useState(12);
   const [appSettings, setAppSettingsState] = useState<AppSettings>(getAppSettings());
+  const [isListening, setIsListening] = useState(false);
 
   const prevItemReadyStateRef = useRef<Record<string, boolean>>({});
   const isFirstLoad = useRef(true);
@@ -207,8 +208,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       if (table === tId) { setTable(''); setCart([]); setEditingOrderId(null); return; }
       setTable(tId);
       const activeOrder = allRestaurantOrders.find(o => o.tableNumber === tId && o.status !== OrderStatus.DELIVERED);
-      // Don't auto-fill cart with active order items unless explicitly modifying
-      // Just set the table context
       setCart([]); setEditingOrderId(null);
       setTableManagerOpen(true);
   };
@@ -231,14 +230,10 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const requestSendOrder = () => { if (!table || cart.length === 0) return; setSendConfirmOpen(true); };
   const handleSendOrder = () => {
     setSendConfirmOpen(false); if (!table || cart.length === 0) return; setIsSending(true);
-    // Always add new order or new items to existing order
-    // Find active order for table
     const activeOrder = allRestaurantOrders.find(o => o.tableNumber === table && o.status !== OrderStatus.DELIVERED);
     
     if (activeOrder) {
         updateOrderItems(activeOrder.id, cart);
-        // Force status back to pending/cooking depending on items? Usually keep as is or set to PENDING if new items added.
-        // updateOrderStatus(activeOrder.id, OrderStatus.PENDING); // Let the kitchen see the new items
     } else {
         addOrder({ id: Date.now().toString(), tableNumber: table, items: cart, status: OrderStatus.PENDING, timestamp: Date.now(), waiterName: waiterName || 'Cameriere' });
     }
@@ -250,10 +245,12 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   
   const handleServeItem = (orderId: string, itemIndex: number) => {
       serveItem(orderId, itemIndex);
+      // AUTO-DESELECT TABLE AFTER SERVING
+      setTable('');
+      setTableManagerOpen(false);
   };
 
   const proceedToOrder = () => {
-    // Just close manager to show menu
     setTableManagerOpen(false);
   };
 
@@ -292,7 +289,29 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       return { status: isLate ? 'late' : 'occupied', count: 0, owner: activeOrder.waiterName };
   };
 
+  const handleDictation = () => {
+    if (isListening) return;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) { alert("Dettatura non supportata."); return; }
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'it-IT';
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.onstart = () => setIsListening(true);
+    recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        setEditNotes(prev => prev ? `${prev} ${transcript}` : transcript);
+        setIsListening(false);
+    };
+    recognition.onerror = () => setIsListening(false);
+    recognition.onend = () => setIsListening(false);
+    recognition.start();
+  };
+
   const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
+
+  // --- NEW: TOP EDITOR DATA ---
+  const editingItemData = menuItems.find(i => i.id === editingItemId);
 
   return (
     <div className="flex flex-col h-screen bg-slate-900 text-slate-100 max-w-md mx-auto shadow-2xl overflow-hidden relative border-x border-slate-800 font-sans selection:bg-orange-500 selection:text-white">
@@ -301,7 +320,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       <style>{`@keyframes swipe-card { 0%, 100% { transform: translateX(0); } 20%, 30% { transform: translateX(50px); } 50% { transform: translateX(0); } 70%, 80% { transform: translateX(-50px); } } @keyframes swipe-bg { 0%, 100% { background-color: rgb(51, 65, 85); } 20%, 30% { background-color: rgb(249, 115, 22); } 50% { background-color: rgb(51, 65, 85); } 70%, 80% { background-color: rgb(220, 38, 38); } } @keyframes fade-edit { 0%, 50%, 100% { opacity: 0; transform: scale(0.9); } 20%, 30% { opacity: 1; transform: scale(1); } } @keyframes fade-delete { 0%, 50%, 100% { opacity: 0; transform: scale(0.9); } 70%, 80% { opacity: 1; transform: scale(1); } } @keyframes success-pop { 0% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); } 50% { transform: scale(1.03); box-shadow: 0 0 20px rgba(34, 197, 94, 0.4); border-color: rgba(34, 197, 94, 0.8); background-color: rgba(34, 197, 94, 0.1); } 100% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); } } @keyframes neon-pulse { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); border-color: rgba(34, 197, 94, 0.8); transform: scale(1); } 50% { box-shadow: 0 0 40px 15px rgba(34, 197, 94, 0.9), inset 0 0 20px rgba(34, 197, 94, 0.5); border-color: #ffffff; transform: scale(1.05); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); border-color: rgba(34, 197, 94, 0.8); transform: scale(1); } } .animate-neon-pulse { animation: neon-pulse 1s infinite cubic-bezier(0.4, 0, 0.6, 1); } .animate-card-swipe { animation: swipe-card 2.5s ease-in-out; } .animate-bg-color { animation: swipe-bg 2.5s ease-in-out; } .animate-fade-edit { animation: fade-edit 2.5s ease-in-out; } .animate-fade-delete { animation: fade-delete 2.5s ease-in-out; } .animate-success-pop { animation: success-pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275); }`}</style>
 
       {/* --- HEADER --- */}
-      <div className="bg-slate-900 pt-5 pb-2 px-5 z-40 flex justify-between items-center sticky top-0 border-b border-white/5 bg-opacity-95 backdrop-blur-sm">
+      <div className="bg-slate-900 pt-5 pb-2 px-5 z-40 flex justify-between items-center sticky top-0 border-b border-white/5 bg-opacity-95 backdrop-blur-sm shadow-md">
         <div className="flex items-center gap-3"><div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/20 border border-orange-400/30 transform -rotate-3"><Utensils size={18} className="text-white" /></div><div><h1 className="font-bold text-sm tracking-tight text-white leading-none mb-0.5">Risto<span className="text-orange-500">Sync</span></h1><p className="text-[10px] text-slate-400 font-medium">Ciao, {waiterName || 'Staff'}</p></div></div>
         <div className="flex items-center gap-3">
              <button onClick={() => setProfileOpen(true)} className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all active:scale-95"><User size={18} /></button>
@@ -312,8 +331,42 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
         </div>
       </div>
 
+      {/* --- QUICK INPUT PANEL (TOP FIXED) --- */}
+      {editingItemData && (
+          <div className="fixed top-[70px] left-0 right-0 z-50 bg-slate-800/95 backdrop-blur-md border-b border-orange-500/30 shadow-2xl p-4 animate-slide-down">
+              <div className="max-w-md mx-auto">
+                <h3 className="font-black text-white text-lg mb-3 text-center flex items-center justify-center gap-2">
+                    <span className="text-orange-500">{editingItemData.category}</span>
+                    <span className="opacity-50">•</span>
+                    {editingItemData.name}
+                </h3>
+                
+                <div className="flex items-center justify-between mb-4 bg-slate-900/50 p-2 rounded-xl border border-slate-700">
+                      <div className="flex items-center gap-3 flex-1">
+                          <button onClick={() => setEditQty(Math.max(1, editQty - 1))} className="w-10 h-10 flex items-center justify-center bg-slate-700 hover:bg-slate-600 rounded-lg shadow-sm text-white active:scale-95 transition-all"><Minus size={18} /></button>
+                          <span className="font-black text-white w-8 text-center text-2xl">{editQty}</span>
+                          <button onClick={() => setEditQty(editQty + 1)} className="w-10 h-10 flex items-center justify-center bg-slate-700 hover:bg-slate-600 rounded-lg shadow-sm text-white active:scale-95 transition-all"><Plus size={18} /></button>
+                      </div>
+                      <div className="h-8 w-px bg-slate-700 mx-2"></div>
+                      <div className="flex-1 relative">
+                          <input type="text" value={editNotes} onChange={(e) => setEditNotes(capitalize(e.target.value))} placeholder="Note..." className="w-full bg-transparent border-none text-white text-sm focus:ring-0 placeholder-slate-500 pr-8" />
+                          <button onClick={handleDictation} className={`absolute right-0 top-1/2 -translate-y-1/2 p-1.5 rounded-full ${isListening ? 'bg-red-500 text-white animate-pulse' : 'text-slate-400 hover:text-white'}`}>
+                              {isListening ? <MicOff size={14}/> : <Mic size={14}/>}
+                          </button>
+                      </div>
+                </div>
+
+                <div className="flex gap-3">
+                    <button onClick={cancelEditing} className="flex-1 py-3 rounded-xl bg-slate-700 text-slate-300 font-bold text-sm hover:bg-slate-600 transition-colors">ANNULLA</button>
+                    <button onClick={() => confirmItem(editingItemData)} className="flex-[2] py-3 rounded-xl bg-orange-500 text-white font-bold text-sm hover:bg-orange-600 shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 active:scale-95 transition-transform"><Check size={18} /> AGGIUNGI ORDINE</button>
+                </div>
+                <div className="mt-3 text-center"><button onClick={() => openAiFor(editingItemData)} className="text-indigo-400 text-[10px] font-bold uppercase tracking-wide flex items-center justify-center gap-1 hover:text-white"><Bot size={12}/> Info AI</button></div>
+              </div>
+          </div>
+      )}
+
       {/* --- MENU GRID --- */}
-      <div className="flex-1 overflow-y-auto pb-48 relative scroll-smooth z-10 no-scrollbar touch-pan-y">
+      <div className={`flex-1 overflow-y-auto pb-48 relative scroll-smooth z-10 no-scrollbar touch-pan-y transition-all ${editingItemId ? 'pt-[220px] opacity-30 pointer-events-none grayscale' : ''}`}>
           <div className="sticky top-0 z-30 pt-2 pb-4 bg-gradient-to-b from-slate-900 via-slate-900/95 to-transparent">
             <div className="flex px-4 gap-3 overflow-x-auto no-scrollbar scroll-smooth snap-x snap-mandatory">
                 {Object.values(Category).map(cat => {
@@ -325,35 +378,13 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
           <div className="px-3 pt-1 grid grid-cols-2 gap-3 pb-6">
               {menuItems.filter(i => i.category === selectedCategory).map(item => {
-                  const isEditing = editingItemId === item.id;
                   const isPopping = justAddedId === item.id;
                   return (
-                    <button key={item.id} onClick={() => startEditing(item)} className={`group relative overflow-hidden transition-all duration-300 rounded-2xl border flex flex-col items-center justify-center text-center ${isEditing ? 'col-span-2 aspect-auto bg-slate-800 border-orange-500/50 shadow-[0_0_30px_rgba(249,115,22,0.15)] ring-1 ring-orange-500/30 p-4' : isPopping ? 'animate-success-pop bg-slate-700 border-green-500 aspect-square' : 'bg-gradient-to-br from-gray-700 to-gray-800 border-gray-600 shadow-lg active:scale-95 p-2 aspect-square'}`}>
-                        {!isEditing && <div className="absolute inset-0 flex items-center justify-center opacity-5 pointer-events-none">{getCategoryIcon(item.category, 80)}</div>}
+                    <button key={item.id} onClick={() => startEditing(item)} className={`group relative overflow-hidden transition-all duration-300 rounded-2xl border flex flex-col items-center justify-center text-center ${isPopping ? 'animate-success-pop bg-slate-700 border-green-500 aspect-square' : 'bg-gradient-to-br from-gray-700 to-gray-800 border-gray-600 shadow-lg active:scale-95 p-2 aspect-square'}`}>
+                        <div className="absolute inset-0 flex items-center justify-center opacity-5 pointer-events-none">{getCategoryIcon(item.category, 80)}</div>
                         <div className="w-full relative z-10">
-                            {!isEditing && <h3 className="font-extrabold text-white text-lg md:text-xl leading-tight tracking-tight drop-shadow-md break-words w-full px-2">{item.name}</h3>}
-                            {isEditing && (
-                              <div className="bg-white rounded-xl p-3 animate-slide-up shadow-inner w-full cursor-default text-left" onClick={e => e.stopPropagation()}>
-                                  <h3 className="font-black text-slate-800 text-xl mb-2 text-center border-b border-slate-100 pb-2">{item.name}</h3>
-                                  <div className="flex items-center justify-between mb-3">
-                                      <label className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Quantità</label>
-                                      <div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1">
-                                          <button onClick={() => setEditQty(Math.max(1, editQty - 1))} className="w-8 h-8 flex items-center justify-center bg-white rounded shadow-sm text-slate-600 active:scale-95"><Minus size={16} /></button>
-                                          <span className="font-bold text-slate-800 w-6 text-center text-lg">{editQty}</span>
-                                          <button onClick={() => setEditQty(editQty + 1)} className="w-8 h-8 flex items-center justify-center bg-white rounded shadow-sm text-slate-600 active:scale-95"><Plus size={16} /></button>
-                                      </div>
-                                  </div>
-                                  <div className="mb-3">
-                                      <label className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1 block">Note Cucina</label>
-                                      <input type="text" value={editNotes} onChange={(e) => setEditNotes(capitalize(e.target.value))} placeholder="Es. Ben cotto..." className="w-full bg-slate-100 border-none rounded-lg px-3 py-3 text-slate-800 text-sm focus:ring-2 focus:ring-orange-200 outline-none" />
-                                  </div>
-                                  <div className="flex gap-2">
-                                      <button onClick={cancelEditing} className="flex-1 py-3 rounded-lg border border-slate-200 text-slate-500 font-bold text-xs hover:bg-slate-50 transition-colors">Annulla</button>
-                                      <button onClick={() => confirmItem(item)} className="flex-[2] py-3 rounded-lg bg-orange-500 text-white font-bold text-xs hover:bg-orange-600 shadow-md shadow-orange-200 flex items-center justify-center gap-2"><Check size={18} /> Conferma</button>
-                                  </div>
-                                  <div className="mt-3 pt-2 border-t border-slate-100 flex justify-center"><button onClick={() => openAiFor(item)} className="text-indigo-500 flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide hover:underline"><Bot size={12}/> Chiedi all'AI info su questo piatto</button></div>
-                              </div>
-                            )}
+                            <h3 className="font-extrabold text-white text-lg md:text-xl leading-tight tracking-tight drop-shadow-md break-words w-full px-2">{item.name}</h3>
+                            <div className="mt-2 text-orange-400 font-bold">€ {item.price}</div>
                         </div>
                     </button>
                   );
