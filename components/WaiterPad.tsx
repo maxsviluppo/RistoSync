@@ -163,6 +163,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       isFirstLoad.current = false;
 
       if (table) {
+          // Include DELIVERED orders in the context of the table so we can see "Eating" status
           const tableOrders = allOrders.filter(o => o.tableNumber === table).sort((a, b) => b.timestamp - a.timestamp);
           setExistingOrders(tableOrders);
       } else { setExistingOrders([]); }
@@ -207,7 +208,8 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const handleSelectTable = (tId: string) => {
       if (table === tId) { setTable(''); setCart([]); setEditingOrderId(null); return; }
       setTable(tId);
-      const activeOrder = allRestaurantOrders.find(o => o.tableNumber === tId && o.status !== OrderStatus.DELIVERED);
+      // We don't filter by status here, we want the active context even if everything is served
+      const activeOrder = allRestaurantOrders.find(o => o.tableNumber === tId);
       setCart([]); setEditingOrderId(null);
       setTableManagerOpen(true);
   };
@@ -230,9 +232,12 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const requestSendOrder = () => { if (!table || cart.length === 0) return; setSendConfirmOpen(true); };
   const handleSendOrder = () => {
     setSendConfirmOpen(false); if (!table || cart.length === 0) return; setIsSending(true);
-    const activeOrder = allRestaurantOrders.find(o => o.tableNumber === table && o.status !== OrderStatus.DELIVERED);
+    // Find ANY active order for this table, even if status is DELIVERED. 
+    // If it exists, we append to it. If it doesn't (free table), we create new.
+    const activeOrder = allRestaurantOrders.find(o => o.tableNumber === table);
     
     if (activeOrder) {
+        // This will update items AND force status back to PENDING (see storageService)
         updateOrderItems(activeOrder.id, cart);
     } else {
         addOrder({ id: Date.now().toString(), tableNumber: table, items: cart, status: OrderStatus.PENDING, timestamp: Date.now(), waiterName: waiterName || 'Cameriere' });
@@ -270,23 +275,41 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   
   // Logic to determine table status color and badge
   const getTableStatusInfo = (tableNum: string) => {
-      const activeOrders = allRestaurantOrders.filter(o => o.tableNumber === tableNum && o.status !== OrderStatus.DELIVERED);
+      // INCLUDE DELIVERED ORDERS TO SHOW "EATING" STATUS
+      const activeOrders = allRestaurantOrders.filter(o => o.tableNumber === tableNum);
       
       if (activeOrders.length === 0) return { status: 'free', count: 0, owner: null };
       
       const activeOrder = activeOrders[0];
       const orderDelayMinutes = (Date.now() - activeOrder.timestamp) / 60000;
+      // Late logic applies if NOT everything is finished/served
       const isLate = orderDelayMinutes > 25;
 
       // Calculate ready but not served
       let readyToServeCount = 0;
+      let totalItems = 0;
+      let totalServed = 0;
+
       activeOrder.items.forEach(i => {
+          totalItems++;
+          if (i.served) totalServed++;
           if (i.completed && !i.served) readyToServeCount++;
       });
 
+      // 1. PRIORITY: Ready to Serve -> GREEN
       if (readyToServeCount > 0) return { status: 'ready', count: readyToServeCount, owner: activeOrder.waiterName };
       
-      return { status: isLate ? 'late' : 'occupied', count: 0, owner: activeOrder.waiterName };
+      // 2. PRIORITY: All Served (Eating) -> NEON ORANGE
+      // (Also applies if status is DELIVERED, but checking items is safer)
+      if (totalItems > 0 && totalItems === totalServed) {
+          return { status: 'eating', count: 0, owner: activeOrder.waiterName };
+      }
+
+      // 3. PRIORITY: Late (Only if waiting for food)
+      if (isLate) return { status: 'late', count: 0, owner: activeOrder.waiterName };
+      
+      // 4. Standard Occupied -> DARK ORANGE
+      return { status: 'occupied', count: 0, owner: activeOrder.waiterName };
   };
 
   const handleDictation = () => {
@@ -384,7 +407,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                         <div className="absolute inset-0 flex items-center justify-center opacity-5 pointer-events-none">{getCategoryIcon(item.category, 80)}</div>
                         <div className="w-full relative z-10">
                             <h3 className="font-extrabold text-white text-lg md:text-xl leading-tight tracking-tight drop-shadow-md break-words w-full px-2">{item.name}</h3>
-                            <div className="mt-2 text-orange-400 font-bold">€ {item.price}</div>
                         </div>
                     </button>
                   );
@@ -460,7 +482,8 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                 let statusText = 'LIBERO';
                                 if (isLocked) { bgClass = 'bg-slate-900 border-slate-800 text-slate-600 opacity-70 cursor-not-allowed'; statusText = 'BLOCCATO'; } 
                                 else if (isSelected) { bgClass = 'bg-slate-800 border-green-500 text-green-500 ring-2 ring-green-500/30 shadow-[0_0_15px_rgba(34,197,94,0.4)]'; } 
-                                else if (info.status === 'ready') { bgClass = 'bg-green-600/20 border-green-500 text-green-400 animate-pulse'; statusText = 'SERVIMI'; } 
+                                else if (info.status === 'ready') { bgClass = 'bg-green-600/20 border-green-500 text-green-400 animate-pulse'; statusText = 'SERVIMI'; }
+                                else if (info.status === 'eating') { bgClass = 'bg-orange-600 border-orange-400 text-white shadow-[0_0_20px_rgba(249,115,22,0.8)] animate-pulse'; statusText = 'IN ATTESA'; }
                                 else if (info.status === 'late') { bgClass = 'bg-red-900/40 border-red-500 text-red-100 shadow-[0_0_20px_rgba(220,38,38,0.6)] animate-pulse'; statusText = 'RITARDO'; }
                                 else if (info.status === 'occupied') { bgClass = 'bg-orange-900/40 border-orange-500 text-orange-100 shadow-[0_0_15px_rgba(249,115,22,0.5)]'; statusText = 'OCCUPATO'; }
                                 
@@ -475,7 +498,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                             <div className="flex flex-col gap-3 mt-2">
                                 {/* ACTIVE ORDER LIST - SERVE ACTIONS */}
                                 <div className="bg-slate-800/50 rounded-2xl border border-slate-700 overflow-hidden max-h-40 overflow-y-auto">
-                                   {existingOrders.length > 0 && existingOrders[0].status !== OrderStatus.DELIVERED ? (
+                                   {existingOrders.length > 0 ? (
                                        <div className="p-3">
                                            <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 sticky top-0 bg-slate-800/95 backdrop-blur-sm z-10 py-1">In Corso</h4>
                                            <div className="space-y-2">

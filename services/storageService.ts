@@ -232,11 +232,19 @@ export const updateOrderItems = (orderId: string, newItems: OrderItem[]) => {
         }
     });
 
-    // Reset timestamp to bring it to top, but keep ID
+    // RE-ACTIVATE ORDER if it was DELIVERED/SERVED
+    // This ensures the kitchen sees the new items (desserts, seconds, etc.)
+    let newStatus = order.status;
+    if (order.status === OrderStatus.DELIVERED || order.status === OrderStatus.READY) {
+        newStatus = OrderStatus.PENDING; 
+    }
+
+    // Update Order
     const updatedOrder = { 
         ...order, 
         items: processedItems, 
-        timestamp: Date.now() 
+        timestamp: Date.now(), // Bump timestamp to bring to top
+        status: newStatus 
     };
     const newOrders = orders.map(o => o.id === orderId ? updatedOrder : o);
 
