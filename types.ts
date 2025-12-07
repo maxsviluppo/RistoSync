@@ -13,6 +13,12 @@ export enum Category {
   BEVANDE = 'Bevande'
 }
 
+export type Department = 'Cucina' | 'Bar' | 'Pizzeria';
+
+export interface AppSettings {
+  categoryDestinations: Record<Category, Department>;
+}
+
 export interface MenuItem {
   id: string;
   name: string;

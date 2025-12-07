@@ -3,10 +3,10 @@ import KitchenDisplay from './components/KitchenDisplay';
 import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, ToggleLeft, ToggleRight, LayoutTemplate } from 'lucide-react';
-import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getCategoryConfig, saveCategoryConfig } from './services/storageService';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft } from 'lucide-react';
+import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
-import { MenuItem, Category } from './types';
+import { MenuItem, Category, Department, AppSettings } from './types';
 
 // Ordine visualizzazione categorie nell'admin
 const ADMIN_CATEGORY_ORDER = [
@@ -49,26 +49,20 @@ const App: React.FC = () => {
 
   // Admin State
   const [showAdmin, setShowAdmin] = useState(false);
-  const [adminTab, setAdminTab] = useState<'menu' | 'notif' | 'info' | 'ai' | 'db'>('menu');
+  const [adminTab, setAdminTab] = useState<'menu' | 'notif' | 'info' | 'ai' | 'db' | 'dest'>('menu');
   const [adminViewMode, setAdminViewMode] = useState<'dashboard' | 'app'>('dashboard');
   
   // Menu Manager State
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [isEditingItem, setIsEditingItem] = useState(false);
   const [editingItem, setEditingItem] = useState<Partial<MenuItem>>({});
-  const [categoryConfig, setCategoryConfig] = useState<Record<Category, boolean>>({
-      [Category.ANTIPASTI]: true,
-      [Category.PRIMI]: true,
-      [Category.SECONDI]: true,
-      [Category.DOLCI]: true,
-      [Category.BEVANDE]: false
-  });
   
   // Delete Confirmation State
   const [itemToDelete, setItemToDelete] = useState<MenuItem | null>(null);
 
   // Settings State
   const [notifSettings, setNotifSettings] = useState<NotificationSettings>({ kitchenSound: true, waiterSound: true, pushEnabled: false });
+  const [appSettings, setAppSettingsState] = useState<AppSettings>(getAppSettings());
   const [apiKeyInput, setApiKeyInput] = useState('');
 
   const isSuperAdmin = session?.user?.email === SUPER_ADMIN_EMAIL;
@@ -184,10 +178,16 @@ const App: React.FC = () => {
       if (showAdmin) {
           setMenuItems(getMenuItems());
           setNotifSettings(getNotificationSettings());
-          setCategoryConfig(getCategoryConfig());
+          setAppSettingsState(getAppSettings()); // Load settings
           const key = getGoogleApiKey();
           if (key) setApiKeyInput(key);
       }
+      
+      const handleSettingsUpdate = () => {
+          setAppSettingsState(getAppSettings());
+      };
+      window.addEventListener('local-settings-update', handleSettingsUpdate);
+      return () => window.removeEventListener('local-settings-update', handleSettingsUpdate);
   }, [showAdmin]);
 
   const handleWaiterClick = () => {
@@ -283,10 +283,16 @@ const App: React.FC = () => {
       saveNotificationSettings(newSettings);
   };
 
-  const toggleCategoryConfig = (cat: Category) => {
-      const newConfig = { ...categoryConfig, [cat]: !categoryConfig[cat] };
-      setCategoryConfig(newConfig);
-      saveCategoryConfig(newConfig);
+  const updateDestination = (cat: Category, dest: Department) => {
+      const newSettings = {
+          ...appSettings,
+          categoryDestinations: {
+              ...appSettings.categoryDestinations,
+              [cat]: dest
+          }
+      };
+      setAppSettingsState(newSettings);
+      saveAppSettings(newSettings); // Saves to Cloud
   };
 
   const handleSaveApiKey = () => {
@@ -439,7 +445,7 @@ const App: React.FC = () => {
                 </button>
                 <button 
                     onClick={signOut}
-                    className="p-3 rounded-full bg-red-600 text-white hover:bg-red-500 shadow-lg shadow-red-900/20 transition-colors"
+                    className="p-3 rounded-full bg-slate-800 text-red-500 hover:text-white hover:bg-red-600 transition-colors"
                     title="Esci"
                 >
                     <LogOut size={24} />
@@ -505,6 +511,9 @@ const App: React.FC = () => {
                          <button onClick={() => setAdminTab('menu')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'menu' ? 'bg-orange-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
                              <Utensils size={20}/> Gestione Menu
                          </button>
+                         <button onClick={() => setAdminTab('dest')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'dest' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
+                             <Printer size={20}/> Destinazioni
+                         </button>
                          <button onClick={() => setAdminTab('notif')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'notif' ? 'bg-green-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
                              <Bell size={20}/> Notifiche
                          </button>
@@ -526,6 +535,7 @@ const App: React.FC = () => {
                         {/* Mobile Tabs */}
                         <div className="flex md:hidden gap-2 mb-6 overflow-x-auto pb-2 no-scrollbar">
                              <button onClick={() => setAdminTab('menu')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'menu' ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Menu</button>
+                             <button onClick={() => setAdminTab('dest')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'dest' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Destinazioni</button>
                              <button onClick={() => setAdminTab('notif')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'notif' ? 'bg-green-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Notifiche</button>
                              <button onClick={() => setAdminTab('ai')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'ai' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>AI</button>
                         </div>
@@ -556,6 +566,50 @@ const App: React.FC = () => {
                                     <p className="text-sm text-slate-500 mt-2">Usa la Dashboard principale per gestire i tenant.</p>
                                 </div>
                             </div>
+                        )}
+
+                        {/* DESTINATIONS TAB (NEW) */}
+                        {adminTab === 'dest' && (
+                             <div className="max-w-2xl animate-fade-in">
+                                <h3 className="text-xl font-bold text-white mb-6">Destinazioni Categorie</h3>
+                                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 mb-6">
+                                    <p className="text-slate-400 mb-6 text-sm">
+                                        Configura dove vengono smistati gli ordini per ogni categoria.
+                                        Queste impostazioni si sincronizzano automaticamente su tutti i dispositivi.
+                                    </p>
+                                    
+                                    <div className="space-y-4">
+                                        {Object.values(Category).map(cat => {
+                                            const currentDest = appSettings.categoryDestinations[cat] || 'Cucina';
+                                            return (
+                                                <div key={cat} className="flex items-center justify-between p-4 bg-slate-950 rounded-xl border border-slate-800">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`p-2 rounded-lg ${currentDest === 'Bar' ? 'bg-blue-500/10 text-blue-400' : 'bg-orange-500/10 text-orange-400'}`}>
+                                                            {currentDest === 'Bar' ? <Printer size={20}/> : <ChefHat size={20}/>}
+                                                        </div>
+                                                        <span className="font-bold text-white">{cat}</span>
+                                                    </div>
+                                                    
+                                                    <div className="flex bg-slate-800 rounded-lg p-1 border border-slate-700">
+                                                        <button 
+                                                            onClick={() => updateDestination(cat, 'Cucina')}
+                                                            className={`px-4 py-2 text-xs font-bold rounded-md transition-all ${currentDest === 'Cucina' ? 'bg-orange-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                                        >
+                                                            CUCINA
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => updateDestination(cat, 'Bar')}
+                                                            className={`px-4 py-2 text-xs font-bold rounded-md transition-all ${currentDest === 'Bar' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                                        >
+                                                            BAR
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                             </div>
                         )}
 
                         {/* AI TAB */}
@@ -643,40 +697,6 @@ const App: React.FC = () => {
                         {/* MENU TAB */}
                         {adminTab === 'menu' && (
                             <div className="pb-20">
-                                {/* CATEGORY CONFIG SECTION (NEW) */}
-                                <div className="mb-8">
-                                    <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                        <LayoutTemplate size={16}/> Destinazione Comande
-                                    </h4>
-                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
-                                        {Object.values(Category).map(cat => {
-                                            const isKitchen = categoryConfig[cat];
-                                            return (
-                                                <button
-                                                    key={cat}
-                                                    onClick={() => toggleCategoryConfig(cat)}
-                                                    className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all relative overflow-hidden
-                                                        ${isKitchen 
-                                                            ? 'bg-slate-800 border-orange-500/50 text-orange-400' 
-                                                            : 'bg-slate-800 border-blue-500/50 text-blue-400'}
-                                                    `}
-                                                >
-                                                    <span className="text-xs font-bold uppercase z-10">{cat}</span>
-                                                    <div className={`flex items-center gap-2 text-sm font-bold z-10 ${isKitchen ? 'text-orange-500' : 'text-blue-500'}`}>
-                                                        {isKitchen ? <ChefHat size={18}/> : <User size={18}/>}
-                                                        {isKitchen ? 'CUCINA' : 'SALA'}
-                                                    </div>
-                                                    {/* Background tint */}
-                                                    <div className={`absolute inset-0 opacity-10 ${isKitchen ? 'bg-orange-500' : 'bg-blue-500'}`}></div>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                    <p className="text-xs text-slate-500 mt-2">
-                                        * Le categorie impostate su <strong>SALA</strong> (blu) non appariranno nel monitor di cucina. I camerieri potranno segnare questi piatti come "Serviti" autonomamente.
-                                    </p>
-                                </div>
-
                                 <div className="flex justify-between items-center mb-6 sticky top-0 bg-slate-950 py-4 z-20 border-b border-slate-800">
                                     <div>
                                         <h3 className="text-xl font-bold text-white">Catalogo Piatti</h3>

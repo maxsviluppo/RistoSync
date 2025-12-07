@@ -1,4 +1,4 @@
-import { Order, OrderStatus, OrderItem, MenuItem, Category } from '../types';
+import { Order, OrderStatus, OrderItem, MenuItem, AppSettings, Category, Department } from '../types';
 import { MENU_ITEMS as DEFAULT_MENU_ITEMS } from '../constants';
 import { supabase } from './supabase';
 
@@ -7,7 +7,7 @@ const TABLES_COUNT_KEY = 'ristosync_table_count';
 const WAITER_KEY = 'ristosync_waiter_name';
 const MENU_KEY = 'ristosync_menu_items';
 const SETTINGS_NOTIFICATIONS_KEY = 'ristosync_settings_notifications';
-const CATEGORY_CONFIG_KEY = 'ristosync_category_config'; // NEW
+const APP_SETTINGS_KEY = 'ristosync_app_settings'; // New Global Settings Key
 const GOOGLE_API_KEY_STORAGE = 'ristosync_google_api_key';
 
 // --- SYNC ENGINE STATE ---
@@ -26,6 +26,7 @@ export const initSupabaseSync = async () => {
         // 1. Initial Sync
         await fetchFromCloud(); 
         await fetchFromCloudMenu();
+        await fetchSettingsFromCloud(); // New: Fetch global settings
         
         // 2. Sync Profile Settings (API KEY)
         const { data: profile } = await supabase.from('profiles').select('google_api_key').eq('id', currentUserId).single();
@@ -34,6 +35,7 @@ export const initSupabaseSync = async () => {
         }
 
         // 3. Realtime Subscription (Robust Mode)
+        // We create a unique channel for this user/restaurant
         const channel = supabase.channel(`room:${currentUserId}`);
 
         channel
@@ -41,7 +43,7 @@ export const initSupabaseSync = async () => {
                 event: '*', 
                 schema: 'public', 
                 table: 'orders' 
-            }, () => {
+            }, (payload) => {
                 fetchFromCloud(); 
             })
             .on('postgres_changes', { 
@@ -50,6 +52,18 @@ export const initSupabaseSync = async () => {
                 table: 'menu_items' 
             }, () => {
                 fetchFromCloudMenu();
+            })
+            // NEW: Listen for Settings changes in Profile
+            .on('postgres_changes', {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'profiles',
+                filter: `id=eq.${currentUserId}`
+            }, (payload) => {
+                if (payload.new.settings) {
+                    localStorage.setItem(APP_SETTINGS_KEY, JSON.stringify(payload.new.settings));
+                    window.dispatchEvent(new Event('local-settings-update'));
+                }
             })
             .subscribe((status) => {
                 if (status === 'SUBSCRIBED') {
@@ -61,6 +75,7 @@ export const initSupabaseSync = async () => {
         if (pollingInterval) clearInterval(pollingInterval);
         pollingInterval = setInterval(() => {
             fetchFromCloud();
+            fetchSettingsFromCloud();
         }, 15000);
     }
 };
@@ -97,6 +112,16 @@ const fetchFromCloudMenu = async () => {
     }
 };
 
+// NEW: Fetch Global Settings (Categories destinations, etc)
+const fetchSettingsFromCloud = async () => {
+    if (!supabase || !currentUserId) return;
+    const { data, error } = await supabase.from('profiles').select('settings').eq('id', currentUserId).single();
+    if (!error && data?.settings) {
+        localStorage.setItem(APP_SETTINGS_KEY, JSON.stringify(data.settings));
+        window.dispatchEvent(new Event('local-settings-update'));
+    }
+};
+
 // --- ORDER MANAGEMENT ---
 export const getOrders = (): Order[] => {
   const data = localStorage.getItem(STORAGE_KEY);
@@ -125,133 +150,173 @@ const syncOrderToCloud = async (order: Order, isDelete = false) => {
             waiter_name: order.waiterName
         };
         const { error } = await supabase.from('orders').upsert(payload);
-        if (error) console.error("Sync error", error);
+        if (error) console.error("Cloud Sync Error", error);
     }
 };
 
-// --- EXPORTED FUNCTIONS ---
-
-// 1. Google API Key
-export const getGoogleApiKey = () => {
-    return localStorage.getItem(GOOGLE_API_KEY_STORAGE) || '';
+export const saveOrders = (orders: Order[]) => {
+  saveLocallyAndNotify(orders);
 };
 
-export const saveGoogleApiKey = async (key: string) => {
-    localStorage.setItem(GOOGLE_API_KEY_STORAGE, key);
-    if (supabase && currentUserId) {
-        await supabase.from('profiles').update({ google_api_key: key }).eq('id', currentUserId);
-    }
-};
-
-// 2. Orders
 export const addOrder = (order: Order) => {
-    const orders = getOrders();
-    orders.push(order);
-    saveLocallyAndNotify(orders);
-    syncOrderToCloud(order);
+  const orders = getOrders();
+  const cleanOrder = {
+      ...order,
+      items: order.items.map(i => ({ ...i, completed: false, isAddedLater: false }))
+  };
+  const newOrders = [...orders, cleanOrder];
+  
+  saveLocallyAndNotify(newOrders);
+  syncOrderToCloud(cleanOrder); // Trigger Cloud Sync
 };
 
 export const updateOrderStatus = (orderId: string, status: OrderStatus) => {
-    const orders = getOrders();
-    const order = orders.find(o => o.id === orderId);
-    if (order) {
-        order.status = status;
-        saveLocallyAndNotify(orders);
-        syncOrderToCloud(order);
-    }
+  const orders = getOrders();
+  const order = orders.find(o => o.id === orderId);
+  if (!order) return;
+
+  const updatedOrder = { ...order, status };
+  const newOrders = orders.map(o => o.id === orderId ? updatedOrder : o);
+  
+  saveLocallyAndNotify(newOrders);
+  syncOrderToCloud(updatedOrder);
 };
 
 export const updateOrderItems = (orderId: string, newItems: OrderItem[]) => {
     const orders = getOrders();
     const order = orders.find(o => o.id === orderId);
-    if (order) {
-        order.items = newItems;
-        saveLocallyAndNotify(orders);
-        syncOrderToCloud(order);
-    }
+    if (!order) return;
+
+    // Smart Merge Logic to Detect "Added" Items vs Existing
+    const processedItems = newItems.map(newItem => {
+        // Try to find matching old item (Same ID and Same Notes)
+        const existing = order.items.find(old => 
+            old.menuItem.id === newItem.menuItem.id && 
+            old.notes === newItem.notes
+        );
+
+        if (existing) {
+            // If exists, determine if quantity increased
+            const isQuantityIncreased = newItem.quantity > existing.quantity;
+            
+            return {
+                ...newItem,
+                // If quantity increased, reset completion status for kitchen to notice
+                completed: isQuantityIncreased ? false : existing.completed,
+                // Mark as added later if it was already marked OR if quantity bumped
+                isAddedLater: existing.isAddedLater || isQuantityIncreased
+            };
+        } else {
+            // Completely new item
+            return { ...newItem, completed: false, isAddedLater: true };
+        }
+    });
+
+    // Reset timestamp to bring it to top, but keep ID
+    const updatedOrder = { 
+        ...order, 
+        items: processedItems, 
+        timestamp: Date.now() 
+    };
+    const newOrders = orders.map(o => o.id === orderId ? updatedOrder : o);
+
+    saveLocallyAndNotify(newOrders);
+    syncOrderToCloud(updatedOrder);
 };
 
 export const toggleOrderItemCompletion = (orderId: string, itemIndex: number) => {
     const orders = getOrders();
     const order = orders.find(o => o.id === orderId);
-    if (order && order.items[itemIndex]) {
-        order.items[itemIndex].completed = !order.items[itemIndex].completed;
-        saveLocallyAndNotify(orders);
-        syncOrderToCloud(order);
+    if (!order) return;
+
+    const newItems = [...order.items];
+    if (newItems[itemIndex]) {
+        newItems[itemIndex] = { 
+            ...newItems[itemIndex], 
+            completed: !newItems[itemIndex].completed 
+        };
+    }
+
+    // Smart Status Logic
+    const allCompleted = newItems.every(i => i.completed);
+    const anyCompleted = newItems.some(i => i.completed);
+    
+    let newStatus = order.status;
+    if (order.status !== OrderStatus.DELIVERED) {
+        if (allCompleted) newStatus = OrderStatus.READY;
+        else if (anyCompleted) newStatus = OrderStatus.COOKING;
+        else if (!anyCompleted && (order.status === OrderStatus.COOKING || order.status === OrderStatus.READY)) {
+            newStatus = OrderStatus.PENDING;
+        }
+    }
+
+    const updatedOrder = { ...order, items: newItems, status: newStatus };
+    const newOrders = orders.map(o => o.id === orderId ? updatedOrder : o);
+    
+    saveLocallyAndNotify(newOrders);
+    syncOrderToCloud(updatedOrder);
+};
+
+export const clearHistory = async () => {
+  const orders = getOrders();
+  const activeOrders = orders.filter(o => o.status !== OrderStatus.DELIVERED);
+  saveLocallyAndNotify(activeOrders);
+  
+  if (supabase && currentUserId) {
+      // In cloud, we delete delivered orders
+      await supabase.from('orders').delete().eq('user_id', currentUserId).eq('status', OrderStatus.DELIVERED);
+  }
+};
+
+export const freeTable = async (tableNumber: string) => {
+    const orders = getOrders();
+    // Identify orders to remove (archiving)
+    const ordersToRemove = orders.filter(o => o.tableNumber === tableNumber);
+    const newOrders = orders.filter(o => o.tableNumber !== tableNumber);
+    
+    saveLocallyAndNotify(newOrders);
+
+    if (supabase && currentUserId) {
+        // Delete from cloud
+        for (const o of ordersToRemove) {
+            await supabase.from('orders').delete().eq('id', o.id);
+        }
     }
 };
 
-export const freeTable = (tableNumber: string) => {
-    const orders = getOrders();
-    // Delete all orders for this table (Active or Delivered) to clear it completely
-    const ordersToDelete = orders.filter(o => o.tableNumber === tableNumber);
-    const ordersToKeep = orders.filter(o => o.tableNumber !== tableNumber);
-    
-    saveLocallyAndNotify(ordersToKeep);
-    ordersToDelete.forEach(o => syncOrderToCloud(o, true));
+// --- DYNAMIC TABLE COUNT ---
+export const getTableCount = (): number => {
+    const count = localStorage.getItem(TABLES_COUNT_KEY);
+    return count ? parseInt(count, 10) : 12; 
 };
-
-export const clearHistory = () => {
-    const orders = getOrders();
-    const activeOrders = orders.filter(o => o.status !== OrderStatus.DELIVERED);
-    const historyOrders = orders.filter(o => o.status === OrderStatus.DELIVERED);
-    
-    saveLocallyAndNotify(activeOrders);
-    historyOrders.forEach(o => syncOrderToCloud(o, true));
-};
-
-// 3. Settings & Profile
-export const getTableCount = () => parseInt(localStorage.getItem(TABLES_COUNT_KEY) || '12', 10);
 
 export const saveTableCount = (count: number) => {
     localStorage.setItem(TABLES_COUNT_KEY, count.toString());
     window.dispatchEvent(new Event('local-storage-update'));
 };
 
-export const getWaiterName = () => localStorage.getItem(WAITER_KEY) || '';
-export const saveWaiterName = (name: string) => localStorage.setItem(WAITER_KEY, name);
-export const logoutWaiter = () => localStorage.removeItem(WAITER_KEY);
-
-export interface NotificationSettings {
-  kitchenSound: boolean;
-  waiterSound: boolean;
-  pushEnabled: boolean;
-}
-
-export const getNotificationSettings = (): NotificationSettings => {
-    const s = localStorage.getItem(SETTINGS_NOTIFICATIONS_KEY);
-    return s ? JSON.parse(s) : { kitchenSound: true, waiterSound: true, pushEnabled: false };
+// --- WAITER SESSION ---
+export const getWaiterName = (): string | null => {
+    return localStorage.getItem(WAITER_KEY);
 };
 
-export const saveNotificationSettings = (settings: NotificationSettings) => {
-    localStorage.setItem(SETTINGS_NOTIFICATIONS_KEY, JSON.stringify(settings));
+export const saveWaiterName = (name: string) => {
+    localStorage.setItem(WAITER_KEY, name);
 };
 
-// 4. Menu & Category Configuration
+export const logoutWaiter = () => {
+    localStorage.removeItem(WAITER_KEY);
+};
+
+// --- MENU MANAGEMENT (CLOUD) ---
 export const getMenuItems = (): MenuItem[] => {
     const data = localStorage.getItem(MENU_KEY);
-    return data ? JSON.parse(data) : DEFAULT_MENU_ITEMS;
-};
-
-// NEW: Category Configuration
-export const getCategoryConfig = (): Record<Category, boolean> => {
-    const data = localStorage.getItem(CATEGORY_CONFIG_KEY);
-    // Default: Bevande (false/Sala), others (true/Cucina)
-    if (!data) {
-        return {
-            [Category.ANTIPASTI]: true,
-            [Category.PRIMI]: true,
-            [Category.SECONDI]: true,
-            [Category.DOLCI]: true, // Spesso in cucina, ma configurabile
-            [Category.BEVANDE]: false
-        };
+    if (data) {
+        return JSON.parse(data);
+    } else {
+        localStorage.setItem(MENU_KEY, JSON.stringify(DEFAULT_MENU_ITEMS));
+        return DEFAULT_MENU_ITEMS;
     }
-    return JSON.parse(data);
-};
-
-export const saveCategoryConfig = (config: Record<Category, boolean>) => {
-    localStorage.setItem(CATEGORY_CONFIG_KEY, JSON.stringify(config));
-    window.dispatchEvent(new Event('local-menu-update')); // Trigger menu/config updates
 };
 
 const syncMenuToCloud = async (item: MenuItem, isDelete = false) => {
@@ -259,34 +324,109 @@ const syncMenuToCloud = async (item: MenuItem, isDelete = false) => {
     if (isDelete) {
         await supabase.from('menu_items').delete().eq('id', item.id);
     } else {
-        await supabase.from('menu_items').upsert({ ...item, user_id: currentUserId });
+         const payload = {
+            id: item.id,
+            user_id: currentUserId,
+            name: item.name,
+            price: item.price,
+            category: item.category,
+            description: item.description,
+            allergens: item.allergens
+        };
+        await supabase.from('menu_items').upsert(payload);
     }
+};
+
+export const saveMenuItems = (items: MenuItem[]) => {
+    localStorage.setItem(MENU_KEY, JSON.stringify(items));
+    window.dispatchEvent(new Event('local-menu-update'));
 };
 
 export const addMenuItem = (item: MenuItem) => {
     const items = getMenuItems();
     items.push(item);
-    localStorage.setItem(MENU_KEY, JSON.stringify(items));
-    window.dispatchEvent(new Event('local-menu-update'));
+    saveMenuItems(items);
     syncMenuToCloud(item);
 };
 
-export const updateMenuItem = (item: MenuItem) => {
+export const updateMenuItem = (updatedItem: MenuItem) => {
     const items = getMenuItems();
-    const idx = items.findIndex(i => i.id === item.id);
-    if (idx > -1) {
-        items[idx] = item;
-        localStorage.setItem(MENU_KEY, JSON.stringify(items));
-        window.dispatchEvent(new Event('local-menu-update'));
-        syncMenuToCloud(item);
-    }
+    const newItems = items.map(i => i.id === updatedItem.id ? updatedItem : i);
+    saveMenuItems(newItems);
+    syncMenuToCloud(updatedItem);
 };
 
 export const deleteMenuItem = (id: string) => {
-    let items = getMenuItems();
-    const item = items.find(i => i.id === id);
-    items = items.filter(i => i.id !== id);
-    localStorage.setItem(MENU_KEY, JSON.stringify(items));
-    window.dispatchEvent(new Event('local-menu-update'));
-    if (item) syncMenuToCloud(item, true);
+    const items = getMenuItems();
+    const itemToDelete = items.find(i => i.id === id);
+    const newItems = items.filter(i => i.id !== id);
+    saveMenuItems(newItems);
+    if (itemToDelete) syncMenuToCloud(itemToDelete, true);
+};
+
+// --- API KEY MANAGEMENT ---
+export const getGoogleApiKey = (): string | null => {
+    return localStorage.getItem(GOOGLE_API_KEY_STORAGE);
+};
+
+export const saveGoogleApiKey = async (apiKey: string) => {
+    localStorage.setItem(GOOGLE_API_KEY_STORAGE, apiKey);
+    
+    // Sync to Cloud Profile
+    if (supabase && currentUserId) {
+        const { error } = await supabase
+            .from('profiles')
+            .update({ google_api_key: apiKey })
+            .eq('id', currentUserId);
+            
+        if (error) console.error("Failed to save API Key to cloud", error);
+    }
+};
+
+// --- APP SETTINGS (DESTINATIONS) ---
+const DEFAULT_SETTINGS: AppSettings = {
+    categoryDestinations: {
+        [Category.ANTIPASTI]: 'Cucina',
+        [Category.PRIMI]: 'Cucina',
+        [Category.SECONDI]: 'Cucina',
+        [Category.DOLCI]: 'Cucina',
+        [Category.BEVANDE]: 'Bar'
+    }
+};
+
+export const getAppSettings = (): AppSettings => {
+    const data = localStorage.getItem(APP_SETTINGS_KEY);
+    return data ? JSON.parse(data) : DEFAULT_SETTINGS;
+};
+
+export const saveAppSettings = async (settings: AppSettings) => {
+    // 1. Save Local
+    localStorage.setItem(APP_SETTINGS_KEY, JSON.stringify(settings));
+    window.dispatchEvent(new Event('local-settings-update'));
+
+    // 2. Sync to Cloud Profile
+    if (supabase && currentUserId) {
+        const { error } = await supabase
+            .from('profiles')
+            .update({ settings: settings }) // Saves entire JSON object
+            .eq('id', currentUserId);
+
+        if (error) console.error("Failed to save App Settings to cloud", error);
+    }
+};
+
+// --- SETTINGS (LOCAL NOTIFICATIONS) ---
+export interface NotificationSettings {
+    kitchenSound: boolean;
+    waiterSound: boolean;
+    pushEnabled: boolean;
+}
+
+export const getNotificationSettings = (): NotificationSettings => {
+    const data = localStorage.getItem(SETTINGS_NOTIFICATIONS_KEY);
+    return data ? JSON.parse(data) : { kitchenSound: true, waiterSound: true, pushEnabled: false };
+};
+
+export const saveNotificationSettings = (settings: NotificationSettings) => {
+    localStorage.setItem(SETTINGS_NOTIFICATIONS_KEY, JSON.stringify(settings));
 };

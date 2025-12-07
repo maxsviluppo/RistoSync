@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Category, MenuItem, Order, OrderItem, OrderStatus } from '../types';
-import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, getWaiterName, logoutWaiter, getMenuItems, freeTable, updateOrderStatus, getCategoryConfig, toggleOrderItemCompletion } from '../services/storageService';
+import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, getWaiterName, logoutWaiter, getMenuItems, freeTable, updateOrderStatus } from '../services/storageService';
 import { askChefAI } from '../services/geminiService';
-import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen, Bell, ArrowRight, Lock, PlusCircle, CheckCircle, CheckSquare, Square, Coffee } from 'lucide-react';
+import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen, Bell, ArrowRight, Lock, PlusCircle } from 'lucide-react';
 
 // --- CONSTANTS ---
 const CATEGORY_ORDER = [
@@ -13,18 +13,17 @@ const CATEGORY_ORDER = [
     Category.BEVANDE
 ];
 
-// Helper to get icon for allergen - INCREASED SIZE
+// Helper to get icon for allergen
 const getAllergenIcon = (id: string) => {
-    const size = 18; // Increased size for visibility
     switch (id) {
-        case 'Glutine': return <Wheat size={size} />;
-        case 'Latticini': return <Milk size={size} />;
-        case 'Uova': return <Egg size={size} />;
-        case 'Frutta a guscio': return <Nut size={size} />;
-        case 'Pesce': return <Fish size={size} />;
-        case 'Soia': return <Bean size={size} />;
-        case 'Piccante': return <Flame size={size} className="text-orange-500" />;
-        case 'Vegano': return <Leaf size={size} className="text-green-500" />;
+        case 'Glutine': return <Wheat size={10} />;
+        case 'Latticini': return <Milk size={10} />;
+        case 'Uova': return <Egg size={10} />;
+        case 'Frutta a guscio': return <Nut size={10} />;
+        case 'Pesce': return <Fish size={10} />;
+        case 'Soia': return <Bean size={10} />;
+        case 'Piccante': return <Flame size={10} className="text-orange-500" />;
+        case 'Vegano': return <Leaf size={10} className="text-green-500" />;
         default: return null;
     }
 };
@@ -250,7 +249,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null); // Track if we are editing an existing order
   const [waiterName, setWaiterName] = useState<string>('');
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [categoryConfig, setCategoryConfig] = useState<Record<Category, boolean>>(getCategoryConfig());
   
   // NEW: Track seen ready counts to handle "click to acknowledge"
   const [seenReadyCounts, setSeenReadyCounts] = useState<Record<string, number>>({});
@@ -311,8 +309,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       const name = getWaiterName();
       if (name) setWaiterName(name);
 
-      setCategoryConfig(getCategoryConfig());
-
       // --- NOTIFICATION LOGIC (Granular Item Level) ---
       const currentItemStatus: Record<string, boolean> = {};
       let newlyReadyItems: string[] = [];
@@ -335,10 +331,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
               // Compare with previous state
               // Only trigger if it WAS false/undefined and NOW is true
-              // IMPORTANT: Only trigger sound for KITCHEN items that became ready.
-              // Service items are marked ready by the waiter themselves, so no sound needed.
-              const isKitchenItem = getCategoryConfig()[item.menuItem.category]; 
-              if (!isFirstLoad.current && isKitchenItem) {
+              if (!isFirstLoad.current) {
                   const wasCompleted = prevItemStatusRef.current[uniqueKey] || false;
                   if (!wasCompleted && item.completed) {
                       newlyReadyItems.push(`${item.menuItem.name} (Tav. ${order.tableNumber})`);
@@ -402,11 +395,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       allRestaurantOrders.forEach(order => {
           if(order.status !== OrderStatus.DELIVERED) {
              let readyInOrder = 0;
-             order.items.forEach(i => { 
-                 // Count ready kitchen items
-                 const isKitchen = categoryConfig[i.menuItem.category];
-                 if(i.completed && isKitchen) readyInOrder++; 
-             });
+             order.items.forEach(i => { if(i.completed) readyInOrder++; });
              
              if(readyInOrder > 0) {
                  const seen = seenReadyCounts[order.tableNumber] || 0;
@@ -415,7 +404,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
           }
       });
       return count > 0;
-  }, [allRestaurantOrders, seenReadyCounts, categoryConfig]);
+  }, [allRestaurantOrders, seenReadyCounts]);
 
 
   // --- Sorting Logic for Cart ---
@@ -475,11 +464,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       let rawReadyCount = 0;
       tableOrders.forEach(o => {
           if (o.status !== OrderStatus.DELIVERED) {
-              o.items.forEach(i => { 
-                  // Only count Kitchen items as "notifications" to acknowledge
-                  const isKitchen = categoryConfig[i.menuItem.category];
-                  if(i.completed && isKitchen) rawReadyCount++; 
-              });
+              o.items.forEach(i => { if(i.completed) rawReadyCount++; });
           }
       });
       // Mark these items as "seen" for this table
@@ -512,74 +497,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   // Action: Go to Order (Close modal, start ordering)
   const proceedToOrder = () => {
       setTableManagerOpen(false);
-  };
-
-  // Action: Serve Items
-  const handleServeItems = (activeOrderId: string, isLastDish: boolean) => {
-      if (!activeOrderId) return;
-
-      // 1. IMMEDIATELY MUTE NOTIFICATIONS (Aggiorna visto = totale)
-      const activeOrder = allRestaurantOrders.find(o => o.id === activeOrderId);
-      if (activeOrder) {
-          // Conta quanti piatti sono pronti ora
-          const currentTotalReady = activeOrder.items.filter(i => {
-              const isKitchen = categoryConfig[i.menuItem.category];
-              return i.completed && isKitchen;
-          }).length;
-          // Imposta il "visto" a questo numero, così unseenReadyCount diventa 0
-          // Questo ferma il lampeggiamento del tavolo e il pulsare dell'icona gestioni
-          setSeenReadyCounts(prev => ({ ...prev, [table]: currentTotalReady }));
-      }
-
-      if (isLastDish) {
-          // ULTIMO PIATTO: Completiamo l'ordine (status DELIVERED)
-          // Questo rimuoverà l'ordine dalla vista cucina (ma non libera il tavolo)
-          updateOrderStatus(activeOrderId, OrderStatus.DELIVERED);
-          setNotificationToast(`Tutti i piatti serviti al Tavolo ${table}`);
-          
-          // RESET COMPLETO STATO
-          setTableManagerOpen(false);
-          setTable('');
-          setCart([]);
-          setEditingOrderId(null);
-      } else {
-          // SERVIRE (Parziale):
-          // In questa app non abbiamo uno stato intermedio "Item Delivered".
-          // L'azione serve per "prendere in carico" (feedback visivo) e chiudere il modal per lavorare.
-          // La notifica "RITIRO" smette di lampeggiare grazie a 'seenReadyCounts' aggiornato qui sopra.
-          setNotificationToast(`Piatti serviti al Tavolo ${table}`);
-          
-          // RESET COMPLETO STATO (Fix richiesto: torna allo standby)
-          setTableManagerOpen(false); 
-          setTable('');
-          setCart([]);
-          setEditingOrderId(null);
-      }
-      setTimeout(() => setNotificationToast(null), 3000);
-  };
-
-  const handleToggleServiceItem = (orderId: string, itemIndex: number) => {
-      toggleOrderItemCompletion(orderId, itemIndex);
-      
-      // Check if this was the last unserved item in the entire order
-      // (Considering kitchen items too)
-      setTimeout(() => {
-          const freshOrders = getOrders();
-          const order = freshOrders.find(o => o.id === orderId);
-          if (order) {
-              const allServed = order.items.every(i => i.completed);
-              if (allServed) {
-                  updateOrderStatus(orderId, OrderStatus.DELIVERED);
-                  setNotificationToast(`Ordine Tavolo ${order.tableNumber} completato!`);
-                  
-                  // RESET COMPLETO STATO (Torna allo Standby)
-                  setTableManagerOpen(false);
-                  setTable('');
-                  setCart([]);
-                  setEditingOrderId(null);
-              }
-          }
-      }, 100);
   };
 
   // Action: Request Free Table
@@ -754,17 +671,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       if (activeOrders.length > 0) {
           // Check for ready items
           let rawReadyCount = 0;
-          let unservedServiceItems = 0;
-
-          activeOrders.forEach(o => o.items.forEach(i => { 
-              const isKitchen = categoryConfig[i.menuItem.category];
-              if(i.completed && isKitchen) {
-                  rawReadyCount++; 
-              }
-              if(!i.completed && !isKitchen) {
-                  unservedServiceItems++; // Items that Waiter needs to serve (Bevande/Dolci)
-              }
-          }));
+          activeOrders.forEach(o => o.items.forEach(i => { if(i.completed) rawReadyCount++; }));
           
           // Check if we have seen these ready items
           const seenCount = seenReadyCounts[tableNum] || 0;
@@ -772,9 +679,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
           if (unseenReadyCount > 0) {
               return { status: 'ready', count: unseenReadyCount, owner: activeOrders[0].waiterName };
-          }
-          if (unservedServiceItems > 0) {
-              return { status: 'eating', count: 0, owner: activeOrders[0].waiterName }; // Show as occupied
           }
           
           return { status: 'busy', count: 0, owner: activeOrders[0].waiterName };
@@ -785,47 +689,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   };
 
   const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
-
-  // --- CALCULATE ACTIVE ORDER INFO FOR SELECTED TABLE ---
-  const activeOrderForSelectedTable = useMemo(() => {
-      if (!table) return null;
-      return allRestaurantOrders.find(o => o.tableNumber === table && o.status !== OrderStatus.DELIVERED);
-  }, [table, allRestaurantOrders]);
-
-  const readyInfo = useMemo(() => {
-      if (!activeOrderForSelectedTable) return { readyCount: 0, totalCount: 0, isAllReady: false, serviceItems: [], kitchenItems: [] };
-      
-      // Split items based on configuration
-      const serviceItems: {item: OrderItem, index: number}[] = [];
-      const kitchenItems: {item: OrderItem, index: number}[] = [];
-
-      activeOrderForSelectedTable.items.forEach((item, index) => {
-          const isKitchen = categoryConfig[item.menuItem.category];
-          if (isKitchen) {
-              kitchenItems.push({ item, index });
-          } else {
-              serviceItems.push({ item, index });
-          }
-      });
-
-      const readyCount = kitchenItems.filter(x => x.item.completed).length;
-      const totalKitchenCount = kitchenItems.length;
-      const isKitchenDone = totalKitchenCount > 0 && readyCount === totalKitchenCount;
-      const isServiceDone = serviceItems.length > 0 && serviceItems.every(x => x.item.completed);
-      
-      // The overall "Last Dish" state logic:
-      // If Kitchen has items, wait for them.
-      // If only Service items exist, wait for them to be checked.
-      // We return 'isAllReady' specifically for the Kitchen flow button.
-      
-      return {
-          readyCount,
-          totalCount: totalKitchenCount,
-          isAllReady: isKitchenDone, // This triggers "ULTIMO PIATTO" text for kitchen items
-          serviceItems,
-          kitchenItems
-      };
-  }, [activeOrderForSelectedTable, categoryConfig]);
 
   return (
     <div className="flex flex-col h-screen bg-slate-900 text-slate-100 max-w-md mx-auto shadow-2xl overflow-hidden relative border-x border-slate-800 font-sans selection:bg-orange-500 selection:text-white">
@@ -919,7 +782,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
              {/* Profile/Exit Button */}
              <button 
                 onClick={() => setProfileOpen(true)}
-                className="w-10 h-10 rounded-xl bg-slate-700 text-white flex items-center justify-center hover:bg-slate-600 transition-all active:scale-95 shadow-lg border border-slate-600"
+                className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all active:scale-95"
             >
                 <User size={18} />
             </button>
@@ -988,12 +851,12 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                         key={item.id} 
                         onClick={() => startEditing(item)}
                         className={`
-                            group relative overflow-hidden transition-all duration-200 rounded-2xl border flex flex-col
+                            group relative overflow-hidden transition-all duration-300 rounded-2xl border text-left flex flex-col justify-between
                             ${isEditing 
-                                ? 'col-span-2 bg-slate-800 border-orange-500/50 shadow-[0_0_30px_rgba(249,115,22,0.15)] ring-1 ring-orange-500/30 p-3 text-left' 
+                                ? 'col-span-2 bg-slate-800 border-orange-500/50 shadow-[0_0_30px_rgba(249,115,22,0.15)] ring-1 ring-orange-500/30' 
                                 : isPopping
-                                    ? 'aspect-square animate-success-pop bg-slate-700 border-green-500 items-center justify-center p-2'
-                                    : 'aspect-square bg-gradient-to-br from-gray-700 via-gray-800 to-gray-950 border-gray-600 shadow-lg shadow-black/40 active:scale-95 items-center justify-center p-3'
+                                    ? 'animate-success-pop bg-slate-700 border-green-500'
+                                    : 'bg-gradient-to-br from-slate-800 to-slate-900 border-white/10 shadow-lg active:scale-95'
                             }
                         `}
                     >
@@ -1002,52 +865,56 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                             {getCategoryIcon(item.category, 60)}
                         </div>
 
-                        {!isEditing && (
-                             <>
-                                <h3 className="font-black text-gray-100 text-2xl leading-none tracking-tight text-center line-clamp-3 z-10 w-full drop-shadow-lg">
+                        <div className="p-3 w-full relative z-10">
+                            <div className="flex justify-between items-start gap-2 mb-1">
+                                <h3 className="font-extrabold text-white text-xl leading-none tracking-tight shadow-black drop-shadow-md line-clamp-2">
                                     {item.name}
                                 </h3>
-                                {/* Tiny allergens mini row at bottom - INCREASED SPACING */}
-                                <div className="flex gap-2 flex-wrap justify-center mt-3 opacity-50">
-                                     {item.allergens?.slice(0, 3).map(algId => (
-                                        <div key={algId} className="text-slate-300">
-                                             {getAllergenIcon(algId)}
-                                         </div>
-                                     ))}
+                                {/* Category Icon Mini */}
+                                <div className="text-orange-500/70 shrink-0 mt-0.5">
+                                    {getCategoryIcon(item.category, 14)}
                                 </div>
-                             </>
-                        )}
+                            </div>
+                            
+                            {!isEditing && (
+                                <div className="flex items-end justify-between mt-2">
+                                    <div className="flex flex-col gap-1">
+                                        <p className="text-slate-500 text-[9px] line-clamp-1 h-3">{item.description}</p>
+                                        <div className="flex gap-1 flex-wrap opacity-50">
+                                            {item.allergens?.slice(0, 3).map(algId => (
+                                                <div key={algId} className="text-slate-400">
+                                                    {getAllergenIcon(algId)}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    <span className="text-orange-400 font-bold font-mono text-sm">€{item.price}</span>
+                                </div>
+                            )}
 
-                        {isEditing && (
-                              <div className="bg-white rounded-xl p-3 animate-slide-up shadow-inner w-full cursor-default" onClick={e => e.stopPropagation()}>
-                                  <div className="flex flex-col mb-3">
-                                      {/* HUGE DISH NAME IN EDIT MODE */}
-                                      <h3 className="font-black text-slate-900 text-3xl leading-none tracking-tight mb-4 w-full break-words">
-                                        {item.name}
-                                      </h3>
-
-                                      <div className="flex items-center justify-between bg-slate-50 p-2 rounded-lg border border-slate-100">
-                                          <span className="text-slate-400 text-[10px] font-bold uppercase tracking-wider">Quantità</span>
-                                          <div className="flex items-center gap-3">
-                                              <button onClick={() => setEditQty(Math.max(1, editQty - 1))} className="w-8 h-8 flex items-center justify-center bg-white rounded shadow-sm text-slate-600 active:scale-95 border border-slate-200">
-                                                  <Minus size={16} />
-                                              </button>
-                                              <span className="font-black text-slate-800 w-6 text-center text-xl">{editQty}</span>
-                                              <button onClick={() => setEditQty(editQty + 1)} className="w-8 h-8 flex items-center justify-center bg-white rounded shadow-sm text-slate-600 active:scale-95 border border-slate-200">
-                                                  <Plus size={16} />
-                                              </button>
-                                          </div>
+                            {isEditing && (
+                              <div className="mt-3 bg-white rounded-xl p-3 animate-slide-up shadow-inner w-full cursor-default" onClick={e => e.stopPropagation()}>
+                                  <div className="flex items-center justify-between mb-3">
+                                      <label className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Quantità</label>
+                                      <div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1">
+                                          <button onClick={() => setEditQty(Math.max(1, editQty - 1))} className="w-8 h-8 flex items-center justify-center bg-white rounded shadow-sm text-slate-600 active:scale-95">
+                                              <Minus size={16} />
+                                          </button>
+                                          <span className="font-bold text-slate-800 w-6 text-center text-lg">{editQty}</span>
+                                          <button onClick={() => setEditQty(editQty + 1)} className="w-8 h-8 flex items-center justify-center bg-white rounded shadow-sm text-slate-600 active:scale-95">
+                                              <Plus size={16} />
+                                          </button>
                                       </div>
                                   </div>
 
                                   <div className="mb-3">
-                                      <label className="text-slate-400 text-[10px] font-bold uppercase tracking-wider mb-1 block">Note Cucina</label>
+                                      <label className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-1 block">Note Cucina</label>
                                       <input 
                                           type="text" 
                                           value={editNotes}
                                           onChange={(e) => setEditNotes(capitalize(e.target.value))}
                                           placeholder="Es. Ben cotto..."
-                                          className="w-full bg-slate-100 border-none rounded-lg px-3 py-3 text-slate-800 text-sm focus:ring-2 focus:ring-orange-200 outline-none placeholder-slate-400"
+                                          className="w-full bg-slate-100 border-none rounded-lg px-3 py-3 text-slate-800 text-sm focus:ring-2 focus:ring-orange-200 outline-none"
                                       />
                                   </div>
 
@@ -1076,6 +943,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                   </div>
                               </div>
                             )}
+                        </div>
                     </button>
                   );
               })}
@@ -1309,86 +1177,24 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                             })}
                         </div>
                         
-                        {/* ACTION & STATUS FOR SELECTED TABLE */}
-                        {table && activeOrderForSelectedTable && (
-                            <div className="flex flex-col gap-2 mt-2 bg-slate-800/50 p-2 rounded-xl border border-slate-700">
-                                {/* SERVICE ITEMS LIST (SALA) */}
-                                {readyInfo.serviceItems.length > 0 && (
-                                    <div className="mb-2">
-                                        <h4 className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1 flex items-center gap-1">
-                                            <Coffee size={12}/> Da Gestire in Sala
-                                        </h4>
-                                        <div className="space-y-1">
-                                            {readyInfo.serviceItems.map((obj, i) => (
-                                                <div key={i} className="flex items-center justify-between bg-slate-800 p-2 rounded-lg border border-slate-700/50">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-bold text-white text-xs">{obj.item.quantity}x</span>
-                                                        <span className={`text-xs ${obj.item.completed ? 'line-through text-slate-500' : 'text-slate-300'}`}>{obj.item.menuItem.name}</span>
-                                                    </div>
-                                                    <button 
-                                                        onClick={() => handleToggleServiceItem(activeOrderForSelectedTable.id, obj.index)}
-                                                        className={`p-1 rounded ${obj.item.completed ? 'text-green-500' : 'text-slate-500 hover:text-white'}`}
-                                                    >
-                                                        {obj.item.completed ? <CheckSquare size={18}/> : <Square size={18}/>}
-                                                    </button>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* KITCHEN ITEMS STATUS (CUCINA) */}
-                                {readyInfo.kitchenItems.length > 0 && (
-                                    <div className="mb-2">
-                                        <h4 className="text-[10px] font-bold text-orange-400 uppercase tracking-widest mb-1 flex items-center gap-1">
-                                            <ChefHat size={12}/> Stato Cucina
-                                        </h4>
-                                        <div className="flex gap-1 overflow-x-auto pb-1 no-scrollbar">
-                                            {readyInfo.kitchenItems.map((obj, i) => (
-                                                <div key={i} className={`flex-shrink-0 px-2 py-1 rounded text-[10px] font-bold border ${obj.item.completed ? 'bg-green-900/30 text-green-400 border-green-800' : 'bg-slate-700 text-slate-400 border-slate-600'}`}>
-                                                    {obj.item.quantity}x {obj.item.menuItem.name}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
                         {/* ACTION BUTTONS FOR SELECTED TABLE */}
                         {table && (
-                            <div className="flex gap-2 mt-2">
-                                {/* SERVE / LAST DISH ACTION (Only applies to Kitchen items flow) */}
-                                {readyInfo.readyCount > 0 && activeOrderForSelectedTable && (
-                                    <button
-                                        onClick={() => handleServeItems(activeOrderForSelectedTable.id, readyInfo.isAllReady)}
-                                        className={`flex-[3] py-5 rounded-2xl font-black text-sm tracking-wide text-white shadow-xl transition-transform flex flex-col items-center justify-center gap-1 leading-none hover:scale-[1.02] border-2
-                                            ${readyInfo.isAllReady 
-                                                ? 'bg-green-600 hover:bg-green-500 shadow-green-900/30 border-green-400' 
-                                                : 'bg-green-600/80 hover:bg-green-500/80 shadow-green-900/20 border-green-500/50'}
-                                        `}
-                                    >
-                                        <CheckCircle size={28}/>
-                                        <span className="uppercase">{readyInfo.isAllReady ? 'ULTIMO PIATTO' : 'SERVIRE'}</span>
-                                        <span className="text-[9px] opacity-80">{readyInfo.readyCount} Pronti su {readyInfo.totalCount}</span>
-                                    </button>
-                                )}
-
+                            <div className="flex gap-4 mt-2">
                                 {/* Primary Action: ORDER/EDIT */}
                                 <button
                                     onClick={proceedToOrder}
-                                    className={`flex-[3] py-5 rounded-2xl font-black text-xl tracking-wide text-white shadow-xl bg-gradient-to-br transition-transform flex flex-col items-center justify-center gap-1 leading-none hover:scale-[1.02]
+                                    className={`flex-[2] py-5 rounded-2xl font-black text-xl tracking-wide text-white shadow-xl bg-gradient-to-br transition-transform flex flex-col items-center justify-center gap-1 leading-none hover:scale-[1.02]
                                         ${editingOrderId ? 'from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 shadow-blue-900/30' : 'from-orange-500 to-orange-600 hover:from-orange-400 hover:to-orange-500 shadow-orange-900/30'}
                                     `}
                                 >
                                     {editingOrderId ? <Edit2 size={28}/> : <Utensils size={28}/>}
-                                    <span className="text-sm uppercase">{editingOrderId ? 'MODIFICA' : 'ORDINE'}</span>
+                                    <span>{editingOrderId ? 'MODIFICA' : 'ORDINE'}</span>
                                 </button>
                                 
                                 {/* Secondary Action: FREE TABLE (Neon Orange) */}
                                 <button 
                                     onClick={requestFreeTable}
-                                    className="flex-1 bg-slate-900 border-2 border-orange-500 text-orange-500 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-[0_0_20px_rgba(249,115,22,0.3)] hover:shadow-[0_0_30px_rgba(249,115,22,0.6)] hover:bg-orange-500/10 transition-all flex flex-col items-center justify-center gap-2"
+                                    className="flex-1 bg-slate-900 border-2 border-orange-500 text-orange-500 rounded-2xl font-black text-sm uppercase tracking-widest shadow-[0_0_20px_rgba(249,115,22,0.3)] hover:shadow-[0_0_30px_rgba(249,115,22,0.6)] hover:bg-orange-500/10 transition-all flex flex-col items-center justify-center gap-2"
                                 >
                                     <DoorOpen size={24} />
                                     LIBERA
