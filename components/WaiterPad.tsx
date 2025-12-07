@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Category, MenuItem, Order, OrderItem, OrderStatus } from '../types';
 import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, getWaiterName, logoutWaiter, getMenuItems, freeTable, updateOrderStatus } from '../services/storageService';
 import { askChefAI } from '../services/geminiService';
-import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen, Bell, ArrowRight, Lock, PlusCircle } from 'lucide-react';
+import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen, Bell, ArrowRight, Lock, PlusCircle, CheckCircle } from 'lucide-react';
 
 // --- CONSTANTS ---
 const CATEGORY_ORDER = [
@@ -500,6 +500,29 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       setTableManagerOpen(false);
   };
 
+  // Action: Serve Items
+  const handleServeItems = (activeOrderId: string, isLastDish: boolean) => {
+      if (!activeOrderId) return;
+
+      if (isLastDish) {
+          // ULTIMO PIATTO: Completiamo l'ordine (status DELIVERED)
+          // Questo rimuoverà l'ordine dalla vista cucina (ma non libera il tavolo)
+          updateOrderStatus(activeOrderId, OrderStatus.DELIVERED);
+          setNotificationToast(`Tutti i piatti serviti al Tavolo ${table}`);
+          // Chiudiamo il modal
+          setTableManagerOpen(false);
+          setTable('');
+      } else {
+          // SERVIRE (Parziale):
+          // In questa app non abbiamo uno stato intermedio "Item Delivered".
+          // L'azione serve per "prendere in carico" (feedback visivo) e chiudere il modal per lavorare.
+          // La notifica "RITIRO" smette di lampeggiare grazie a 'seenReadyCounts' aggiornato in handleSelectTable.
+          setNotificationToast(`Piatti serviti al Tavolo ${table}`);
+          setTableManagerOpen(false); // Chiudi e torna al lavoro
+      }
+      setTimeout(() => setNotificationToast(null), 3000);
+  };
+
   // Action: Request Free Table
   const requestFreeTable = () => {
       setFreeTableConfirmOpen(true);
@@ -690,6 +713,25 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   };
 
   const totalItems = cart.reduce((acc, item) => acc + item.quantity, 0);
+
+  // --- CALCULATE ACTIVE ORDER INFO FOR SELECTED TABLE ---
+  const activeOrderForSelectedTable = useMemo(() => {
+      if (!table) return null;
+      return allRestaurantOrders.find(o => o.tableNumber === table && o.status !== OrderStatus.DELIVERED);
+  }, [table, allRestaurantOrders]);
+
+  const readyInfo = useMemo(() => {
+      if (!activeOrderForSelectedTable) return { readyCount: 0, totalCount: 0, isAllReady: false };
+      
+      const readyCount = activeOrderForSelectedTable.items.filter(i => i.completed).length;
+      const totalCount = activeOrderForSelectedTable.items.length;
+      
+      return {
+          readyCount,
+          totalCount,
+          isAllReady: totalCount > 0 && readyCount === totalCount
+      };
+  }, [activeOrderForSelectedTable]);
 
   return (
     <div className="flex flex-col h-screen bg-slate-900 text-slate-100 max-w-md mx-auto shadow-2xl overflow-hidden relative border-x border-slate-800 font-sans selection:bg-orange-500 selection:text-white">
@@ -1175,22 +1217,38 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                         
                         {/* ACTION BUTTONS FOR SELECTED TABLE */}
                         {table && (
-                            <div className="flex gap-4 mt-2">
+                            <div className="flex gap-2 mt-2">
+                                {/* SERVE / LAST DISH ACTION (NEW) */}
+                                {readyInfo.readyCount > 0 && activeOrderForSelectedTable && (
+                                    <button
+                                        onClick={() => handleServeItems(activeOrderForSelectedTable.id, readyInfo.isAllReady)}
+                                        className={`flex-[3] py-5 rounded-2xl font-black text-sm tracking-wide text-white shadow-xl transition-transform flex flex-col items-center justify-center gap-1 leading-none hover:scale-[1.02] border-2
+                                            ${readyInfo.isAllReady 
+                                                ? 'bg-green-600 hover:bg-green-500 shadow-green-900/30 border-green-400' 
+                                                : 'bg-green-600/80 hover:bg-green-500/80 shadow-green-900/20 border-green-500/50'}
+                                        `}
+                                    >
+                                        <CheckCircle size={28}/>
+                                        <span className="uppercase">{readyInfo.isAllReady ? 'ULTIMO PIATTO' : 'SERVIRE'}</span>
+                                        <span className="text-[9px] opacity-80">{readyInfo.readyCount} Pronti su {readyInfo.totalCount}</span>
+                                    </button>
+                                )}
+
                                 {/* Primary Action: ORDER/EDIT */}
                                 <button
                                     onClick={proceedToOrder}
-                                    className={`flex-[2] py-5 rounded-2xl font-black text-xl tracking-wide text-white shadow-xl bg-gradient-to-br transition-transform flex flex-col items-center justify-center gap-1 leading-none hover:scale-[1.02]
+                                    className={`flex-[3] py-5 rounded-2xl font-black text-xl tracking-wide text-white shadow-xl bg-gradient-to-br transition-transform flex flex-col items-center justify-center gap-1 leading-none hover:scale-[1.02]
                                         ${editingOrderId ? 'from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 shadow-blue-900/30' : 'from-orange-500 to-orange-600 hover:from-orange-400 hover:to-orange-500 shadow-orange-900/30'}
                                     `}
                                 >
                                     {editingOrderId ? <Edit2 size={28}/> : <Utensils size={28}/>}
-                                    <span>{editingOrderId ? 'MODIFICA' : 'ORDINE'}</span>
+                                    <span className="text-sm uppercase">{editingOrderId ? 'MODIFICA' : 'ORDINE'}</span>
                                 </button>
                                 
                                 {/* Secondary Action: FREE TABLE (Neon Orange) */}
                                 <button 
                                     onClick={requestFreeTable}
-                                    className="flex-1 bg-slate-900 border-2 border-orange-500 text-orange-500 rounded-2xl font-black text-sm uppercase tracking-widest shadow-[0_0_20px_rgba(249,115,22,0.3)] hover:shadow-[0_0_30px_rgba(249,115,22,0.6)] hover:bg-orange-500/10 transition-all flex flex-col items-center justify-center gap-2"
+                                    className="flex-1 bg-slate-900 border-2 border-orange-500 text-orange-500 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-[0_0_20px_rgba(249,115,22,0.3)] hover:shadow-[0_0_30px_rgba(249,115,22,0.6)] hover:bg-orange-500/10 transition-all flex flex-col items-center justify-center gap-2"
                                 >
                                     <DoorOpen size={24} />
                                     LIBERA
