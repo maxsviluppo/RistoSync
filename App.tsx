@@ -3,7 +3,7 @@ import KitchenDisplay from './components/KitchenDisplay';
 import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft, CheckCircle, LayoutGrid, SlidersHorizontal } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft, CheckCircle, LayoutGrid, SlidersHorizontal, Mic, MicOff } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { MenuItem, Category, Department, AppSettings } from './types';
@@ -56,6 +56,7 @@ const App: React.FC = () => {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [isEditingItem, setIsEditingItem] = useState(false);
   const [editingItem, setEditingItem] = useState<Partial<MenuItem>>({});
+  const [isListening, setIsListening] = useState(false);
   
   // Delete Confirmation State
   const [itemToDelete, setItemToDelete] = useState<MenuItem | null>(null);
@@ -221,6 +222,43 @@ const App: React.FC = () => {
       const newSettings = { ...notifSettings, [key]: !notifSettings[key] };
       setNotifSettings(newSettings);
       saveNotificationSettings(newSettings);
+  };
+
+  const handleDictation = () => {
+    if (isListening) return;
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        alert("Il tuo browser non supporta la dettatura vocale.");
+        return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'it-IT';
+    recognition.continuous = false; // Ferma il mic dopo la prima frase (messaggio)
+    recognition.interimResults = false;
+
+    recognition.onstart = () => setIsListening(true);
+
+    recognition.onresult = (event: any) => {
+        const transcript = event.results[0][0].transcript;
+        const currentDesc = editingItem.description || '';
+        const newText = currentDesc ? `${currentDesc} ${transcript}` : transcript;
+        
+        setEditingItem(prev => ({ ...prev, description: newText }));
+        setIsListening(false);
+    };
+
+    recognition.onerror = (event: any) => {
+        console.error("Errore microfono:", event.error);
+        setIsListening(false);
+    };
+    
+    recognition.onend = () => {
+        setIsListening(false);
+    };
+
+    recognition.start();
   };
 
   // --- DESTINATION LOGIC (Temporary State) ---
@@ -434,7 +472,24 @@ const App: React.FC = () => {
                                                 <button key={a.id} onClick={() => toggleAllergen(a.id)} className={`p-2 rounded-xl flex flex-col items-center ${editingItem.allergens?.includes(a.id) ? 'bg-orange-500 text-white' : 'bg-slate-950 text-slate-500'}`}><a.icon size={16}/></button>
                                             ))}
                                         </div>
-                                        <textarea value={editingItem.description || ''} onChange={e => setEditingItem({...editingItem, description: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white mb-6 h-24" placeholder="Descrizione"></textarea>
+                                        
+                                        <div className="relative mb-6">
+                                            <textarea 
+                                                value={editingItem.description || ''} 
+                                                onChange={e => setEditingItem({...editingItem, description: e.target.value})} 
+                                                className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 pr-12 text-white h-24 resize-none" 
+                                                placeholder="Descrizione / Ingredienti (Usa il microfono per dettare)"
+                                            ></textarea>
+                                            <button 
+                                                type="button" 
+                                                onClick={handleDictation}
+                                                className={`absolute top-3 right-3 p-2 rounded-full transition-all shadow-lg ${isListening ? 'bg-red-600 text-white animate-pulse ring-2 ring-red-400' : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700 hover:border-slate-500'}`}
+                                                title="Dettatura vocale"
+                                            >
+                                                {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+                                            </button>
+                                        </div>
+
                                         <div className="flex gap-4">
                                             <button onClick={() => setIsEditingItem(false)} className="flex-1 py-3 bg-slate-800 text-slate-300 rounded-xl font-bold">Annulla</button>
                                             <button onClick={handleSaveMenu} className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-bold">Salva</button>
