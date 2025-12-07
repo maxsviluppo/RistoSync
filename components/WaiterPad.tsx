@@ -536,16 +536,24 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
           // Questo rimuoverà l'ordine dalla vista cucina (ma non libera il tavolo)
           updateOrderStatus(activeOrderId, OrderStatus.DELIVERED);
           setNotificationToast(`Tutti i piatti serviti al Tavolo ${table}`);
-          // Chiudiamo il modal
+          
+          // RESET COMPLETO STATO
           setTableManagerOpen(false);
           setTable('');
+          setCart([]);
+          setEditingOrderId(null);
       } else {
           // SERVIRE (Parziale):
           // In questa app non abbiamo uno stato intermedio "Item Delivered".
           // L'azione serve per "prendere in carico" (feedback visivo) e chiudere il modal per lavorare.
           // La notifica "RITIRO" smette di lampeggiare grazie a 'seenReadyCounts' aggiornato qui sopra.
           setNotificationToast(`Piatti serviti al Tavolo ${table}`);
-          setTableManagerOpen(false); // Chiudi e torna al lavoro
+          
+          // RESET COMPLETO STATO (Fix richiesto: torna allo standby)
+          setTableManagerOpen(false); 
+          setTable('');
+          setCart([]);
+          setEditingOrderId(null);
       }
       setTimeout(() => setNotificationToast(null), 3000);
   };
@@ -563,8 +571,12 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
               if (allServed) {
                   updateOrderStatus(orderId, OrderStatus.DELIVERED);
                   setNotificationToast(`Ordine Tavolo ${order.tableNumber} completato!`);
+                  
+                  // RESET COMPLETO STATO (Torna allo Standby)
                   setTableManagerOpen(false);
                   setTable('');
+                  setCart([]);
+                  setEditingOrderId(null);
               }
           }
       }, 100);
