@@ -3,7 +3,7 @@ import KitchenDisplay from './components/KitchenDisplay';
 import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft, CheckCircle } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { MenuItem, Category, Department, AppSettings } from './types';
@@ -62,7 +62,12 @@ const App: React.FC = () => {
 
   // Settings State
   const [notifSettings, setNotifSettings] = useState<NotificationSettings>({ kitchenSound: true, waiterSound: true, pushEnabled: false });
+  
+  // App Settings (Destinations)
   const [appSettings, setAppSettingsState] = useState<AppSettings>(getAppSettings());
+  const [tempDestinations, setTempDestinations] = useState<Record<Category, Department>>(getAppSettings().categoryDestinations);
+  const [hasUnsavedDestinations, setHasUnsavedDestinations] = useState(false);
+
   const [apiKeyInput, setApiKeyInput] = useState('');
 
   const isSuperAdmin = session?.user?.email === SUPER_ADMIN_EMAIL;
@@ -178,17 +183,27 @@ const App: React.FC = () => {
       if (showAdmin) {
           setMenuItems(getMenuItems());
           setNotifSettings(getNotificationSettings());
-          setAppSettingsState(getAppSettings()); // Load settings
+          
+          const currentSettings = getAppSettings();
+          setAppSettingsState(currentSettings); 
+          setTempDestinations(currentSettings.categoryDestinations);
+          setHasUnsavedDestinations(false);
+
           const key = getGoogleApiKey();
           if (key) setApiKeyInput(key);
       }
       
       const handleSettingsUpdate = () => {
-          setAppSettingsState(getAppSettings());
+          const updated = getAppSettings();
+          setAppSettingsState(updated);
+          // Only update temp if we don't have unsaved changes, to avoid overwriting user work
+          if (!hasUnsavedDestinations) {
+              setTempDestinations(updated.categoryDestinations);
+          }
       };
       window.addEventListener('local-settings-update', handleSettingsUpdate);
       return () => window.removeEventListener('local-settings-update', handleSettingsUpdate);
-  }, [showAdmin]);
+  }, [showAdmin, hasUnsavedDestinations]);
 
   const handleWaiterClick = () => {
       const existingName = getWaiterName();
@@ -283,16 +298,21 @@ const App: React.FC = () => {
       saveNotificationSettings(newSettings);
   };
 
-  const updateDestination = (cat: Category, dest: Department) => {
+  // --- DESTINATION LOGIC (Temporary State) ---
+  const handleTempDestinationChange = (cat: Category, dest: Department) => {
+      setTempDestinations(prev => ({ ...prev, [cat]: dest }));
+      setHasUnsavedDestinations(true);
+  };
+
+  const saveDestinationsToCloud = async () => {
       const newSettings = {
           ...appSettings,
-          categoryDestinations: {
-              ...appSettings.categoryDestinations,
-              [cat]: dest
-          }
+          categoryDestinations: tempDestinations
       };
+      await saveAppSettings(newSettings); // Saves to Cloud
       setAppSettingsState(newSettings);
-      saveAppSettings(newSettings); // Saves to Cloud
+      setHasUnsavedDestinations(false);
+      alert("Configurazione salvata e sincronizzata su tutti i dispositivi!");
   };
 
   const handleSaveApiKey = () => {
@@ -659,27 +679,38 @@ const App: React.FC = () => {
                                     </button>
                                 </div>
 
-                                {/* DESTINATION CONFIGURATION (MOVED HERE) */}
-                                <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 mb-8 overflow-x-auto">
-                                    <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                        <Printer size={16}/> Destinazioni Categorie (Cucina / Sala)
-                                    </h4>
-                                    <div className="flex gap-3">
+                                {/* DESTINATION CONFIGURATION (CLEANER UI) */}
+                                <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 mb-8 shadow-sm">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <h4 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                                            <Printer size={18} className="text-orange-500"/> Configurazione Destinazioni
+                                        </h4>
+                                        {hasUnsavedDestinations && (
+                                            <button 
+                                                onClick={saveDestinationsToCloud}
+                                                className="bg-green-600 hover:bg-green-500 text-white px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 animate-pulse shadow-lg shadow-green-500/20"
+                                            >
+                                                <Save size={14}/> SALVA CONFIGURAZIONE
+                                            </button>
+                                        )}
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                         {Object.values(Category).map(cat => {
-                                            const currentDest = appSettings.categoryDestinations[cat] || 'Cucina';
+                                            const currentDest = tempDestinations[cat] || 'Cucina';
                                             return (
-                                                <div key={cat} className="flex flex-col items-center bg-slate-950 p-2 rounded-lg border border-slate-800 min-w-[100px]">
-                                                    <span className="text-xs font-bold text-white mb-2">{cat}</span>
-                                                    <div className="flex bg-slate-800 rounded p-0.5 w-full">
+                                                <div key={cat} className="flex items-center justify-between p-3 bg-slate-900/50 rounded-xl border border-slate-700 hover:border-slate-600 transition-colors">
+                                                    <span className="font-bold text-slate-300 text-sm pl-2">{cat}</span>
+                                                    <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-800">
                                                         <button 
-                                                            onClick={() => updateDestination(cat, 'Cucina')}
-                                                            className={`flex-1 py-1 rounded text-[10px] font-bold transition-all ${currentDest === 'Cucina' ? 'bg-orange-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}
+                                                            onClick={() => handleTempDestinationChange(cat, 'Cucina')}
+                                                            className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wide transition-all ${currentDest === 'Cucina' ? 'bg-orange-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
                                                         >
                                                             CUCINA
                                                         </button>
                                                         <button 
-                                                            onClick={() => updateDestination(cat, 'Sala')}
-                                                            className={`flex-1 py-1 rounded text-[10px] font-bold transition-all ${currentDest === 'Sala' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}
+                                                            onClick={() => handleTempDestinationChange(cat, 'Sala')}
+                                                            className={`px-3 py-1.5 rounded-md text-[10px] font-black uppercase tracking-wide transition-all ${currentDest === 'Sala' ? 'bg-blue-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}
                                                         >
                                                             SALA
                                                         </button>
@@ -688,6 +719,9 @@ const App: React.FC = () => {
                                             );
                                         })}
                                     </div>
+                                    <p className="text-xs text-slate-500 mt-4 italic">
+                                        * Le modifiche vengono applicate solo dopo aver premuto "Salva Configurazione".
+                                    </p>
                                 </div>
 
                                 {isEditingItem ? (
