@@ -49,7 +49,7 @@ const App: React.FC = () => {
 
   // Admin State
   const [showAdmin, setShowAdmin] = useState(false);
-  const [adminTab, setAdminTab] = useState<'menu' | 'notif' | 'info' | 'ai' | 'db' | 'dest'>('menu');
+  const [adminTab, setAdminTab] = useState<'menu' | 'notif' | 'info' | 'ai' | 'db'>('menu');
   const [adminViewMode, setAdminViewMode] = useState<'dashboard' | 'app'>('dashboard');
   
   // Menu Manager State
@@ -509,10 +509,7 @@ const App: React.FC = () => {
                     {/* Sidebar */}
                     <div className="w-64 bg-slate-900 border-r border-slate-800 p-4 space-y-2 hidden md:block">
                          <button onClick={() => setAdminTab('menu')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'menu' ? 'bg-orange-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
-                             <Utensils size={20}/> Gestione Menu
-                         </button>
-                         <button onClick={() => setAdminTab('dest')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'dest' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
-                             <Printer size={20}/> Destinazioni
+                             <Utensils size={20}/> Gestione Menu & Destinazioni
                          </button>
                          <button onClick={() => setAdminTab('notif')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'notif' ? 'bg-green-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}>
                              <Bell size={20}/> Notifiche
@@ -534,8 +531,7 @@ const App: React.FC = () => {
                     <div className="flex-1 overflow-y-auto p-6 bg-slate-950 relative">
                         {/* Mobile Tabs */}
                         <div className="flex md:hidden gap-2 mb-6 overflow-x-auto pb-2 no-scrollbar">
-                             <button onClick={() => setAdminTab('menu')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'menu' ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Menu</button>
-                             <button onClick={() => setAdminTab('dest')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'dest' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Destinazioni</button>
+                             <button onClick={() => setAdminTab('menu')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'menu' ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Menu & Destinazioni</button>
                              <button onClick={() => setAdminTab('notif')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'notif' ? 'bg-green-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Notifiche</button>
                              <button onClick={() => setAdminTab('ai')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'ai' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>AI</button>
                         </div>
@@ -566,50 +562,6 @@ const App: React.FC = () => {
                                     <p className="text-sm text-slate-500 mt-2">Usa la Dashboard principale per gestire i tenant.</p>
                                 </div>
                             </div>
-                        )}
-
-                        {/* DESTINATIONS TAB (NEW) */}
-                        {adminTab === 'dest' && (
-                             <div className="max-w-2xl animate-fade-in">
-                                <h3 className="text-xl font-bold text-white mb-6">Destinazioni Categorie</h3>
-                                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 mb-6">
-                                    <p className="text-slate-400 mb-6 text-sm">
-                                        Configura dove vengono smistati gli ordini per ogni categoria.
-                                        Queste impostazioni si sincronizzano automaticamente su tutti i dispositivi.
-                                    </p>
-                                    
-                                    <div className="space-y-4">
-                                        {Object.values(Category).map(cat => {
-                                            const currentDest = appSettings.categoryDestinations[cat] || 'Cucina';
-                                            return (
-                                                <div key={cat} className="flex items-center justify-between p-4 bg-slate-950 rounded-xl border border-slate-800">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className={`p-2 rounded-lg ${currentDest === 'Bar' ? 'bg-blue-500/10 text-blue-400' : 'bg-orange-500/10 text-orange-400'}`}>
-                                                            {currentDest === 'Bar' ? <Printer size={20}/> : <ChefHat size={20}/>}
-                                                        </div>
-                                                        <span className="font-bold text-white">{cat}</span>
-                                                    </div>
-                                                    
-                                                    <div className="flex bg-slate-800 rounded-lg p-1 border border-slate-700">
-                                                        <button 
-                                                            onClick={() => updateDestination(cat, 'Cucina')}
-                                                            className={`px-4 py-2 text-xs font-bold rounded-md transition-all ${currentDest === 'Cucina' ? 'bg-orange-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-                                                        >
-                                                            CUCINA
-                                                        </button>
-                                                        <button 
-                                                            onClick={() => updateDestination(cat, 'Bar')}
-                                                            className={`px-4 py-2 text-xs font-bold rounded-md transition-all ${currentDest === 'Bar' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
-                                                        >
-                                                            BAR
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                             </div>
                         )}
 
                         {/* AI TAB */}
@@ -694,17 +646,48 @@ const App: React.FC = () => {
                             </div>
                         )}
 
-                        {/* MENU TAB */}
+                        {/* MENU & DESTINATIONS TAB */}
                         {adminTab === 'menu' && (
                             <div className="pb-20">
                                 <div className="flex justify-between items-center mb-6 sticky top-0 bg-slate-950 py-4 z-20 border-b border-slate-800">
                                     <div>
-                                        <h3 className="text-xl font-bold text-white">Catalogo Piatti</h3>
+                                        <h3 className="text-xl font-bold text-white">Gestione Menu</h3>
                                         <p className="text-slate-400 text-xs">{menuItems.length} elementi totali</p>
                                     </div>
                                     <button onClick={() => { setIsEditingItem(true); setEditingItem({}); }} className="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg font-bold flex items-center gap-2 shadow-lg shadow-orange-900/20 active:scale-95 transition-all">
                                         <Plus size={20}/> <span className="hidden sm:inline">Nuovo Piatto</span>
                                     </button>
+                                </div>
+
+                                {/* DESTINATION CONFIGURATION (MOVED HERE) */}
+                                <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 mb-8 overflow-x-auto">
+                                    <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                        <Printer size={16}/> Destinazioni Categorie
+                                    </h4>
+                                    <div className="flex gap-3">
+                                        {Object.values(Category).map(cat => {
+                                            const currentDest = appSettings.categoryDestinations[cat] || 'Cucina';
+                                            return (
+                                                <div key={cat} className="flex flex-col items-center bg-slate-950 p-2 rounded-lg border border-slate-800 min-w-[100px]">
+                                                    <span className="text-xs font-bold text-white mb-2">{cat}</span>
+                                                    <div className="flex bg-slate-800 rounded p-0.5 w-full">
+                                                        <button 
+                                                            onClick={() => updateDestination(cat, 'Cucina')}
+                                                            className={`flex-1 py-1 rounded text-[10px] font-bold transition-all ${currentDest === 'Cucina' ? 'bg-orange-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}
+                                                        >
+                                                            CUCINA
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => updateDestination(cat, 'Bar')}
+                                                            className={`flex-1 py-1 rounded text-[10px] font-bold transition-all ${currentDest === 'Bar' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}
+                                                        >
+                                                            BAR
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
 
                                 {isEditingItem ? (

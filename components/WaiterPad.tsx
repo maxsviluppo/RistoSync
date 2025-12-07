@@ -851,49 +851,33 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                         key={item.id} 
                         onClick={() => startEditing(item)}
                         className={`
-                            group relative overflow-hidden transition-all duration-300 rounded-2xl border text-left flex flex-col justify-between
+                            group relative overflow-hidden transition-all duration-300 rounded-2xl border flex flex-col items-center justify-center aspect-square text-center
                             ${isEditing 
-                                ? 'col-span-2 bg-slate-800 border-orange-500/50 shadow-[0_0_30px_rgba(249,115,22,0.15)] ring-1 ring-orange-500/30' 
+                                ? 'col-span-2 aspect-auto bg-slate-800 border-orange-500/50 shadow-[0_0_30px_rgba(249,115,22,0.15)] ring-1 ring-orange-500/30 p-4' 
                                 : isPopping
                                     ? 'animate-success-pop bg-slate-700 border-green-500'
-                                    : 'bg-gradient-to-br from-slate-800 to-slate-900 border-white/10 shadow-lg active:scale-95'
+                                    : 'bg-gradient-to-br from-slate-800 to-slate-900 border-white/10 shadow-lg active:scale-95 p-2'
                             }
                         `}
                     >
-                        {/* Watermark Icon */}
-                        <div className="absolute -bottom-2 -right-2 opacity-5 text-white transform rotate-12 pointer-events-none transition-opacity group-hover:opacity-10">
-                            {getCategoryIcon(item.category, 60)}
-                        </div>
-
-                        <div className="p-3 w-full relative z-10">
-                            <div className="flex justify-between items-start gap-2 mb-1">
-                                <h3 className="font-extrabold text-white text-xl leading-none tracking-tight shadow-black drop-shadow-md line-clamp-2">
-                                    {item.name}
-                                </h3>
-                                {/* Category Icon Mini */}
-                                <div className="text-orange-500/70 shrink-0 mt-0.5">
-                                    {getCategoryIcon(item.category, 14)}
-                                </div>
+                        {/* Background Watermark */}
+                        {!isEditing && (
+                            <div className="absolute inset-0 flex items-center justify-center opacity-5 pointer-events-none">
+                                {getCategoryIcon(item.category, 80)}
                             </div>
+                        )}
+
+                        <div className="w-full relative z-10">
                             
                             {!isEditing && (
-                                <div className="flex items-end justify-between mt-2">
-                                    <div className="flex flex-col gap-1">
-                                        <p className="text-slate-500 text-[9px] line-clamp-1 h-3">{item.description}</p>
-                                        <div className="flex gap-1 flex-wrap opacity-50">
-                                            {item.allergens?.slice(0, 3).map(algId => (
-                                                <div key={algId} className="text-slate-400">
-                                                    {getAllergenIcon(algId)}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <span className="text-orange-400 font-bold font-mono text-sm">€{item.price}</span>
-                                </div>
+                                <h3 className="font-extrabold text-white text-xl md:text-2xl leading-tight tracking-tight drop-shadow-md break-words w-full px-2">
+                                    {item.name}
+                                </h3>
                             )}
 
                             {isEditing && (
-                              <div className="mt-3 bg-white rounded-xl p-3 animate-slide-up shadow-inner w-full cursor-default" onClick={e => e.stopPropagation()}>
+                              <div className="bg-white rounded-xl p-3 animate-slide-up shadow-inner w-full cursor-default text-left" onClick={e => e.stopPropagation()}>
+                                  <h3 className="font-black text-slate-800 text-lg mb-2 text-center border-b border-slate-100 pb-2">{item.name}</h3>
                                   <div className="flex items-center justify-between mb-3">
                                       <label className="text-slate-500 text-[10px] font-bold uppercase tracking-wider">Quantità</label>
                                       <div className="flex items-center gap-2 bg-slate-100 rounded-lg p-1">

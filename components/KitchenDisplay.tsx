@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Order, OrderStatus, Category } from '../types';
-import { getOrders, updateOrderStatus, clearHistory, toggleOrderItemCompletion } from '../services/storageService';
+import { Order, OrderStatus, Category, AppSettings } from '../types';
+import { getOrders, updateOrderStatus, clearHistory, toggleOrderItemCompletion, getAppSettings } from '../services/storageService';
 import { Clock, CheckCircle, ChefHat, Trash2, History, UtensilsCrossed, Bell, User, LogOut, Square, CheckSquare, Coffee } from 'lucide-react';
 
 // --- SORT PRIORITY ---
@@ -72,6 +72,7 @@ interface KitchenDisplayProps {
 const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [viewMode, setViewMode] = useState<'active' | 'history'>('active');
+  const [appSettings, setAppSettings] = useState<AppSettings>(getAppSettings());
   
   // Notification State
   const [notification, setNotification] = useState<{msg: string, type: 'info' | 'success'} | null>(null);
@@ -99,7 +100,15 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
         const prevOrderIds = prevOrders.map(o => o.id);
         const addedOrders = sorted.filter(o => !prevOrderIds.includes(o.id));
         
-        if (addedOrders.length > 0) {
+        // Only notify if the new order contains KITCHEN items
+        const hasKitchenItems = addedOrders.some(order => 
+            order.items.some(item => {
+                const dest = appSettings.categoryDestinations[item.menuItem.category];
+                return dest === 'Cucina' || !dest;
+            })
+        );
+
+        if (hasKitchenItems) {
             playNotificationSound('new');
             showNotification(`Nuovo Ordine: Tavolo ${addedOrders[0].tableNumber}`, 'info');
         }
@@ -126,15 +135,21 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
       if (e.key === 'ristosync_orders') loadOrders();
     };
     const handleLocalUpdate = () => loadOrders();
+    const handleSettingsUpdate = () => {
+        setAppSettings(getAppSettings());
+        loadOrders(); // Reload orders to apply new filters if settings changed
+    };
 
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('local-storage-update', handleLocalUpdate);
+    window.addEventListener('local-settings-update', handleSettingsUpdate);
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('local-storage-update', handleLocalUpdate);
+      window.removeEventListener('local-settings-update', handleSettingsUpdate);
     };
-  }, []);
+  }, []); // Reload only on mount, listeners handle updates
 
   const advanceStatus = (orderId: string, currentStatus: OrderStatus) => {
     let nextStatus = currentStatus;
@@ -172,10 +187,6 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
       ? true 
       : o.status === OrderStatus.DELIVERED
   );
-
-  // Reverse history if purely viewing history mode (though now active covers all)
-  // Per mantenere coerente la UI, in Active ordiniamo per timestamp (vecchi prima).
-  // Se fosse una vera history page, faremmo il contrario.
 
   return (
     <div className="min-h-screen bg-slate-900 text-white p-6 font-sans flex flex-col relative overflow-hidden">
@@ -221,7 +232,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
                 onClick={() => setViewMode('active')}
                 className={`px-6 py-2 rounded-md font-bold text-sm uppercase tracking-wide transition-all ${viewMode === 'active' ? 'bg-slate-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
              >
-                Tavoli Attivi <span className="ml-2 bg-orange-500 text-white px-2 py-0.5 rounded-full text-xs">{orders.length}</span>
+                Tavoli Attivi
              </button>
              <button 
                 onClick={() => setViewMode('history')}
@@ -274,14 +285,22 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
              const isReady = order.status === OrderStatus.READY;
              const isDelivered = order.status === OrderStatus.DELIVERED;
 
-            // Sort items for display using category priority, but KEEP reference to original index for toggling
-            const sortedItemsWithIndex = order.items
+            // FILTER ITEMS: Only show items destined for 'Cucina'
+            const kitchenItemsWithIndex = order.items
                 .map((item, originalIndex) => ({ item, originalIndex }))
+                .filter(({ item }) => {
+                    const dest = appSettings.categoryDestinations[item.menuItem.category];
+                    return dest === 'Cucina' || !dest; // Default to Kitchen if undefined
+                })
                 .sort((a, b) => {
                     const pA = CATEGORY_PRIORITY[a.item.menuItem.category] || 99;
                     const pB = CATEGORY_PRIORITY[b.item.menuItem.category] || 99;
                     return pA - pB;
                 });
+
+            // If no kitchen items in this order, don't show the card at all (unless delivered, maybe?)
+            // Usually, if an order is just Drinks, the Kitchen shouldn't see it.
+            if (kitchenItemsWithIndex.length === 0) return null;
 
             return (
               <div 
@@ -316,7 +335,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
                 {/* Body Card */}
                 <div className="p-4 flex-1 overflow-y-auto max-h-[300px] bg-slate-900/50">
                   <ul className="space-y-3">
-                    {sortedItemsWithIndex.map(({ item, originalIndex }) => (
+                    {kitchenItemsWithIndex.map(({ item, originalIndex }) => (
                       <li 
                         key={`${order.id}-${originalIndex}`} 
                         onClick={() => viewMode === 'active' && !isDelivered && handleToggleItem(order.id, originalIndex)}
