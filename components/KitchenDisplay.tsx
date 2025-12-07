@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Order, OrderStatus, Category } from '../types';
 import { getOrders, updateOrderStatus, clearHistory, toggleOrderItemCompletion } from '../services/storageService';
-import { Clock, CheckCircle, ChefHat, Trash2, History, UtensilsCrossed, Bell, User, LogOut, Square, CheckSquare } from 'lucide-react';
+import { Clock, CheckCircle, ChefHat, Trash2, History, UtensilsCrossed, Bell, User, LogOut, Square, CheckSquare, AlertCircle } from 'lucide-react';
 
 // --- SORT PRIORITY ---
 const CATEGORY_PRIORITY: Record<Category, number> = {
@@ -11,6 +11,9 @@ const CATEGORY_PRIORITY: Record<Category, number> = {
     [Category.DOLCI]: 4,
     [Category.BEVANDE]: 5
 };
+
+// --- CONFIG ---
+const WARNING_MINUTES = 15; // Minuti dopo i quali scatta l'allarme
 
 // --- SOUND UTILS ---
 const playNotificationSound = (type: 'new' | 'ready') => {
@@ -73,6 +76,9 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [viewMode, setViewMode] = useState<'active' | 'history'>('active');
   
+  // Real-time Timer State
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
   // Notification State
   const [notification, setNotification] = useState<{msg: string, type: 'info' | 'success'} | null>(null);
   
@@ -84,6 +90,14 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
       setNotification({ msg, type });
       setTimeout(() => setNotification(null), 4000);
   };
+
+  // Timer Tick
+  useEffect(() => {
+      const timer = setInterval(() => {
+          setCurrentTime(Date.now());
+      }, 1000);
+      return () => clearInterval(timer);
+  }, []);
 
   const loadOrders = () => {
     const allOrders = getOrders();
@@ -149,8 +163,11 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
       toggleOrderItemCompletion(orderId, originalIndex);
   };
 
-  const formatTime = (timestamp: number) => {
-    return new Date(timestamp).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+  const formatDuration = (ms: number) => {
+      const totalSeconds = Math.floor(ms / 1000);
+      const m = Math.floor(totalSeconds / 60);
+      const s = totalSeconds % 60;
+      return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
   const getStatusColor = (status: OrderStatus) => {
@@ -176,7 +193,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-6 font-sans flex flex-col relative overflow-hidden">
+    <div className="min-h-screen bg-slate-900 text-white p-4 sm:p-6 font-sans flex flex-col relative overflow-hidden">
       
       {/* Toast Notification */}
       {notification && (
@@ -192,7 +209,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
       )}
 
       {/* Top Bar */}
-      <div className="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
+      <div className="flex flex-col sm:flex-row justify-between items-center mb-6 border-b border-slate-700 pb-4 gap-4">
         <div className="flex items-center gap-3">
           <div className="w-14 h-14 bg-orange-500 rounded-full flex items-center justify-center shadow-lg shadow-orange-500/20">
              <ChefHat className="w-8 h-8 text-white" />
@@ -233,7 +250,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
         <div className="flex gap-4 items-center">
             <div className="bg-slate-800 px-4 py-2 rounded-lg border border-slate-700 shadow-inner">
                 <span className="text-2xl font-mono text-orange-400 font-bold">
-                    {new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}
+                    {new Date(currentTime).toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}
                 </span>
             </div>
             {viewMode === 'history' && (
@@ -276,11 +293,15 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-10">
           {displayedOrders.map((order) => {
-             const timeDiff = Math.floor((Date.now() - order.timestamp) / 60000);
-             const isLate = viewMode === 'active' && timeDiff > 15 && order.status !== OrderStatus.READY;
+             // Live Timer Calculation
+             const elapsedMs = currentTime - order.timestamp;
+             const elapsedMinutes = Math.floor(elapsedMs / 60000);
+             
+             // Alarm Logic
+             const isLate = viewMode === 'active' && elapsedMinutes >= WARNING_MINUTES && order.status !== OrderStatus.READY;
              const isReady = order.status === OrderStatus.READY;
 
-            // Sort items for display using category priority, but KEEP reference to original index for toggling
+            // Sort items for display using category priority
             const sortedItemsWithIndex = order.items
                 .map((item, originalIndex) => ({ item, originalIndex }))
                 .sort((a, b) => {
@@ -295,31 +316,42 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
                 className={`flex flex-col rounded-xl shadow-xl border-t-8 ${getStatusColor(order.status).replace('text', 'border').replace('bg-','border-')} bg-slate-800 text-slate-200 overflow-hidden transform transition-all duration-300 relative
                     ${viewMode === 'active' ? 'hover:-translate-y-1' : 'opacity-75'}
                     ${isReady ? 'ring-2 ring-green-500/50 shadow-green-900/20' : ''}
+                    ${isLate ? 'shadow-[0_0_30px_rgba(239,68,68,0.4)] border-red-600 animate-pulse' : ''}
                 `}
               >
                 {/* Header Card */}
-                <div className={`p-4 border-b border-slate-700 flex justify-between items-start bg-slate-800/50`}>
-                  <div>
-                    <h2 className="text-3xl font-black text-white">Tav. {order.tableNumber}</h2>
-                    <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wide mt-1 shadow-sm ${getStatusColor(order.status)}`}>
+                <div className={`p-3 border-b border-slate-700 flex justify-between items-start 
+                    ${isLate ? 'bg-red-900/40' : 'bg-slate-800/50'}
+                `}>
+                  <div className="flex flex-col">
+                    <h2 className="text-3xl font-black text-white leading-none">Tav. {order.tableNumber}</h2>
+                    <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide mt-1 shadow-sm w-fit ${getStatusColor(order.status)}`}>
                       {order.status}
                     </span>
                   </div>
-                  <div className="text-right">
-                    <div className="flex items-center justify-end gap-1 text-slate-400 font-mono text-lg font-bold">
-                        <Clock size={18} />
-                        {formatTime(order.timestamp)}
+                  
+                  <div className="text-right flex flex-col items-end">
+                    {/* Active Timer */}
+                    <div className={`flex items-center justify-end gap-1 font-mono text-xl font-black 
+                        ${isLate ? 'text-red-500 animate-pulse' : 'text-slate-300'}
+                    `}>
+                        {isLate && <Bell size={18} className="animate-swing text-red-500 mr-1" />}
+                        {formatDuration(elapsedMs)}
                     </div>
+                    
+                    <div className="flex items-center justify-end gap-1 text-slate-500 text-xs mt-1 font-bold opacity-70">
+                        Inserito: {new Date(order.timestamp).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+                    </div>
+                    
                     {/* Waiter Info */}
-                    <div className="flex items-center justify-end gap-1 text-slate-500 text-xs mt-1 font-bold">
-                        <User size={12} /> {order.waiterName || 'Staff'}
+                    <div className="flex items-center justify-end gap-1 text-slate-500 text-xs mt-0.5 font-bold opacity-70">
+                        <User size={10} /> {order.waiterName || 'Staff'}
                     </div>
-                    {isLate && <div className="text-red-500 font-bold text-xs mt-1 animate-pulse bg-red-900/30 px-2 rounded">RITARDO {timeDiff}m</div>}
                   </div>
                 </div>
 
                 {/* Body Card */}
-                <div className="p-4 flex-1 overflow-y-auto max-h-[300px] bg-slate-900/50">
+                <div className="p-3 flex-1 overflow-y-auto max-h-[400px] bg-slate-900/50">
                   <ul className="space-y-3">
                     {sortedItemsWithIndex.map(({ item, originalIndex }) => (
                       <li 
@@ -339,27 +371,35 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
                                     </span>
                                 </div>
                             )}
-                            <div className="flex gap-3 items-center w-full">
-                                <div className={`transition-colors ${item.completed ? 'text-green-500' : 'text-slate-600'}`}>
-                                        {item.completed ? <CheckSquare size={24} /> : <Square size={24} />}
+                            <div className="flex gap-3 items-start w-full">
+                                <div className={`mt-1 transition-colors ${item.completed ? 'text-green-500' : 'text-slate-600'}`}>
+                                        {item.completed ? <CheckSquare size={28} /> : <Square size={28} />}
                                 </div>
-                                <span className={`font-black text-xl w-8 h-8 flex items-center justify-center rounded-lg shadow-inner mt-1 transition-colors
+                                <span className={`font-black text-2xl w-10 h-10 flex items-center justify-center rounded-lg shadow-inner transition-colors shrink-0
                                         ${item.completed ? 'bg-green-900/30 text-green-400' : 'bg-slate-700 text-white'}
                                 `}>
                                     {item.quantity}
                                 </span>
-                                <div className="flex-1">
+                                <div className="flex-1 min-w-0">
                                     {/* Category Label */}
                                     <p className="text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-0.5">
                                         {item.menuItem.category}
                                     </p>
-                                    <p className={`font-bold text-lg leading-tight transition-all ${item.completed ? 'text-slate-500 line-through decoration-2 decoration-green-500/50' : 'text-slate-200'}`}>
+                                    
+                                    {/* DISH NAME - GIANT */}
+                                    <p className={`font-black text-4xl leading-[0.9] tracking-tight mb-1 transition-all break-words
+                                        ${item.completed ? 'text-slate-600 line-through decoration-2 decoration-green-500/50' : 'text-slate-100'}
+                                    `}>
                                         {item.menuItem.name}
                                     </p>
+                                    
                                     {item.notes && (
-                                        <p className="text-red-300 text-sm font-bold mt-1 bg-red-900/20 inline-block px-2 py-0.5 rounded border border-red-900/30">
-                                            ⚠️ {item.notes}
-                                        </p>
+                                        <div className="flex items-start gap-1 mt-1">
+                                            <AlertCircle size={14} className="text-red-400 mt-0.5 shrink-0" />
+                                            <p className="text-red-300 text-base font-bold bg-red-900/20 px-2 rounded border border-red-900/30 leading-tight">
+                                                {item.notes}
+                                            </p>
+                                        </div>
                                     )}
                                 </div>
                             </div>
@@ -369,18 +409,18 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
                   </ul>
                 </div>
 
-                {/* Footer Action */}
+                {/* Footer Action - SLIMMER BANNER */}
                 {viewMode === 'active' && (
                     <button
                     onClick={() => advanceStatus(order.id, order.status)}
-                    className={`w-full py-5 text-center font-black text-lg uppercase tracking-wider transition-all flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.98]
+                    className={`w-full py-3 text-center font-black text-base uppercase tracking-wider transition-all flex items-center justify-center gap-2 hover:brightness-110 active:scale-[0.98]
                         ${order.status === OrderStatus.READY 
                             ? 'bg-green-600 hover:bg-green-500 text-white shadow-green-900/20' 
                             : 'bg-orange-500 hover:bg-orange-600 text-white shadow-orange-900/20'}
                     `}
                     >
                     {order.status === OrderStatus.READY ? (
-                        <> <CheckCircle /> SERVI AL TAVOLO </>
+                        <> <CheckCircle size={18} /> SERVI AL TAVOLO </>
                     ) : (
                         <> AVANZA STATO {order.status === OrderStatus.PENDING && '→ PREPARAZIONE'} {order.status === OrderStatus.COOKING && '→ PRONTO'} </>
                     )}
@@ -388,7 +428,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
                 )}
                 {viewMode === 'history' && (
                      <div className="p-2 bg-slate-800 text-center text-xs text-slate-500 font-mono border-t border-slate-700">
-                         COMPLETATO alle {formatTime(order.timestamp + 1000 * 60 * 20)} {/* Simulated time */}
+                         COMPLETATO: {new Date(order.timestamp).toLocaleDateString()}
                      </div>
                 )}
               </div>
