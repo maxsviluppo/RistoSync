@@ -162,7 +162,7 @@ export const addOrder = (order: Order) => {
   const orders = getOrders();
   const cleanOrder = {
       ...order,
-      items: order.items.map(i => ({ ...i, completed: false, isAddedLater: false }))
+      items: order.items.map(i => ({ ...i, completed: false, served: false, isAddedLater: false }))
   };
   const newOrders = [...orders, cleanOrder];
   
@@ -203,12 +203,13 @@ export const updateOrderItems = (orderId: string, newItems: OrderItem[]) => {
                 ...newItem,
                 // If quantity increased, reset completion status for kitchen to notice
                 completed: isQuantityIncreased ? false : existing.completed,
+                served: isQuantityIncreased ? false : existing.served,
                 // Mark as added later if it was already marked OR if quantity bumped
                 isAddedLater: existing.isAddedLater || isQuantityIncreased
             };
         } else {
             // Completely new item
-            return { ...newItem, completed: false, isAddedLater: true };
+            return { ...newItem, completed: false, served: false, isAddedLater: true };
         }
     });
 
@@ -237,17 +238,43 @@ export const toggleOrderItemCompletion = (orderId: string, itemIndex: number) =>
         };
     }
 
-    // Smart Status Logic
-    const allCompleted = newItems.every(i => i.completed);
-    const anyCompleted = newItems.some(i => i.completed);
+    // Smart Status Logic for Kitchen (Ready if all cooked)
+    const allCooked = newItems.every(i => i.completed);
+    const anyCooked = newItems.some(i => i.completed);
     
     let newStatus = order.status;
+    // Don't downgrade from Delivered automatically here
     if (order.status !== OrderStatus.DELIVERED) {
-        if (allCompleted) newStatus = OrderStatus.READY;
-        else if (anyCompleted) newStatus = OrderStatus.COOKING;
-        else if (!anyCompleted && (order.status === OrderStatus.COOKING || order.status === OrderStatus.READY)) {
-            newStatus = OrderStatus.PENDING;
-        }
+        if (allCooked) newStatus = OrderStatus.READY;
+        else if (anyCooked) newStatus = OrderStatus.COOKING;
+        else if (!anyCooked) newStatus = OrderStatus.PENDING;
+    }
+
+    const updatedOrder = { ...order, items: newItems, status: newStatus };
+    const newOrders = orders.map(o => o.id === orderId ? updatedOrder : o);
+    
+    saveLocallyAndNotify(newOrders);
+    syncOrderToCloud(updatedOrder);
+};
+
+export const serveItem = (orderId: string, itemIndex: number) => {
+    const orders = getOrders();
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    const newItems = [...order.items];
+    if (newItems[itemIndex]) {
+        newItems[itemIndex] = { 
+            ...newItems[itemIndex], 
+            served: true 
+        };
+    }
+
+    // If all items are served, mark order as DELIVERED
+    const allServed = newItems.every(i => i.served);
+    let newStatus = order.status;
+    if (allServed) {
+        newStatus = OrderStatus.DELIVERED;
     }
 
     const updatedOrder = { ...order, items: newItems, status: newStatus };

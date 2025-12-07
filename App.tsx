@@ -471,7 +471,7 @@ const App: React.FC = () => {
                                                                                 const alg = ALLERGENS_CONFIG.find(a => a.id === aId);
                                                                                 if (!alg) return null;
                                                                                 return (
-                                                                                    <span key={aId} className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-slate-950 border border-slate-800 text-[10px] font-bold uppercase text-slate-300 tracking-wider">
+                                                                                    <span key={aId} className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-slate-700 text-[10px] font-bold uppercase text-slate-300 tracking-wider">
                                                                                         <alg.icon size={12} className="text-orange-500"/> {alg.label}
                                                                                     </span>
                                                                                 );

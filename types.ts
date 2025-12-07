@@ -32,7 +32,8 @@ export interface OrderItem {
   menuItem: MenuItem;
   quantity: number;
   notes?: string;
-  completed?: boolean;
+  completed?: boolean; // Kitchen finished cooking
+  served?: boolean;    // Waiter delivered to table
   isAddedLater?: boolean; // New: Tracks items added via modification
 }
 
