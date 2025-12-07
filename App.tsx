@@ -450,14 +450,44 @@ const App: React.FC = () => {
                                                     <h4 className="text-orange-500 font-black uppercase text-sm mb-3">{cat}</h4>
                                                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                                                         {itemsInCategory.map(item => (
-                                                            <div key={item.id} className="bg-slate-900 border border-slate-800 p-3 rounded-xl flex justify-between items-center group">
-                                                                <div>
-                                                                    <div className="font-bold text-white">{item.name}</div>
-                                                                    <div className="text-slate-500 text-xs">€ {item.price.toFixed(2)}</div>
+                                                            <div key={item.id} className="relative bg-slate-900 border border-slate-800 p-5 rounded-2xl flex flex-col gap-3 group hover:border-slate-600 transition-all shadow-sm overflow-hidden">
+                                                                
+                                                                {/* Header: Name and Price */}
+                                                                <div className="flex justify-between items-start gap-4">
+                                                                    <div className="font-bold text-white text-lg leading-tight w-3/4">{item.name}</div>
+                                                                    <div className="text-2xl font-black text-orange-500 whitespace-nowrap">€ {item.price.toFixed(2)}</div>
                                                                 </div>
-                                                                <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                    <button onClick={() => { setEditingItem(item); setIsEditingItem(true); }} className="p-2 bg-slate-800 rounded-lg text-blue-400"><Edit2 size={16}/></button>
-                                                                    <button onClick={() => setItemToDelete(item)} className="p-2 bg-slate-800 rounded-lg text-red-400"><Trash2 size={16}/></button>
+
+                                                                {/* Description / Ingredients */}
+                                                                <div className="text-slate-400 text-sm leading-relaxed border-b border-slate-800/50 pb-3">
+                                                                    {item.description || <span className="italic opacity-30 text-xs">Nessuna descrizione inserita</span>}
+                                                                </div>
+
+                                                                {/* Allergens */}
+                                                                <div className="min-h-[24px]">
+                                                                    {item.allergens && item.allergens.length > 0 ? (
+                                                                        <div className="flex flex-wrap gap-2">
+                                                                            {item.allergens.map(aId => {
+                                                                                const alg = ALLERGENS_CONFIG.find(a => a.id === aId);
+                                                                                if (!alg) return null;
+                                                                                return (
+                                                                                    <span key={aId} className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-slate-950 border border-slate-800 text-[10px] font-bold uppercase text-slate-300 tracking-wider">
+                                                                                        <alg.icon size={12} className="text-orange-500"/> {alg.label}
+                                                                                    </span>
+                                                                                );
+                                                                            })}
+                                                                        </div>
+                                                                    ) : (
+                                                                        <span className="text-[10px] text-slate-600 uppercase font-bold tracking-widest flex items-center gap-1">
+                                                                            <CheckCircle size={10}/> Nessun allergene segnalato
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+
+                                                                {/* Hover Actions Overlay */}
+                                                                <div className="absolute top-0 right-0 p-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-all bg-gradient-to-l from-slate-900 via-slate-900 to-transparent pl-8">
+                                                                    <button onClick={() => { setEditingItem(item); setIsEditingItem(true); }} className="p-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg shadow-lg transform hover:scale-110 transition-transform"><Edit2 size={18}/></button>
+                                                                    <button onClick={() => setItemToDelete(item)} className="p-2 bg-red-600 hover:bg-red-500 text-white rounded-lg shadow-lg transform hover:scale-110 transition-transform"><Trash2 size={18}/></button>
                                                                 </div>
                                                             </div>
                                                         ))}
