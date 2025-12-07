@@ -856,7 +856,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                 ? 'col-span-2 bg-slate-800 border-orange-500/50 shadow-[0_0_30px_rgba(249,115,22,0.15)] ring-1 ring-orange-500/30 p-3 text-left' 
                                 : isPopping
                                     ? 'aspect-square animate-success-pop bg-slate-700 border-green-500 items-center justify-center p-2'
-                                    : 'aspect-square bg-gradient-to-br from-slate-800 to-slate-900 border-white/10 shadow-lg active:scale-95 items-center justify-center p-2'
+                                    : 'aspect-square bg-gradient-to-br from-gray-700 via-gray-800 to-gray-950 border-gray-600 shadow-lg shadow-black/40 active:scale-95 items-center justify-center p-3'
                             }
                         `}
                     >
@@ -867,13 +867,13 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
                         {!isEditing && (
                              <>
-                                <h3 className="font-extrabold text-white text-xl leading-tight tracking-tight shadow-black drop-shadow-md text-center line-clamp-3 z-10 w-full">
+                                <h3 className="font-black text-gray-100 text-2xl leading-none tracking-tight text-center line-clamp-3 z-10 w-full drop-shadow-lg">
                                     {item.name}
                                 </h3>
                                 {/* Tiny allergens mini row at bottom */}
-                                <div className="flex gap-1 flex-wrap justify-center mt-2 opacity-60">
+                                <div className="flex gap-1 flex-wrap justify-center mt-2 opacity-50">
                                      {item.allergens?.slice(0, 3).map(algId => (
-                                        <div key={algId} className="text-slate-400">
+                                        <div key={algId} className="text-slate-300">
                                              {getAllergenIcon(algId)}
                                          </div>
                                      ))}
