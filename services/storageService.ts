@@ -1,4 +1,4 @@
-import { Order, OrderStatus, OrderItem, MenuItem } from '../types';
+import { Order, OrderStatus, OrderItem, MenuItem, Category } from '../types';
 import { MENU_ITEMS as DEFAULT_MENU_ITEMS } from '../constants';
 import { supabase } from './supabase';
 
@@ -7,6 +7,7 @@ const TABLES_COUNT_KEY = 'ristosync_table_count';
 const WAITER_KEY = 'ristosync_waiter_name';
 const MENU_KEY = 'ristosync_menu_items';
 const SETTINGS_NOTIFICATIONS_KEY = 'ristosync_settings_notifications';
+const CATEGORY_CONFIG_KEY = 'ristosync_category_config'; // NEW
 const GOOGLE_API_KEY_STORAGE = 'ristosync_google_api_key';
 
 // --- SYNC ENGINE STATE ---
@@ -226,10 +227,31 @@ export const saveNotificationSettings = (settings: NotificationSettings) => {
     localStorage.setItem(SETTINGS_NOTIFICATIONS_KEY, JSON.stringify(settings));
 };
 
-// 4. Menu
+// 4. Menu & Category Configuration
 export const getMenuItems = (): MenuItem[] => {
     const data = localStorage.getItem(MENU_KEY);
     return data ? JSON.parse(data) : DEFAULT_MENU_ITEMS;
+};
+
+// NEW: Category Configuration
+export const getCategoryConfig = (): Record<Category, boolean> => {
+    const data = localStorage.getItem(CATEGORY_CONFIG_KEY);
+    // Default: Bevande (false/Sala), others (true/Cucina)
+    if (!data) {
+        return {
+            [Category.ANTIPASTI]: true,
+            [Category.PRIMI]: true,
+            [Category.SECONDI]: true,
+            [Category.DOLCI]: true, // Spesso in cucina, ma configurabile
+            [Category.BEVANDE]: false
+        };
+    }
+    return JSON.parse(data);
+};
+
+export const saveCategoryConfig = (config: Record<Category, boolean>) => {
+    localStorage.setItem(CATEGORY_CONFIG_KEY, JSON.stringify(config));
+    window.dispatchEvent(new Event('local-menu-update')); // Trigger menu/config updates
 };
 
 const syncMenuToCloud = async (item: MenuItem, isDelete = false) => {

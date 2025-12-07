@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Order, OrderStatus, Category } from '../types';
-import { getOrders, updateOrderStatus, clearHistory, toggleOrderItemCompletion } from '../services/storageService';
+import { getOrders, updateOrderStatus, clearHistory, toggleOrderItemCompletion, getCategoryConfig } from '../services/storageService';
 import { CheckCircle, ChefHat, Trash2, History, UtensilsCrossed, Bell, User, LogOut, Square, CheckSquare, AlertCircle, Clock } from 'lucide-react';
 
 // --- SORT PRIORITY ---
@@ -75,6 +75,7 @@ interface KitchenDisplayProps {
 const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [viewMode, setViewMode] = useState<'active' | 'history'>('active');
+  const [categoryConfig, setCategoryConfig] = useState<Record<Category, boolean>>(getCategoryConfig());
   
   // Real-time Timer State
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -101,6 +102,8 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
 
   const loadOrders = () => {
     const allOrders = getOrders();
+    const currentConfig = getCategoryConfig();
+    setCategoryConfig(currentConfig);
     
     // --- SORTING LOGIC ---
     // 1. Ordini READY vanno in fondo (coda di uscita)
@@ -119,13 +122,19 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
     });
 
     // --- CHANGE DETECTION LOGIC ---
+    // Filter orders to only check for notifications on Kitchen-Relevant Items
+    // If an order only contains drinks (and drinks are Service), we shouldn't notify the kitchen
+    const relevantOrders = sorted.filter(order => 
+        order.items.some(item => currentConfig[item.menuItem.category])
+    );
+
     if (!isFirstLoad.current) {
         const prevOrders = previousOrdersRef.current;
         
         // 1. Detect NEW Orders
-        const newOrderIds = sorted.map(o => o.id);
+        const newOrderIds = relevantOrders.map(o => o.id);
         const prevOrderIds = prevOrders.map(o => o.id);
-        const addedOrders = sorted.filter(o => !prevOrderIds.includes(o.id));
+        const addedOrders = relevantOrders.filter(o => !prevOrderIds.includes(o.id));
         
         if (addedOrders.length > 0) {
             playNotificationSound('new');
@@ -133,7 +142,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
         }
 
         // 2. Detect STATUS Changes to READY
-        sorted.forEach(newOrder => {
+        relevantOrders.forEach(newOrder => {
             const oldOrder = prevOrders.find(o => o.id === newOrder.id);
             if (oldOrder && oldOrder.status !== OrderStatus.READY && newOrder.status === OrderStatus.READY) {
                 playNotificationSound('ready');
@@ -143,8 +152,8 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
     }
 
     if (isFirstLoad.current) isFirstLoad.current = false;
-    previousOrdersRef.current = sorted;
-    setOrders(sorted);
+    previousOrdersRef.current = relevantOrders; // Store filtered as reference
+    setOrders(sorted); // Store all, but filter in render
   };
 
   useEffect(() => {
@@ -154,13 +163,16 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
       if (e.key === 'ristosync_orders') loadOrders();
     };
     const handleLocalUpdate = () => loadOrders();
+    const handleMenuUpdate = () => loadOrders(); // Update if config changes
 
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('local-storage-update', handleLocalUpdate);
+    window.addEventListener('local-menu-update', handleMenuUpdate);
 
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('local-storage-update', handleLocalUpdate);
+      window.removeEventListener('local-menu-update', handleMenuUpdate);
     };
   }, []);
 
@@ -194,12 +206,16 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
     }
   };
 
-  // Filter orders based on view mode
-  const displayedOrders = orders.filter(o => 
-    viewMode === 'active' 
-      ? o.status !== OrderStatus.DELIVERED 
-      : o.status === OrderStatus.DELIVERED
-  );
+  // Filter orders based on view mode AND content relevance
+  const displayedOrders = orders.filter(o => {
+      // 1. Status Filter
+      if (viewMode === 'active' && o.status === OrderStatus.DELIVERED) return false;
+      if (viewMode === 'history' && o.status !== OrderStatus.DELIVERED) return false;
+      
+      // 2. Content Filter: Must have at least one Kitchen item (config=true)
+      const hasKitchenItems = o.items.some(item => categoryConfig[item.menuItem.category]);
+      return hasKitchenItems;
+  });
 
   // Reverse history to show newest first
   if (viewMode === 'history') {
@@ -250,7 +266,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
                 onClick={() => setViewMode('active')}
                 className={`px-6 py-2 rounded-md font-bold text-sm uppercase tracking-wide transition-all ${viewMode === 'active' ? 'bg-slate-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
              >
-                In Corso <span className="ml-2 bg-orange-500 text-white px-2 py-0.5 rounded-full text-xs">{orders.filter(o => o.status !== OrderStatus.DELIVERED).length}</span>
+                In Corso <span className="ml-2 bg-orange-500 text-white px-2 py-0.5 rounded-full text-xs">{orders.filter(o => o.status !== OrderStatus.DELIVERED && o.items.some(i => categoryConfig[i.menuItem.category])).length}</span>
              </button>
              <button 
                 onClick={() => setViewMode('history')}
@@ -316,14 +332,17 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
              const isLate = viewMode === 'active' && elapsedMinutes >= WARNING_MINUTES && order.status !== OrderStatus.READY;
              const isReady = order.status === OrderStatus.READY;
 
-            // Sort items for display using category priority
+            // Sort items for display using category priority AND filter out Service items
             const sortedItemsWithIndex = order.items
                 .map((item, originalIndex) => ({ item, originalIndex }))
+                .filter(({ item }) => categoryConfig[item.menuItem.category]) // Only show Kitchen items
                 .sort((a, b) => {
                     const pA = CATEGORY_PRIORITY[a.item.menuItem.category] || 99;
                     const pB = CATEGORY_PRIORITY[b.item.menuItem.category] || 99;
                     return pA - pB;
                 });
+
+            if (sortedItemsWithIndex.length === 0) return null; // Should be handled by displayedOrders filter, but double check
 
             return (
               <div 

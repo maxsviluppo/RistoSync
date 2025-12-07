@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Category, MenuItem, Order, OrderItem, OrderStatus } from '../types';
-import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, getWaiterName, logoutWaiter, getMenuItems, freeTable, updateOrderStatus } from '../services/storageService';
+import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, getWaiterName, logoutWaiter, getMenuItems, freeTable, updateOrderStatus, getCategoryConfig, toggleOrderItemCompletion } from '../services/storageService';
 import { askChefAI } from '../services/geminiService';
-import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen, Bell, ArrowRight, Lock, PlusCircle, CheckCircle } from 'lucide-react';
+import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen, Bell, ArrowRight, Lock, PlusCircle, CheckCircle, CheckSquare, Square, Coffee } from 'lucide-react';
 
 // --- CONSTANTS ---
 const CATEGORY_ORDER = [
@@ -250,6 +250,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null); // Track if we are editing an existing order
   const [waiterName, setWaiterName] = useState<string>('');
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
+  const [categoryConfig, setCategoryConfig] = useState<Record<Category, boolean>>(getCategoryConfig());
   
   // NEW: Track seen ready counts to handle "click to acknowledge"
   const [seenReadyCounts, setSeenReadyCounts] = useState<Record<string, number>>({});
@@ -310,6 +311,8 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       const name = getWaiterName();
       if (name) setWaiterName(name);
 
+      setCategoryConfig(getCategoryConfig());
+
       // --- NOTIFICATION LOGIC (Granular Item Level) ---
       const currentItemStatus: Record<string, boolean> = {};
       let newlyReadyItems: string[] = [];
@@ -332,7 +335,10 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
               // Compare with previous state
               // Only trigger if it WAS false/undefined and NOW is true
-              if (!isFirstLoad.current) {
+              // IMPORTANT: Only trigger sound for KITCHEN items that became ready.
+              // Service items are marked ready by the waiter themselves, so no sound needed.
+              const isKitchenItem = getCategoryConfig()[item.menuItem.category]; 
+              if (!isFirstLoad.current && isKitchenItem) {
                   const wasCompleted = prevItemStatusRef.current[uniqueKey] || false;
                   if (!wasCompleted && item.completed) {
                       newlyReadyItems.push(`${item.menuItem.name} (Tav. ${order.tableNumber})`);
@@ -396,7 +402,11 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       allRestaurantOrders.forEach(order => {
           if(order.status !== OrderStatus.DELIVERED) {
              let readyInOrder = 0;
-             order.items.forEach(i => { if(i.completed) readyInOrder++; });
+             order.items.forEach(i => { 
+                 // Count ready kitchen items
+                 const isKitchen = categoryConfig[i.menuItem.category];
+                 if(i.completed && isKitchen) readyInOrder++; 
+             });
              
              if(readyInOrder > 0) {
                  const seen = seenReadyCounts[order.tableNumber] || 0;
@@ -405,7 +415,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
           }
       });
       return count > 0;
-  }, [allRestaurantOrders, seenReadyCounts]);
+  }, [allRestaurantOrders, seenReadyCounts, categoryConfig]);
 
 
   // --- Sorting Logic for Cart ---
@@ -465,7 +475,11 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       let rawReadyCount = 0;
       tableOrders.forEach(o => {
           if (o.status !== OrderStatus.DELIVERED) {
-              o.items.forEach(i => { if(i.completed) rawReadyCount++; });
+              o.items.forEach(i => { 
+                  // Only count Kitchen items as "notifications" to acknowledge
+                  const isKitchen = categoryConfig[i.menuItem.category];
+                  if(i.completed && isKitchen) rawReadyCount++; 
+              });
           }
       });
       // Mark these items as "seen" for this table
@@ -508,7 +522,10 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       const activeOrder = allRestaurantOrders.find(o => o.id === activeOrderId);
       if (activeOrder) {
           // Conta quanti piatti sono pronti ora
-          const currentTotalReady = activeOrder.items.filter(i => i.completed).length;
+          const currentTotalReady = activeOrder.items.filter(i => {
+              const isKitchen = categoryConfig[i.menuItem.category];
+              return i.completed && isKitchen;
+          }).length;
           // Imposta il "visto" a questo numero, così unseenReadyCount diventa 0
           // Questo ferma il lampeggiamento del tavolo e il pulsare dell'icona gestioni
           setSeenReadyCounts(prev => ({ ...prev, [table]: currentTotalReady }));
@@ -531,6 +548,26 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
           setTableManagerOpen(false); // Chiudi e torna al lavoro
       }
       setTimeout(() => setNotificationToast(null), 3000);
+  };
+
+  const handleToggleServiceItem = (orderId: string, itemIndex: number) => {
+      toggleOrderItemCompletion(orderId, itemIndex);
+      
+      // Check if this was the last unserved item in the entire order
+      // (Considering kitchen items too)
+      setTimeout(() => {
+          const freshOrders = getOrders();
+          const order = freshOrders.find(o => o.id === orderId);
+          if (order) {
+              const allServed = order.items.every(i => i.completed);
+              if (allServed) {
+                  updateOrderStatus(orderId, OrderStatus.DELIVERED);
+                  setNotificationToast(`Ordine Tavolo ${order.tableNumber} completato!`);
+                  setTableManagerOpen(false);
+                  setTable('');
+              }
+          }
+      }, 100);
   };
 
   // Action: Request Free Table
@@ -705,7 +742,17 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       if (activeOrders.length > 0) {
           // Check for ready items
           let rawReadyCount = 0;
-          activeOrders.forEach(o => o.items.forEach(i => { if(i.completed) rawReadyCount++; }));
+          let unservedServiceItems = 0;
+
+          activeOrders.forEach(o => o.items.forEach(i => { 
+              const isKitchen = categoryConfig[i.menuItem.category];
+              if(i.completed && isKitchen) {
+                  rawReadyCount++; 
+              }
+              if(!i.completed && !isKitchen) {
+                  unservedServiceItems++; // Items that Waiter needs to serve (Bevande/Dolci)
+              }
+          }));
           
           // Check if we have seen these ready items
           const seenCount = seenReadyCounts[tableNum] || 0;
@@ -713,6 +760,9 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
           if (unseenReadyCount > 0) {
               return { status: 'ready', count: unseenReadyCount, owner: activeOrders[0].waiterName };
+          }
+          if (unservedServiceItems > 0) {
+              return { status: 'eating', count: 0, owner: activeOrders[0].waiterName }; // Show as occupied
           }
           
           return { status: 'busy', count: 0, owner: activeOrders[0].waiterName };
@@ -731,17 +781,39 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   }, [table, allRestaurantOrders]);
 
   const readyInfo = useMemo(() => {
-      if (!activeOrderForSelectedTable) return { readyCount: 0, totalCount: 0, isAllReady: false };
+      if (!activeOrderForSelectedTable) return { readyCount: 0, totalCount: 0, isAllReady: false, serviceItems: [], kitchenItems: [] };
       
-      const readyCount = activeOrderForSelectedTable.items.filter(i => i.completed).length;
-      const totalCount = activeOrderForSelectedTable.items.length;
+      // Split items based on configuration
+      const serviceItems: {item: OrderItem, index: number}[] = [];
+      const kitchenItems: {item: OrderItem, index: number}[] = [];
+
+      activeOrderForSelectedTable.items.forEach((item, index) => {
+          const isKitchen = categoryConfig[item.menuItem.category];
+          if (isKitchen) {
+              kitchenItems.push({ item, index });
+          } else {
+              serviceItems.push({ item, index });
+          }
+      });
+
+      const readyCount = kitchenItems.filter(x => x.item.completed).length;
+      const totalKitchenCount = kitchenItems.length;
+      const isKitchenDone = totalKitchenCount > 0 && readyCount === totalKitchenCount;
+      const isServiceDone = serviceItems.length > 0 && serviceItems.every(x => x.item.completed);
+      
+      // The overall "Last Dish" state logic:
+      // If Kitchen has items, wait for them.
+      // If only Service items exist, wait for them to be checked.
+      // We return 'isAllReady' specifically for the Kitchen flow button.
       
       return {
           readyCount,
-          totalCount,
-          isAllReady: totalCount > 0 && readyCount === totalCount
+          totalCount: totalKitchenCount,
+          isAllReady: isKitchenDone, // This triggers "ULTIMO PIATTO" text for kitchen items
+          serviceItems,
+          kitchenItems
       };
-  }, [activeOrderForSelectedTable]);
+  }, [activeOrderForSelectedTable, categoryConfig]);
 
   return (
     <div className="flex flex-col h-screen bg-slate-900 text-slate-100 max-w-md mx-auto shadow-2xl overflow-hidden relative border-x border-slate-800 font-sans selection:bg-orange-500 selection:text-white">
@@ -1225,10 +1297,56 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                             })}
                         </div>
                         
+                        {/* ACTION & STATUS FOR SELECTED TABLE */}
+                        {table && activeOrderForSelectedTable && (
+                            <div className="flex flex-col gap-2 mt-2 bg-slate-800/50 p-2 rounded-xl border border-slate-700">
+                                {/* SERVICE ITEMS LIST (SALA) */}
+                                {readyInfo.serviceItems.length > 0 && (
+                                    <div className="mb-2">
+                                        <h4 className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                            <Coffee size={12}/> Da Gestire in Sala
+                                        </h4>
+                                        <div className="space-y-1">
+                                            {readyInfo.serviceItems.map((obj, i) => (
+                                                <div key={i} className="flex items-center justify-between bg-slate-800 p-2 rounded-lg border border-slate-700/50">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="font-bold text-white text-xs">{obj.item.quantity}x</span>
+                                                        <span className={`text-xs ${obj.item.completed ? 'line-through text-slate-500' : 'text-slate-300'}`}>{obj.item.menuItem.name}</span>
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => handleToggleServiceItem(activeOrderForSelectedTable.id, obj.index)}
+                                                        className={`p-1 rounded ${obj.item.completed ? 'text-green-500' : 'text-slate-500 hover:text-white'}`}
+                                                    >
+                                                        {obj.item.completed ? <CheckSquare size={18}/> : <Square size={18}/>}
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* KITCHEN ITEMS STATUS (CUCINA) */}
+                                {readyInfo.kitchenItems.length > 0 && (
+                                    <div className="mb-2">
+                                        <h4 className="text-[10px] font-bold text-orange-400 uppercase tracking-widest mb-1 flex items-center gap-1">
+                                            <ChefHat size={12}/> Stato Cucina
+                                        </h4>
+                                        <div className="flex gap-1 overflow-x-auto pb-1 no-scrollbar">
+                                            {readyInfo.kitchenItems.map((obj, i) => (
+                                                <div key={i} className={`flex-shrink-0 px-2 py-1 rounded text-[10px] font-bold border ${obj.item.completed ? 'bg-green-900/30 text-green-400 border-green-800' : 'bg-slate-700 text-slate-400 border-slate-600'}`}>
+                                                    {obj.item.quantity}x {obj.item.menuItem.name}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
                         {/* ACTION BUTTONS FOR SELECTED TABLE */}
                         {table && (
                             <div className="flex gap-2 mt-2">
-                                {/* SERVE / LAST DISH ACTION (NEW) */}
+                                {/* SERVE / LAST DISH ACTION (Only applies to Kitchen items flow) */}
                                 {readyInfo.readyCount > 0 && activeOrderForSelectedTable && (
                                     <button
                                         onClick={() => handleServeItems(activeOrderForSelectedTable.id, readyInfo.isAllReady)}

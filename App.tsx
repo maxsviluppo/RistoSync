@@ -3,8 +3,8 @@ import KitchenDisplay from './components/KitchenDisplay';
 import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send } from 'lucide-react';
-import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey } from './services/storageService';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, ToggleLeft, ToggleRight, LayoutTemplate } from 'lucide-react';
+import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getCategoryConfig, saveCategoryConfig } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { MenuItem, Category } from './types';
 
@@ -56,6 +56,13 @@ const App: React.FC = () => {
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
   const [isEditingItem, setIsEditingItem] = useState(false);
   const [editingItem, setEditingItem] = useState<Partial<MenuItem>>({});
+  const [categoryConfig, setCategoryConfig] = useState<Record<Category, boolean>>({
+      [Category.ANTIPASTI]: true,
+      [Category.PRIMI]: true,
+      [Category.SECONDI]: true,
+      [Category.DOLCI]: true,
+      [Category.BEVANDE]: false
+  });
   
   // Delete Confirmation State
   const [itemToDelete, setItemToDelete] = useState<MenuItem | null>(null);
@@ -177,6 +184,7 @@ const App: React.FC = () => {
       if (showAdmin) {
           setMenuItems(getMenuItems());
           setNotifSettings(getNotificationSettings());
+          setCategoryConfig(getCategoryConfig());
           const key = getGoogleApiKey();
           if (key) setApiKeyInput(key);
       }
@@ -273,6 +281,12 @@ const App: React.FC = () => {
       const newSettings = { ...notifSettings, [key]: !notifSettings[key] };
       setNotifSettings(newSettings);
       saveNotificationSettings(newSettings);
+  };
+
+  const toggleCategoryConfig = (cat: Category) => {
+      const newConfig = { ...categoryConfig, [cat]: !categoryConfig[cat] };
+      setCategoryConfig(newConfig);
+      saveCategoryConfig(newConfig);
   };
 
   const handleSaveApiKey = () => {
@@ -629,6 +643,40 @@ const App: React.FC = () => {
                         {/* MENU TAB */}
                         {adminTab === 'menu' && (
                             <div className="pb-20">
+                                {/* CATEGORY CONFIG SECTION (NEW) */}
+                                <div className="mb-8">
+                                    <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                        <LayoutTemplate size={16}/> Destinazione Comande
+                                    </h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+                                        {Object.values(Category).map(cat => {
+                                            const isKitchen = categoryConfig[cat];
+                                            return (
+                                                <button
+                                                    key={cat}
+                                                    onClick={() => toggleCategoryConfig(cat)}
+                                                    className={`p-4 rounded-xl border flex flex-col items-center gap-2 transition-all relative overflow-hidden
+                                                        ${isKitchen 
+                                                            ? 'bg-slate-800 border-orange-500/50 text-orange-400' 
+                                                            : 'bg-slate-800 border-blue-500/50 text-blue-400'}
+                                                    `}
+                                                >
+                                                    <span className="text-xs font-bold uppercase z-10">{cat}</span>
+                                                    <div className={`flex items-center gap-2 text-sm font-bold z-10 ${isKitchen ? 'text-orange-500' : 'text-blue-500'}`}>
+                                                        {isKitchen ? <ChefHat size={18}/> : <User size={18}/>}
+                                                        {isKitchen ? 'CUCINA' : 'SALA'}
+                                                    </div>
+                                                    {/* Background tint */}
+                                                    <div className={`absolute inset-0 opacity-10 ${isKitchen ? 'bg-orange-500' : 'bg-blue-500'}`}></div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                    <p className="text-xs text-slate-500 mt-2">
+                                        * Le categorie impostate su <strong>SALA</strong> (blu) non appariranno nel monitor di cucina. I camerieri potranno segnare questi piatti come "Serviti" autonomamente.
+                                    </p>
+                                </div>
+
                                 <div className="flex justify-between items-center mb-6 sticky top-0 bg-slate-950 py-4 z-20 border-b border-slate-800">
                                     <div>
                                         <h3 className="text-xl font-bold text-white">Catalogo Piatti</h3>
