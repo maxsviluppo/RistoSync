@@ -111,7 +111,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const [tableManagerOpen, setTableManagerOpen] = useState(false);
   const [existingOrders, setExistingOrders] = useState<Order[]>([]);
   const [allRestaurantOrders, setAllRestaurantOrders] = useState<Order[]>([]);
-  const [notificationToast, setNotificationToast] = useState<string | null>(null);
+  const [notificationToast, setNotificationToast] = useState<{msg: string, type: 'success' | 'blue'} | null>(null);
   const [totalTables, setTotalTables] = useState(12);
   const [isSettingTables, setIsSettingTables] = useState(false);
   const [tempTableCount, setTempTableCount] = useState(12);
@@ -156,7 +156,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       if (newlyReadyCount > 0) {
           playWaiterNotification();
           const msg = newlyReadyCount === 1 ? `1 PIATTO PRONTO DA SERVIRE` : `${newlyReadyCount} PIATTI PRONTI DA SERVIRE`;
-          setNotificationToast(msg);
+          setNotificationToast({msg, type: 'success'});
           setTimeout(() => setNotificationToast(null), 8000);
       }
       prevItemReadyStateRef.current = currentItemReadyState;
@@ -239,6 +239,8 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
     if (activeOrder) {
         // This will update items AND force status back to PENDING (see storageService)
         updateOrderItems(activeOrder.id, cart);
+        setNotificationToast({msg: 'AGGIUNTA INVIATA CON SUCCESSO', type: 'blue'});
+        setTimeout(() => setNotificationToast(null), 3000);
     } else {
         addOrder({ id: Date.now().toString(), tableNumber: table, items: cart, status: OrderStatus.PENDING, timestamp: Date.now(), waiterName: waiterName || 'Cameriere' });
     }
@@ -251,8 +253,9 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const handleServeItem = (orderId: string, itemIndex: number) => {
       serveItem(orderId, itemIndex);
       // AUTO-DESELECT TABLE AFTER SERVING
-      setTable('');
-      setTableManagerOpen(false);
+      // setTable('');
+      // setTableManagerOpen(false);
+      // Keep open to allow seeing status change
   };
 
   const proceedToOrder = () => {
@@ -339,7 +342,12 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   return (
     <div className="flex flex-col h-screen bg-slate-900 text-slate-100 max-w-md mx-auto shadow-2xl overflow-hidden relative border-x border-slate-800 font-sans selection:bg-orange-500 selection:text-white">
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden flex items-center justify-center"><ChefHat size={400} className="text-white opacity-[0.03] transform -rotate-12 translate-x-20 translate-y-10" /></div>
-      {notificationToast && <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[60] bg-green-500 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-slide-down border-2 border-green-300 w-[90%] justify-center"><Bell className="animate-swing shrink-0" size={20} /><span className="font-bold text-sm truncate">{notificationToast}</span></div>}
+      {notificationToast && (
+          <div className={`absolute top-20 left-1/2 -translate-x-1/2 z-[60] text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-slide-down border-2 w-[90%] justify-center ${notificationToast.type === 'blue' ? 'bg-blue-600 border-blue-400' : 'bg-green-500 border-green-300'}`}>
+              <Bell className="animate-swing shrink-0" size={20} />
+              <span className="font-bold text-sm truncate">{notificationToast.msg}</span>
+          </div>
+      )}
       <style>{`@keyframes swipe-card { 0%, 100% { transform: translateX(0); } 20%, 30% { transform: translateX(50px); } 50% { transform: translateX(0); } 70%, 80% { transform: translateX(-50px); } } @keyframes swipe-bg { 0%, 100% { background-color: rgb(51, 65, 85); } 20%, 30% { background-color: rgb(249, 115, 22); } 50% { background-color: rgb(51, 65, 85); } 70%, 80% { background-color: rgb(220, 38, 38); } } @keyframes fade-edit { 0%, 50%, 100% { opacity: 0; transform: scale(0.9); } 20%, 30% { opacity: 1; transform: scale(1); } } @keyframes fade-delete { 0%, 50%, 100% { opacity: 0; transform: scale(0.9); } 70%, 80% { opacity: 1; transform: scale(1); } } @keyframes success-pop { 0% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); } 50% { transform: scale(1.03); box-shadow: 0 0 20px rgba(34, 197, 94, 0.4); border-color: rgba(34, 197, 94, 0.8); background-color: rgba(34, 197, 94, 0.1); } 100% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); } } @keyframes neon-pulse { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); border-color: rgba(34, 197, 94, 0.8); transform: scale(1); } 50% { box-shadow: 0 0 40px 15px rgba(34, 197, 94, 0.9), inset 0 0 20px rgba(34, 197, 94, 0.5); border-color: #ffffff; transform: scale(1.05); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); border-color: rgba(34, 197, 94, 0.8); transform: scale(1); } } .animate-neon-pulse { animation: neon-pulse 1s infinite cubic-bezier(0.4, 0, 0.6, 1); } .animate-card-swipe { animation: swipe-card 2.5s ease-in-out; } .animate-bg-color { animation: swipe-bg 2.5s ease-in-out; } .animate-fade-edit { animation: fade-edit 2.5s ease-in-out; } .animate-fade-delete { animation: fade-delete 2.5s ease-in-out; } .animate-success-pop { animation: success-pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275); }`}</style>
 
       {/* --- HEADER --- */}
@@ -505,15 +513,18 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                                 {existingOrders[0].items.map((item, idx) => {
                                                     const isReady = item.completed && !item.served;
                                                     const isServed = item.served;
-                                                    if(isServed) return null; // Don't show served items here to keep list clean? Or show dimmed? Let's hide served to focus on action.
-
+                                                    
                                                     return (
-                                                        <div key={idx} className="flex justify-between items-center bg-slate-900 p-2 rounded-xl border border-slate-700">
+                                                        <div key={idx} className={`flex justify-between items-center p-2 rounded-xl border border-slate-700 ${isServed ? 'bg-slate-900/50 opacity-60' : 'bg-slate-900'}`}>
                                                             <div className="flex flex-col">
-                                                                <span className="text-sm font-bold text-white">{item.quantity}x {item.menuItem.name}</span>
-                                                                <span className={`text-[9px] uppercase font-bold ${isReady ? 'text-green-400' : 'text-slate-500'}`}>{isReady ? 'PRONTO' : 'IN PREPARAZIONE'}</span>
+                                                                <span className={`text-sm font-bold ${isServed ? 'text-slate-500 line-through' : 'text-white'}`}>{item.quantity}x {item.menuItem.name}</span>
+                                                                <span className={`text-[9px] uppercase font-bold ${isServed ? 'text-slate-600' : isReady ? 'text-green-400' : 'text-slate-500'}`}>
+                                                                    {isServed ? 'SERVITO' : isReady ? 'PRONTO' : 'IN PREPARAZIONE'}
+                                                                </span>
                                                             </div>
-                                                            {isReady ? (
+                                                            {isServed ? (
+                                                                <div className="w-8 h-8 flex items-center justify-center text-green-600/50"><CheckCircle size={16}/></div>
+                                                            ) : isReady ? (
                                                                 <button onClick={() => handleServeItem(existingOrders[0].id, idx)} className="bg-green-600 hover:bg-green-500 text-white text-[10px] font-bold uppercase px-3 py-2 rounded-lg shadow-lg shadow-green-600/20 flex items-center gap-1 animate-pulse"><CheckCircle size={12}/> SERVIRE</button>
                                                             ) : (
                                                                 <div className="w-8 h-8 flex items-center justify-center text-slate-600"><Clock size={16}/></div>
