@@ -302,11 +302,14 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
              // In HISTORY mode, we want to see orders even if they were just "Sala" items (drinks) if they are completed.
              if (viewMode === 'active' && visibleItems.length === 0) return null;
 
+             // CLEAN TABLE NUMBER FOR HISTORY (Remove _HISTORY suffix)
+             const displayTableNumber = order.tableNumber.replace('_HISTORY', '');
+
             return (
               <div key={order.id} className={`flex flex-col rounded-xl shadow-2xl border-t-8 ${borderColor} bg-slate-800/95 bg-gradient-to-br from-slate-800 to-slate-900 text-slate-200 overflow-hidden relative ${viewMode === 'active' ? 'hover:-translate-y-1 transition-transform' : 'opacity-75'}`}>
                 <div className={`p-4 border-b border-slate-700/50 flex justify-between items-start bg-slate-800/50`}>
                   <div>
-                      <h2 className="text-3xl font-black bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent">Tav. {order.tableNumber}</h2>
+                      <h2 className="text-3xl font-black bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent">Tav. {displayTableNumber}</h2>
                       <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold uppercase mt-1 ${getStatusColor(order.status)}`}>{order.status}</span>
                   </div>
                   <div className="flex flex-col items-end gap-1.5">

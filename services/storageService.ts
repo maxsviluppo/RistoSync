@@ -341,16 +341,30 @@ export const clearHistory = async () => {
 
 export const freeTable = async (tableNumber: string) => {
     const orders = getOrders();
-    // Identify orders to remove (archiving)
-    const ordersToRemove = orders.filter(o => o.tableNumber === tableNumber);
-    const newOrders = orders.filter(o => o.tableNumber !== tableNumber);
+    // Instead of deleting, we ARCHIVE them by:
+    // 1. Ensuring status is DELIVERED (so they appear in history)
+    // 2. Renaming the table number locally to something unique so WaiterPad sees table as free
+    
+    const tableOrders = orders.filter(o => o.tableNumber === tableNumber);
+    const otherOrders = orders.filter(o => o.tableNumber !== tableNumber);
+    
+    const archivedOrders = tableOrders.map(o => ({
+        ...o,
+        status: OrderStatus.DELIVERED,
+        // Append suffix to hide from Active Table view in WaiterPad (which searches strict equality)
+        // But Kitchen History can still parse it
+        tableNumber: `${o.tableNumber}_HISTORY`,
+        timestamp: Date.now() // Update exit time
+    }));
+
+    const newOrders = [...otherOrders, ...archivedOrders];
     
     saveLocallyAndNotify(newOrders);
 
     if (supabase && currentUserId) {
-        // Delete from cloud
-        for (const o of ordersToRemove) {
-            await supabase.from('orders').delete().eq('id', o.id);
+        // Update in cloud instead of deleting
+        for (const o of archivedOrders) {
+            await syncOrderToCloud(o);
         }
     }
 };
