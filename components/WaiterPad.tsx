@@ -265,7 +265,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
         // This will update items AND force status back to PENDING (see storageService)
         updateOrderItems(activeOrder.id, cart);
     } else {
-        addOrder({ id: Date.now().toString(), tableNumber: table, items: cart, status: OrderStatus.PENDING, timestamp: Date.now(), waiterName: waiterName || 'Cameriere' });
+        addOrder({ id: Date.now().toString(), tableNumber: table, items: cart, status: OrderStatus.PENDING, timestamp: Date.now(), waiterName: waiterName || 'Cameriere', createdAt: Date.now() });
     }
     
     setTimeout(() => { setCart([]); setIsSending(false); setSheetHeight(80); setEditingOrderId(null); loadData(); setTable(''); }, 500);
@@ -608,7 +608,10 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
                                 <div className="flex gap-2">
                                     <button onClick={proceedToOrder} className="flex-[2] py-4 rounded-2xl font-black text-base tracking-wide text-white shadow-xl bg-gradient-to-br from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 transition-transform flex flex-col items-center justify-center gap-1 hover:scale-[1.02] shadow-blue-900/30"><Utensils size={24}/><span>AGGIUNGI ORDINE</span></button>
-                                    <button onClick={requestFreeTable} className="flex-1 bg-orange-500 border-2 border-orange-400 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-[0_0_20px_rgba(249,115,22,0.4)] hover:bg-orange-600 transition-all flex flex-col items-center justify-center gap-2 hover:scale-[1.02]"><DoorOpen size={24} />LIBERA</button>
+                                    <button onClick={requestFreeTable} className="flex-1 bg-orange-500 border-2 border-orange-400 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-[0_0_20px_rgba(249,115,22,0.4)] hover:bg-orange-600 transition-all flex flex-col items-center justify-center gap-2 hover:scale-[1.02]">
+                                        <DoorOpen size={20} className="mb-1" />
+                                        <span className="text-[10px] leading-tight">Sì, Libera</span>
+                                    </button>
                                 </div>
                             </div>
                         )}

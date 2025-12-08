@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Order, OrderStatus, Category, AppSettings } from '../types';
 import { getOrders, updateOrderStatus, clearHistory, toggleOrderItemCompletion, getAppSettings } from '../services/storageService';
-import { Clock, CheckCircle, ChefHat, Trash2, History, UtensilsCrossed, Bell, User, LogOut, Square, CheckSquare, Coffee, AlertOctagon, Timer, PlusCircle } from 'lucide-react';
+import { Clock, CheckCircle, ChefHat, Trash2, History, UtensilsCrossed, Bell, User, LogOut, Square, CheckSquare, Coffee, AlertOctagon, Timer, PlusCircle, ArrowRight } from 'lucide-react';
 
 const CATEGORY_PRIORITY: Record<Category, number> = {
     [Category.ANTIPASTI]: 1,
@@ -147,6 +147,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
 
   const loadOrders = () => {
     const allOrders = getOrders();
+    // Sort by Last Updated (Timestamp) to bubble active ones
     const sorted = allOrders.sort((a, b) => a.timestamp - b.timestamp);
 
     if (!isFirstLoad.current) {
@@ -222,7 +223,12 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
     }
   };
 
-  const displayedOrders = orders.filter(o => viewMode === 'active' ? true : o.status === OrderStatus.DELIVERED);
+  // CORRECT FILTER LOGIC
+  const displayedOrders = orders.filter(o => 
+      viewMode === 'active' 
+          ? o.status !== OrderStatus.DELIVERED // Active: Hide delivered
+          : o.status === OrderStatus.DELIVERED // History: Show delivered only
+  );
 
   return (
     <div className="min-h-screen bg-slate-900 text-white p-6 font-sans flex flex-col relative overflow-hidden">
@@ -279,16 +285,22 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
              let borderColor = getStatusColor(order.status).replace('text', 'border').replace('bg-','border-');
              if (isCritical) borderColor = 'border-red-600 animate-pulse shadow-[0_0_20px_rgba(220,38,38,0.4)]';
 
-             // FILTER: Remove items destined for Sala
-             const kitchenItemsWithIndex = order.items
+             // FILTER: Determine visible items based on View Mode
+             const visibleItems = order.items
                 .map((item, originalIndex) => ({ item, originalIndex }))
                 .filter(({ item }) => {
+                    // In History Mode, show ALL items to give full context
+                    if (viewMode === 'history') return true;
+                    
+                    // In Active Mode, show only items destined for Kitchen
                     const dest = appSettings.categoryDestinations[item.menuItem.category];
                     return dest !== 'Sala'; 
                 })
                 .sort((a, b) => (CATEGORY_PRIORITY[a.item.menuItem.category] || 99) - (CATEGORY_PRIORITY[b.item.menuItem.category] || 99));
 
-             if (kitchenItemsWithIndex.length === 0) return null;
+             // Only hide the order if we are in ACTIVE mode and there are no kitchen items.
+             // In HISTORY mode, we want to see orders even if they were just "Sala" items (drinks) if they are completed.
+             if (viewMode === 'active' && visibleItems.length === 0) return null;
 
             return (
               <div key={order.id} className={`flex flex-col rounded-xl shadow-2xl border-t-8 ${borderColor} bg-slate-800/95 bg-gradient-to-br from-slate-800 to-slate-900 text-slate-200 overflow-hidden relative ${viewMode === 'active' ? 'hover:-translate-y-1 transition-transform' : 'opacity-75'}`}>
@@ -297,8 +309,20 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
                       <h2 className="text-3xl font-black bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent">Tav. {order.tableNumber}</h2>
                       <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold uppercase mt-1 ${getStatusColor(order.status)}`}>{order.status}</span>
                   </div>
-                  <div className="flex flex-col items-end gap-2">
-                    {/* NEW TIMER COMPONENT */}
+                  <div className="flex flex-col items-end gap-1.5">
+                    {/* TIMESTAMPS */}
+                    <div className="flex flex-col items-end gap-1 mb-1">
+                        <span className="text-[10px] text-slate-400 font-mono bg-slate-800/80 px-1.5 py-0.5 rounded flex items-center gap-1 border border-slate-700">
+                            Entrata: <span className="text-white font-bold">{formatTime(order.createdAt || order.timestamp)}</span>
+                        </span>
+                        {order.status === OrderStatus.DELIVERED && (
+                            <span className="text-[10px] text-slate-400 font-mono bg-slate-800/80 px-1.5 py-0.5 rounded flex items-center gap-1 border border-slate-700">
+                                Uscita: <span className="text-green-400 font-bold">{formatTime(order.timestamp)}</span>
+                            </span>
+                        )}
+                    </div>
+
+                    {/* TIMER & WAITER */}
                     {viewMode === 'active' && (
                         <OrderTimer 
                             timestamp={order.timestamp} 
@@ -312,7 +336,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
 
                 <div className="p-4 flex-1 overflow-y-auto max-h-[300px] bg-slate-900/30">
                   <ul className="space-y-4">
-                    {kitchenItemsWithIndex.map(({ item, originalIndex }) => (
+                    {visibleItems.map(({ item, originalIndex }) => (
                       <li key={`${order.id}-${originalIndex}`} onClick={() => viewMode === 'active' && order.status !== OrderStatus.DELIVERED && handleToggleItem(order.id, originalIndex)} className={`flex justify-between items-start border-b border-dashed border-slate-700 pb-3 last:border-0 rounded-lg p-2 transition-colors ${item.completed ? 'bg-green-900/10 opacity-50' : 'hover:bg-slate-800/50 cursor-pointer'}`}>
                         <div className="w-full">
                             {item.isAddedLater && order.status !== OrderStatus.DELIVERED && <div className="flex items-center gap-1 mb-1 bg-blue-600 w-max px-2 py-0.5 rounded-md shadow-sm border border-blue-400"><PlusCircle size={10} className="text-white animate-pulse" /><span className="text-[10px] font-black text-white uppercase tracking-wide">AGGIUNTA</span></div>}
@@ -320,7 +344,12 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
                                 <div className={`pt-1 ${item.completed ? 'text-green-500' : 'text-slate-600'}`}>{item.completed ? <CheckSquare size={28} /> : <Square size={28} />}</div>
                                 <span className={`font-black text-2xl w-10 h-10 flex items-center justify-center rounded-lg shadow-inner ${item.completed ? 'bg-green-900/30 text-green-400' : 'bg-slate-700 text-white'}`}>{item.quantity}</span>
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-0.5">{item.menuItem.category}</p>
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-0.5">{item.menuItem.category}</p>
+                                        {appSettings.categoryDestinations[item.menuItem.category] === 'Sala' && viewMode === 'history' && (
+                                            <span className="text-[9px] bg-blue-900/50 text-blue-300 px-1.5 py-0.5 rounded border border-blue-500/30">SALA</span>
+                                        )}
+                                    </div>
                                     <p className={`font-black text-3xl leading-none tracking-tight break-words ${item.completed ? 'text-slate-600 line-through' : 'bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent'}`}>{item.menuItem.name}</p>
                                     {item.notes && <p className="text-red-300 text-sm font-bold mt-2 bg-red-900/20 inline-block px-3 py-1 rounded border border-red-900/30 shadow-sm">⚠️ {item.notes}</p>}
                                 </div>

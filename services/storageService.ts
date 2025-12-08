@@ -94,6 +94,7 @@ const fetchFromCloud = async () => {
         tableNumber: row.table_number,
         status: row.status as OrderStatus,
         timestamp: parseInt(row.timestamp) || new Date(row.created_at).getTime(),
+        createdAt: new Date(row.created_at).getTime(), // Map DB created_at to App createdAt
         items: row.items,
         waiterName: row.waiter_name
     }));
@@ -148,6 +149,8 @@ const syncOrderToCloud = async (order: Order, isDelete = false) => {
             items: order.items,
             timestamp: order.timestamp,
             waiter_name: order.waiterName
+            // Note: we don't sync createdAt manually as column is auto-generated, 
+            // but for updates it's fine.
         };
         const { error } = await supabase.from('orders').upsert(payload);
         if (error) console.error("Cloud Sync Error", error);
@@ -161,9 +164,12 @@ export const saveOrders = (orders: Order[]) => {
 export const addOrder = (order: Order) => {
   const orders = getOrders();
   const settings = getAppSettings(); // Get settings
+  const now = Date.now();
 
-  const cleanOrder = {
+  const cleanOrder: Order = {
       ...order,
+      timestamp: now,
+      createdAt: now, // Explicitly set creation time
       items: order.items.map(i => {
           // AUTO-COMPLETE logic for Sala items
           const isSala = settings.categoryDestinations[i.menuItem.category] === 'Sala';
@@ -306,14 +312,14 @@ export const serveItem = (orderId: string, itemIndex: number) => {
         newStatus = OrderStatus.DELIVERED;
     }
 
-    // UPDATE TIMESTAMP TO RESET TIMERS
+    // UPDATE TIMESTAMP TO RESET TIMERS AND MARK COMPLETION TIME
     // This effectively resets the kitchen timer and the waiter delay counter
     // for the remaining items/next course.
     const updatedOrder = { 
         ...order, 
         items: newItems, 
         status: newStatus,
-        timestamp: Date.now() 
+        timestamp: Date.now() // This acts as "Completed At" when status becomes Delivered
     };
     
     const newOrders = orders.map(o => o.id === orderId ? updatedOrder : o);

@@ -42,6 +42,7 @@ export interface Order {
   tableNumber: string;
   items: OrderItem[];
   status: OrderStatus;
-  timestamp: number;
+  timestamp: number; // Last updated timestamp (acts as exit time when Delivered)
+  createdAt: number; // New: Creation timestamp (entry time)
   waiterName?: string;
 }
