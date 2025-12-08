@@ -199,38 +199,21 @@ export const updateOrderItems = (orderId: string, newItems: OrderItem[]) => {
     const settings = getAppSettings(); // Get settings
     if (!order) return;
 
-    // Smart Merge Logic to Detect "Added" Items vs Existing
-    const processedItems = newItems.map(newItem => {
-        // Try to find matching old item (Same ID and Same Notes)
-        const existing = order.items.find(old => 
-            old.menuItem.id === newItem.menuItem.id && 
-            old.notes === newItem.notes
-        );
-
-        if (existing) {
-            // If exists, determine if quantity increased
-            const isQuantityIncreased = newItem.quantity > existing.quantity;
-            
-            return {
-                ...newItem,
-                // If quantity increased, reset completion status for kitchen to notice
-                completed: isQuantityIncreased ? false : existing.completed,
-                served: isQuantityIncreased ? false : existing.served,
-                // Mark as added later if it was already marked OR if quantity bumped
-                isAddedLater: existing.isAddedLater || isQuantityIncreased
-            };
-        } else {
-            // Completely new item
-            // AUTO-COMPLETE logic for Sala items
-            const isSala = settings.categoryDestinations[newItem.menuItem.category] === 'Sala';
-            return { 
-                ...newItem, 
-                completed: isSala, // Auto-ready if for Sala
-                served: false, 
-                isAddedLater: true 
-            };
-        }
+    // 1. Prepare NEW items (from current modification)
+    const processedNewItems = newItems.map(newItem => {
+        // AUTO-COMPLETE logic for Sala items
+        const isSala = settings.categoryDestinations[newItem.menuItem.category] === 'Sala';
+        return {
+            ...newItem,
+            completed: isSala, // Auto-ready if for Sala
+            served: false,
+            isAddedLater: true // Mark as added later
+        };
     });
+
+    // 2. APPEND new items to EXISTING items (Do not replace!)
+    // This fixes the issue where previous items disappeared.
+    const combinedItems = [...order.items, ...processedNewItems];
 
     // RE-ACTIVATE ORDER if it was DELIVERED/SERVED
     // This ensures the kitchen sees the new items (desserts, seconds, etc.)
@@ -242,7 +225,7 @@ export const updateOrderItems = (orderId: string, newItems: OrderItem[]) => {
     // Update Order
     const updatedOrder = { 
         ...order, 
-        items: processedItems, 
+        items: combinedItems, 
         timestamp: Date.now(), // Bump timestamp to bring to top
         status: newStatus 
     };
