@@ -312,7 +312,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       // 1. PRIORITY: Ready to Serve -> GREEN
       if (readyToServeCount > 0) return { status: 'ready', count: readyToServeCount, owner: activeOrder.waiterName };
       
-      // 2. PRIORITY: All Served (Eating) -> NEON ORANGE
+      // 2. PRIORITY: All Served (Eating) -> NEON ORANGE -> NOW "COMPLETO" (BLUE)
       // (Also applies if status is DELIVERED, but checking items is safer)
       if (totalItems > 0 && totalItems === totalServed) {
           return { status: 'eating', count: 0, owner: activeOrder.waiterName };
@@ -506,11 +506,11 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                         bgClass = 'bg-green-600/20 border-green-500 text-green-400 animate-pulse';
                                         statusText = 'SERVIMI';
                                         break;
-                                    case 'eating': // NEON ORANGE - All served, eating
-                                        bgClass = 'bg-orange-600 border-orange-400 text-white shadow-[0_0_20px_rgba(249,115,22,0.8)]';
-                                        statusText = 'IN ATTESA';
+                                    case 'eating': // BLUE - All served, COMPLETED
+                                        bgClass = 'bg-blue-600 border-blue-400 text-white shadow-[0_0_20px_rgba(37,99,235,0.6)]';
+                                        statusText = 'COMPLETO';
                                         break;
-                                    case 'occupied': // ORANGE - Cooking/Waiting
+                                    case 'occupied': // ORANGE - Cooking/Waiting/New Items
                                         bgClass = 'bg-orange-900/40 border-orange-500 text-orange-100 shadow-[0_0_15px_rgba(249,115,22,0.5)]';
                                         statusText = 'IN ATTESA';
                                         break;
