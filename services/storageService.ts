@@ -196,36 +196,55 @@ export const updateOrderStatus = (orderId: string, status: OrderStatus) => {
 export const updateOrderItems = (orderId: string, newItems: OrderItem[]) => {
     const orders = getOrders();
     const order = orders.find(o => o.id === orderId);
-    const settings = getAppSettings(); // Get settings
+    const settings = getAppSettings();
     if (!order) return;
 
-    // 1. Prepare NEW items (from current modification)
-    const processedNewItems = newItems.map(newItem => {
-        // AUTO-COMPLETE logic for Sala items
-        const isSala = settings.categoryDestinations[newItem.menuItem.category] === 'Sala';
-        return {
-            ...newItem,
-            completed: isSala, // Auto-ready if for Sala
-            served: false,
-            isAddedLater: true // Mark as added later
-        };
+    // CRITICAL FIX: MERGE LOGIC instead of Replace
+    // We start with the existing items
+    const mergedItems = [...order.items];
+
+    newItems.forEach(newItem => {
+        // Check if this item (same ID and same Notes) already exists in the order
+        const existingIndex = mergedItems.findIndex(old => 
+            old.menuItem.id === newItem.menuItem.id && 
+            (old.notes || '') === (newItem.notes || '')
+        );
+
+        if (existingIndex >= 0) {
+            // UPDATE EXISTING: Add Quantity
+            const existing = mergedItems[existingIndex];
+            const isQuantityIncreased = newItem.quantity > 0; // In this context (adding), it's always > 0
+            
+            mergedItems[existingIndex] = {
+                ...existing,
+                quantity: existing.quantity + newItem.quantity,
+                // If we add quantity, we reset completion so kitchen sees it again
+                completed: false, 
+                served: false,
+                isAddedLater: true
+            };
+        } else {
+            // ADD NEW ITEM: Append to list
+            const isSala = settings.categoryDestinations[newItem.menuItem.category] === 'Sala';
+            mergedItems.push({
+                ...newItem,
+                completed: isSala,
+                served: false,
+                isAddedLater: true
+            });
+        }
     });
 
-    // 2. APPEND new items to EXISTING items (Do not replace!)
-    // This fixes the issue where previous items disappeared.
-    const combinedItems = [...order.items, ...processedNewItems];
-
-    // RE-ACTIVATE ORDER if it was DELIVERED/SERVED
-    // This ensures the kitchen sees the new items (desserts, seconds, etc.)
+    // RE-ACTIVATE ORDER if it was DELIVERED/SERVED or READY
     let newStatus = order.status;
     if (order.status === OrderStatus.DELIVERED || order.status === OrderStatus.READY) {
         newStatus = OrderStatus.PENDING; 
     }
 
-    // Update Order
+    // Update Order with MERGED items
     const updatedOrder = { 
         ...order, 
-        items: combinedItems, 
+        items: mergedItems, 
         timestamp: Date.now(), // Bump timestamp to bring to top
         status: newStatus 
     };
@@ -287,7 +306,16 @@ export const serveItem = (orderId: string, itemIndex: number) => {
         newStatus = OrderStatus.DELIVERED;
     }
 
-    const updatedOrder = { ...order, items: newItems, status: newStatus };
+    // UPDATE TIMESTAMP TO RESET TIMERS
+    // This effectively resets the kitchen timer and the waiter delay counter
+    // for the remaining items/next course.
+    const updatedOrder = { 
+        ...order, 
+        items: newItems, 
+        status: newStatus,
+        timestamp: Date.now() 
+    };
+    
     const newOrders = orders.map(o => o.id === orderId ? updatedOrder : o);
     
     saveLocallyAndNotify(newOrders);

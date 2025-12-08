@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Category, MenuItem, Order, OrderItem, OrderStatus, AppSettings } from '../types';
 import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, getWaiterName, logoutWaiter, getMenuItems, freeTable, updateOrderStatus, getAppSettings, serveItem } from '../services/storageService';
 import { askChefAI } from '../services/geminiService';
-import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen, Bell, ArrowRight, Lock, PlusCircle, Coffee, CheckCircle, Mic, MicOff } from 'lucide-react';
+import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen, Bell, ArrowRight, Lock, PlusCircle, Coffee, CheckCircle, Mic, MicOff, AlertOctagon, Flag } from 'lucide-react';
 
 const CATEGORY_ORDER = [Category.ANTIPASTI, Category.PRIMI, Category.SECONDI, Category.DOLCI, Category.BEVANDE];
 
@@ -31,9 +31,10 @@ interface SwipeableItemProps {
     onDelete: () => void;
     isFirst: boolean;
     appSettings: AppSettings;
+    isAddition: boolean;
 }
 
-const SwipeableCartItem: React.FC<SwipeableItemProps> = ({ item, index, onEdit, onDelete, isFirst, appSettings }) => {
+const SwipeableCartItem: React.FC<SwipeableItemProps> = ({ item, index, onEdit, onDelete, isFirst, appSettings, isAddition }) => {
     const [offsetX, setOffsetX] = useState(0);
     const [isDragging, setIsDragging] = useState(false);
     const startX = useRef<number>(0);
@@ -68,7 +69,10 @@ const SwipeableCartItem: React.FC<SwipeableItemProps> = ({ item, index, onEdit, 
                     <div className="flex gap-3 items-center w-full">
                         <span className="bg-slate-700 text-slate-200 font-bold w-8 h-8 flex items-center justify-center rounded-lg text-sm shadow-inner shrink-0">{item.quantity}</span>
                         <div className="flex-1 min-w-0">
-                            <span className="font-bold text-white text-base block leading-tight truncate">{item.menuItem.name}</span>
+                            <div className="flex items-center gap-2">
+                                <span className="font-bold text-white text-base block leading-tight truncate">{item.menuItem.name}</span>
+                                {isAddition && <span className="text-[9px] bg-blue-600 text-white px-1.5 py-0.5 rounded font-bold uppercase flex items-center gap-1 shadow-sm border border-blue-400/50"><PlusCircle size={8}/> INTEGRAZIONE</span>}
+                            </div>
                             {item.notes && <p className="text-[10px] text-slate-400 mt-1 italic pl-2 border-l-2 border-slate-600 truncate">{item.notes}</p>}
                         </div>
                         {isSala && <div className="px-2 py-1 bg-blue-900/50 text-blue-300 rounded text-[9px] font-bold uppercase border border-blue-500/30 flex items-center gap-1"><Coffee size={10}/> SALA</div>}
@@ -111,12 +115,14 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const [tableManagerOpen, setTableManagerOpen] = useState(false);
   const [existingOrders, setExistingOrders] = useState<Order[]>([]);
   const [allRestaurantOrders, setAllRestaurantOrders] = useState<Order[]>([]);
-  const [notificationToast, setNotificationToast] = useState<{msg: string, type: 'success' | 'blue'} | null>(null);
+  const [notificationToast, setNotificationToast] = useState<string | null>(null);
   const [totalTables, setTotalTables] = useState(12);
   const [isSettingTables, setIsSettingTables] = useState(false);
   const [tempTableCount, setTempTableCount] = useState(12);
   const [appSettings, setAppSettingsState] = useState<AppSettings>(getAppSettings());
   const [isListening, setIsListening] = useState(false);
+  const [lateTables, setLateTables] = useState<string[]>([]);
+  const [latesAcknowledged, setLatesAcknowledged] = useState(false);
 
   const prevItemReadyStateRef = useRef<Record<string, boolean>>({});
   const isFirstLoad = useRef(true);
@@ -132,10 +138,18 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       // NOTIFICATION LOGIC: Check for items that are READY (completed) but NOT SERVED
       let newlyReadyCount = 0;
       const currentItemReadyState: Record<string, boolean> = {};
+      const currentLateTables: string[] = [];
 
       allOrders.forEach(order => {
           if (order.status === OrderStatus.DELIVERED) return; 
-          // Only notify if waiter matches or if no waiter assigned
+
+          // 1. CHECK DELAY
+          const delayMinutes = (Date.now() - order.timestamp) / 60000;
+          if (delayMinutes >= 25 && order.status !== OrderStatus.READY) {
+              currentLateTables.push(order.tableNumber);
+          }
+
+          // 2. CHECK READY ITEMS
           if (name && order.waiterName && order.waiterName !== name) return;
 
           order.items.forEach((item, idx) => {
@@ -153,10 +167,14 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
           });
       });
       
+      // Update Late Tables State
+      setLateTables(currentLateTables);
+      
+      // Notification Toast
       if (newlyReadyCount > 0) {
           playWaiterNotification();
           const msg = newlyReadyCount === 1 ? `1 PIATTO PRONTO DA SERVIRE` : `${newlyReadyCount} PIATTI PRONTI DA SERVIRE`;
-          setNotificationToast({msg, type: 'success'});
+          setNotificationToast(msg);
           setTimeout(() => setNotificationToast(null), 8000);
       }
       prevItemReadyStateRef.current = currentItemReadyState;
@@ -188,7 +206,12 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       window.removeEventListener('local-settings-update', handleSettingsUpdate);
       window.removeEventListener('local-menu-update', handleLocalUpdate);
     };
-  }, [table]); 
+  }, [table]);
+
+  // Reset acknowledgment if late tables clear up
+  useEffect(() => {
+     if (lateTables.length === 0) setLatesAcknowledged(false);
+  }, [lateTables]);
 
   // Check if ANY table has items ready to serve (completed=true, served=false)
   const hasUnseenNotifications = useMemo(() => {
@@ -210,17 +233,10 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       setTable(tId);
       // We don't filter by status here, we want the active context even if everything is served
       const activeOrder = allRestaurantOrders.find(o => o.tableNumber === tId);
-      setCart([]); setEditingOrderId(null);
+      setCart([]); setEditingOrderId(activeOrder ? activeOrder.id : null); // Set ID directly here for logic
       setTableManagerOpen(true);
-  };
-
-  // Close map and RESET selection if not confirmed (The "X" button logic)
-  const handleCloseTableManager = () => {
-      setTableManagerOpen(false);
-      setIsSettingTables(false);
-      setTable(''); // Reset selection
-      setCart([]); // Clear any unconfirmed cart items
-      setEditingOrderId(null);
+      // Ensure we set acknowledged when interacting
+      setLatesAcknowledged(true);
   };
 
   const startEditing = (item: MenuItem) => { setEditingItemId(item.id); setEditQty(1); setEditNotes(''); };
@@ -248,8 +264,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
     if (activeOrder) {
         // This will update items AND force status back to PENDING (see storageService)
         updateOrderItems(activeOrder.id, cart);
-        setNotificationToast({msg: 'AGGIUNTA INVIATA CON SUCCESSO', type: 'blue'});
-        setTimeout(() => setNotificationToast(null), 3000);
     } else {
         addOrder({ id: Date.now().toString(), tableNumber: table, items: cart, status: OrderStatus.PENDING, timestamp: Date.now(), waiterName: waiterName || 'Cameriere' });
     }
@@ -261,14 +275,10 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   
   const handleServeItem = (orderId: string, itemIndex: number) => {
       serveItem(orderId, itemIndex);
-      // AUTO-DESELECT TABLE AFTER SERVING
-      // setTable('');
-      // setTableManagerOpen(false);
-      // Keep open to allow seeing status change
+      // DO NOT CLOSE MODAL. Keep waiter in flow.
   };
 
   const proceedToOrder = () => {
-    // Just close modal, KEEP table selected
     setTableManagerOpen(false);
   };
 
@@ -281,6 +291,14 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const handleLogout = () => { logoutWaiter(); onExit(); };
   const handleAskAI = async () => { if (!aiQuery.trim()) return; setAiLoading(true); const response = await askChefAI(aiQuery, aiItem); setAiResponse(response); setAiLoading(false); };
   const openAiFor = (item: MenuItem | null) => { setAiItem(item); setAiQuery(''); setAiResponse(''); setAiModalOpen(true); };
+  
+  const handleOpenTableManager = () => {
+      setTableManagerOpen(!tableManagerOpen);
+      if (!tableManagerOpen) {
+          // Taking vision of delays
+          setLatesAcknowledged(true);
+      }
+  };
 
   const getCategoryIcon = (cat: Category, size: number = 18) => {
     switch (cat) { case Category.ANTIPASTI: return <Pizza size={size} />; case Category.PRIMI: return <ChefHat size={size} />; case Category.SECONDI: return <Utensils size={size} />; case Category.DOLCI: return <CakeSlice size={size} />; case Category.BEVANDE: return <Wine size={size} />; default: return <Utensils size={size} />; }
@@ -291,12 +309,14 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       // INCLUDE DELIVERED ORDERS TO SHOW "EATING" STATUS
       const activeOrders = allRestaurantOrders.filter(o => o.tableNumber === tableNum);
       
-      if (activeOrders.length === 0) return { status: 'free', count: 0, owner: null };
+      // CRITICAL FIX: Only return 'free' if NO orders exist. 
+      if (activeOrders.length === 0) return { status: 'free', count: 0, owner: null, delay: 0 };
       
       const activeOrder = activeOrders[0];
-      const orderDelayMinutes = (Date.now() - activeOrder.timestamp) / 60000;
+      const orderDelayMinutes = Math.floor((Date.now() - activeOrder.timestamp) / 60000);
+      
       // Late logic applies if NOT everything is finished/served
-      const isLate = orderDelayMinutes > 25;
+      const isLate = orderDelayMinutes > 25 && activeOrder.status !== OrderStatus.READY && activeOrder.status !== OrderStatus.DELIVERED;
 
       // Calculate ready but not served
       let readyToServeCount = 0;
@@ -310,19 +330,20 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       });
 
       // 1. PRIORITY: Ready to Serve -> GREEN
-      if (readyToServeCount > 0) return { status: 'ready', count: readyToServeCount, owner: activeOrder.waiterName };
+      if (readyToServeCount > 0) return { status: 'ready', count: readyToServeCount, owner: activeOrder.waiterName, delay: orderDelayMinutes };
       
-      // 2. PRIORITY: All Served (Eating) -> NEON ORANGE -> NOW "COMPLETO" (BLUE)
-      // (Also applies if status is DELIVERED, but checking items is safer)
+      // 2. PRIORITY: All Served (Eating) -> NEON ORANGE
+      // If totalItems matches totalServed, they are eating.
+      // NOTE: Even if status is DELIVERED, we treat as occupied.
       if (totalItems > 0 && totalItems === totalServed) {
-          return { status: 'eating', count: 0, owner: activeOrder.waiterName };
+          return { status: 'eating', count: 0, owner: activeOrder.waiterName, delay: 0 };
       }
 
       // 3. PRIORITY: Late (Only if waiting for food)
-      if (isLate) return { status: 'late', count: 0, owner: activeOrder.waiterName };
+      if (isLate) return { status: 'late', count: 0, owner: activeOrder.waiterName, delay: orderDelayMinutes };
       
       // 4. Standard Occupied -> DARK ORANGE
-      return { status: 'occupied', count: 0, owner: activeOrder.waiterName };
+      return { status: 'occupied', count: 0, owner: activeOrder.waiterName, delay: orderDelayMinutes };
   };
 
   const handleDictation = () => {
@@ -348,26 +369,26 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
   // --- NEW: TOP EDITOR DATA ---
   const editingItemData = menuItems.find(i => i.id === editingItemId);
+  
+  // Late Flash Logic for Header Icon
+  const shouldFlashLate = lateTables.length > 0 && !latesAcknowledged && !tableManagerOpen;
 
   return (
     <div className="flex flex-col h-screen bg-slate-900 text-slate-100 max-w-md mx-auto shadow-2xl overflow-hidden relative border-x border-slate-800 font-sans selection:bg-orange-500 selection:text-white">
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden flex items-center justify-center"><ChefHat size={400} className="text-white opacity-[0.03] transform -rotate-12 translate-x-20 translate-y-10" /></div>
-      {notificationToast && (
-          <div className={`absolute top-20 left-1/2 -translate-x-1/2 z-[60] text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-slide-down border-2 w-[90%] justify-center ${notificationToast.type === 'blue' ? 'bg-blue-600 border-blue-400' : 'bg-green-500 border-green-300'}`}>
-              <Bell className="animate-swing shrink-0" size={20} />
-              <span className="font-bold text-sm truncate">{notificationToast.msg}</span>
-          </div>
-      )}
-      <style>{`@keyframes swipe-card { 0%, 100% { transform: translateX(0); } 20%, 30% { transform: translateX(50px); } 50% { transform: translateX(0); } 70%, 80% { transform: translateX(-50px); } } @keyframes swipe-bg { 0%, 100% { background-color: rgb(51, 65, 85); } 20%, 30% { background-color: rgb(249, 115, 22); } 50% { background-color: rgb(51, 65, 85); } 70%, 80% { background-color: rgb(220, 38, 38); } } @keyframes fade-edit { 0%, 50%, 100% { opacity: 0; transform: scale(0.9); } 20%, 30% { opacity: 1; transform: scale(1); } } @keyframes fade-delete { 0%, 50%, 100% { opacity: 0; transform: scale(0.9); } 70%, 80% { opacity: 1; transform: scale(1); } } @keyframes success-pop { 0% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); } 50% { transform: scale(1.03); box-shadow: 0 0 20px rgba(34, 197, 94, 0.4); border-color: rgba(34, 197, 94, 0.8); background-color: rgba(34, 197, 94, 0.1); } 100% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); } } @keyframes neon-pulse { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); border-color: rgba(34, 197, 94, 0.8); transform: scale(1); } 50% { box-shadow: 0 0 40px 15px rgba(34, 197, 94, 0.9), inset 0 0 20px rgba(34, 197, 94, 0.5); border-color: #ffffff; transform: scale(1.05); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); border-color: rgba(34, 197, 94, 0.8); transform: scale(1); } } .animate-neon-pulse { animation: neon-pulse 1s infinite cubic-bezier(0.4, 0, 0.6, 1); } .animate-card-swipe { animation: swipe-card 2.5s ease-in-out; } .animate-bg-color { animation: swipe-bg 2.5s ease-in-out; } .animate-fade-edit { animation: fade-edit 2.5s ease-in-out; } .animate-fade-delete { animation: fade-delete 2.5s ease-in-out; } .animate-success-pop { animation: success-pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275); }`}</style>
+      {notificationToast && <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[60] bg-green-500 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-slide-down border-2 border-green-300 w-[90%] justify-center"><Bell className="animate-swing shrink-0" size={20} /><span className="font-bold text-sm truncate">{notificationToast}</span></div>}
+      <style>{`@keyframes swipe-card { 0%, 100% { transform: translateX(0); } 20%, 30% { transform: translateX(50px); } 50% { transform: translateX(0); } 70%, 80% { transform: translateX(-50px); } } @keyframes swipe-bg { 0%, 100% { background-color: rgb(51, 65, 85); } 20%, 30% { background-color: rgb(249, 115, 22); } 50% { background-color: rgb(51, 65, 85); } 70%, 80% { background-color: rgb(220, 38, 38); } } @keyframes fade-edit { 0%, 50%, 100% { opacity: 0; transform: scale(0.9); } 20%, 30% { opacity: 1; transform: scale(1); } } @keyframes fade-delete { 0%, 50%, 100% { opacity: 0; transform: scale(0.9); } 70%, 80% { opacity: 1; transform: scale(1); } } @keyframes success-pop { 0% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); } 50% { transform: scale(1.03); box-shadow: 0 0 20px rgba(34, 197, 94, 0.4); border-color: rgba(34, 197, 94, 0.8); background-color: rgba(34, 197, 94, 0.1); } 100% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); } } @keyframes neon-pulse { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); border-color: rgba(34, 197, 94, 0.8); transform: scale(1); } 50% { box-shadow: 0 0 40px 15px rgba(34, 197, 94, 0.9), inset 0 0 20px rgba(34, 197, 94, 0.5); border-color: #ffffff; transform: scale(1.05); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); border-color: rgba(34, 197, 94, 0.8); transform: scale(1); } } @keyframes red-flash { 0%, 100% { background-color: rgb(51, 65, 85); border-color: rgb(51, 65, 85); } 50% { background-color: rgb(220, 38, 38); border-color: rgb(252, 165, 165); box-shadow: 0 0 15px rgba(220, 38, 38, 0.7); } } .animate-neon-pulse { animation: neon-pulse 1s infinite cubic-bezier(0.4, 0, 0.6, 1); } .animate-red-flash { animation: red-flash 0.8s infinite; } .animate-card-swipe { animation: swipe-card 2.5s ease-in-out; } .animate-bg-color { animation: swipe-bg 2.5s ease-in-out; } .animate-fade-edit { animation: fade-edit 2.5s ease-in-out; } .animate-fade-delete { animation: fade-delete 2.5s ease-in-out; } .animate-success-pop { animation: success-pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275); }`}</style>
 
       {/* --- HEADER --- */}
       <div className="bg-slate-900 pt-5 pb-2 px-5 z-40 flex justify-between items-center sticky top-0 border-b border-white/5 bg-opacity-95 backdrop-blur-sm shadow-md">
         <div className="flex items-center gap-3"><div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/20 border border-orange-400/30 transform -rotate-3"><Utensils size={18} className="text-white" /></div><div><h1 className="font-bold text-sm tracking-tight text-white leading-none mb-0.5">Risto<span className="text-orange-500">Sync</span></h1><p className="text-[10px] text-slate-400 font-medium">Ciao, {waiterName || 'Staff'}</p></div></div>
         <div className="flex items-center gap-3">
              <button onClick={() => setProfileOpen(true)} className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all active:scale-95"><User size={18} /></button>
-            <button onClick={() => setTableManagerOpen(!tableManagerOpen)} className={`flex items-center rounded-xl pl-4 pr-2 py-1.5 border-2 transition-all duration-300 transform group active:scale-95 relative ${!table ? 'bg-slate-800 border-slate-700 hover:border-slate-600' : 'bg-slate-900 border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.6)] scale-105 ring-1 ring-green-500/20'} ${hasUnseenNotifications && !tableManagerOpen && 'animate-neon-pulse'}`}>
-                <div className="flex flex-col items-end mr-3"><span className={`text-[10px] font-black uppercase tracking-wider leading-none ${!table ? 'text-slate-500' : 'text-white'} ${hasUnseenNotifications && !tableManagerOpen ? 'text-green-500' : ''}`}>TAVOLO</span>{table && <span className="font-black text-xl text-green-500 leading-none drop-shadow-[0_0_8px_rgba(34,197,94,0.8)]">{table}</span>}</div>
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all relative ${!table ? 'bg-slate-700 text-slate-400' : 'bg-green-500 text-white shadow-lg'} ${hasUnseenNotifications && !tableManagerOpen ? 'bg-green-500 text-white' : ''}`}><LayoutGrid size={20} className={!table && !hasUnseenNotifications ? "opacity-50" : ""} /></div>
+            <button onClick={handleOpenTableManager} className={`flex items-center rounded-xl pl-4 pr-2 py-1.5 border-2 transition-all duration-300 transform group active:scale-95 relative ${shouldFlashLate ? 'animate-red-flash text-white' : !table ? 'bg-slate-800 border-slate-700 hover:border-slate-600' : 'bg-slate-900 border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.6)] scale-105 ring-1 ring-green-500/20'} ${hasUnseenNotifications && !tableManagerOpen && !shouldFlashLate && 'animate-neon-pulse'}`}>
+                <div className="flex flex-col items-end mr-3"><span className={`text-[10px] font-black uppercase tracking-wider leading-none ${!table ? 'text-slate-500' : 'text-white'} ${hasUnseenNotifications && !tableManagerOpen && !shouldFlashLate ? 'text-green-500' : ''} ${shouldFlashLate ? 'text-white' : ''}`}>TAVOLO</span>{table && <span className="font-black text-xl text-green-500 leading-none drop-shadow-[0_0_8px_rgba(34,197,94,0.8)]">{table}</span>}</div>
+                <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-all relative ${!table && !shouldFlashLate ? 'bg-slate-700 text-slate-400' : shouldFlashLate ? 'bg-white/20 text-white' : 'bg-green-500 text-white shadow-lg'} ${hasUnseenNotifications && !tableManagerOpen && !shouldFlashLate ? 'bg-green-500 text-white' : ''}`}>
+                    {shouldFlashLate ? <AlertOctagon size={20}/> : <LayoutGrid size={20} className={!table && !hasUnseenNotifications ? "opacity-50" : ""} />}
+                </div>
             </button>
         </div>
       </div>
@@ -424,7 +445,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                     <button key={item.id} onClick={() => startEditing(item)} className={`group relative overflow-hidden transition-all duration-300 rounded-2xl border flex flex-col items-center justify-center text-center ${isPopping ? 'animate-success-pop bg-slate-700 border-green-500 aspect-square' : 'bg-gradient-to-br from-gray-700 to-gray-800 border-gray-600 shadow-lg active:scale-95 p-2 aspect-square'}`}>
                         <div className="absolute inset-0 flex items-center justify-center opacity-5 pointer-events-none">{getCategoryIcon(item.category, 80)}</div>
                         <div className="w-full relative z-10">
-                            <h3 className="font-extrabold text-white text-lg md:text-xl leading-tight tracking-tight drop-shadow-md break-words w-full px-2">{item.name}</h3>
+                            <h3 className="font-extrabold bg-gradient-to-b from-slate-50 to-slate-400 bg-clip-text text-transparent text-lg md:text-xl leading-tight tracking-tight drop-shadow-md break-words w-full px-2">{item.name}</h3>
                         </div>
                     </button>
                   );
@@ -461,7 +482,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                 ) : (
                     <>
                         <p className="text-xs text-center text-slate-500 mb-4 animate-pulse uppercase tracking-wider">← Scorri per Eliminare • Scorri per Modificare →</p>
-                        {sortedCart.map((item, index) => <SwipeableCartItem key={index} index={index} item={item} onEdit={() => editCartItem(index)} onDelete={() => requestDelete(index)} isFirst={index === 0} appSettings={appSettings} />)}
+                        {sortedCart.map((item, index) => <SwipeableCartItem key={index} index={index} item={item} onEdit={() => editCartItem(index)} onDelete={() => requestDelete(index)} isFirst={index === 0} appSettings={appSettings} isAddition={!!editingOrderId} />)}
                     </>
                 )}
              </div>
@@ -481,7 +502,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                       {!isSettingTables ? (<div><h2 className="text-2xl font-bold text-white">Mappa Tavoli</h2>{table ? <p className="text-orange-400 text-sm font-bold">Selezionato: TAVOLO {table}</p> : <p className="text-slate-400 text-sm">Seleziona un tavolo</p>}</div>) : (<div><h2 className="text-xl font-bold text-white">Impostazioni</h2><p className="text-slate-400 text-sm">Numero tavoli sala</p></div>)}
                       <div className="flex gap-2">
                         {!isSettingTables && <button onClick={() => { setIsSettingTables(true); setTempTableCount(totalTables); }} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white"><Settings size={20} /></button>}
-                        <button onClick={handleCloseTableManager} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={20} /></button>
+                        <button onClick={() => { setTableManagerOpen(false); setIsSettingTables(false); setTable(''); setCart([]); setEditingOrderId(null); }} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={20} /></button>
                       </div>
                   </div>
                   {isSettingTables ? (
@@ -497,51 +518,49 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                 const isSelected = table === tId;
                                 const isLocked = info.owner && info.owner !== waiterName; 
                                 
-                                let bgClass = '';
-                                let statusText = '';
-                                
-                                // 1. Determine Base State & Color
-                                switch (info.status) {
-                                    case 'ready': // GREEN - Kitchen ready
-                                        bgClass = 'bg-green-600/20 border-green-500 text-green-400 animate-pulse';
-                                        statusText = 'SERVIMI';
-                                        break;
-                                    case 'eating': // BLUE - All served, COMPLETED
-                                        bgClass = 'bg-blue-600 border-blue-400 text-white shadow-[0_0_20px_rgba(37,99,235,0.6)]';
-                                        statusText = 'COMPLETO';
-                                        break;
-                                    case 'occupied': // ORANGE - Cooking/Waiting/New Items
-                                        bgClass = 'bg-orange-900/40 border-orange-500 text-orange-100 shadow-[0_0_15px_rgba(249,115,22,0.5)]';
-                                        statusText = 'IN ATTESA';
-                                        break;
-                                    case 'late': // RED - Late
-                                        bgClass = 'bg-red-900/40 border-red-500 text-red-100 shadow-[0_0_20px_rgba(220,38,38,0.6)] animate-pulse';
-                                        statusText = 'RITARDO';
-                                        break;
-                                    default: // FREE - Grey
-                                        bgClass = 'bg-slate-800 border-slate-700 text-slate-400';
-                                        statusText = 'LIBERO';
+                                // Base Status Styling (Logic priority: Locked > Ready > Late > Eating > Occupied > Free)
+                                let bgClass = 'bg-slate-800 border-slate-700 text-slate-400';
+                                let statusText = 'LIBERO';
+                                let badge = null;
+
+                                if (isLocked) { 
+                                    bgClass = 'bg-slate-900 border-slate-800 text-slate-600 opacity-70 cursor-not-allowed'; 
+                                    statusText = 'BLOCCATO'; 
+                                } 
+                                else if (info.status === 'ready') { 
+                                    bgClass = 'bg-green-600/20 border-green-500 text-green-400 animate-pulse'; 
+                                    statusText = 'SERVIMI';
+                                    badge = <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded-full flex items-center justify-center text-[10px] font-bold text-white shadow-md bg-green-600 border border-green-400 animate-bounce">{info.count}</div>;
+                                }
+                                else if (info.status === 'eating') { 
+                                    bgClass = 'bg-orange-600 border-orange-400 text-white shadow-[0_0_20px_rgba(249,115,22,0.8)] animate-pulse'; 
+                                    statusText = 'IN ATTESA'; 
+                                }
+                                else if (info.status === 'late') { 
+                                    bgClass = 'bg-red-900/40 border-red-500 text-red-100 shadow-[0_0_20px_rgba(220,38,38,0.6)] animate-pulse'; 
+                                    statusText = 'RITARDO'; 
+                                }
+                                else if (info.status === 'occupied') { 
+                                    bgClass = 'bg-orange-900/40 border-orange-500 text-orange-100 shadow-[0_0_15px_rgba(249,115,22,0.5)]'; 
+                                    statusText = 'OCCUPATO'; 
                                 }
 
-                                // 2. Locked State Override
-                                if (isLocked) {
-                                     bgClass = 'bg-slate-900 border-slate-800 text-slate-600 opacity-70 cursor-not-allowed';
-                                     statusText = 'BLOCCATO';
-                                } 
-                                // 3. Selection Override (Visual only)
-                                else if (isSelected) {
-                                    if (info.status === 'free') {
-                                        // If free, selecting it makes it look active (Greenish for new order)
-                                        bgClass = 'bg-slate-800 border-green-500 text-green-500 ring-2 ring-green-500/30 shadow-[0_0_15px_rgba(34,197,94,0.4)]';
-                                    } else {
-                                        // If occupied/waiting, KEEP the base color but add selection border
-                                        bgClass += ' ring-2 ring-white scale-105 shadow-xl';
-                                    }
+                                // Selection Styling (Overlay)
+                                if (isSelected && !isLocked) {
+                                    // Add a strong border to indicate selection without overriding the status color
+                                    bgClass += ' ring-4 ring-white shadow-xl scale-[1.02] z-10'; 
                                 }
-                                
+
                                 return (
                                     <button key={tId} onClick={() => !isLocked && handleSelectTable(tId)} disabled={!!isLocked} className={`aspect-square rounded-2xl border-2 flex flex-col items-center justify-center relative transition-all active:scale-95 ${bgClass}`}>
-                                        {isLocked ? (<><Lock size={20} className="mb-1"/><span className="text-xl font-black text-slate-500">{tId}</span><div className="absolute bottom-2 text-[8px] uppercase font-bold bg-slate-800 px-2 py-0.5 rounded text-slate-400 max-w-[90%] truncate">{info.owner}</div></>) : (<><span className="text-2xl font-black">{tId}</span><span className="text-[9px] uppercase font-bold mt-1 leading-none text-center px-1">{statusText}</span>{info.count > 0 && <div className={`absolute top-2 right-2 px-1.5 py-0.5 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-md border ${info.status === 'ready' ? 'bg-green-600 border-green-400 animate-bounce' : 'bg-slate-600 border-slate-500'}`}>{info.count} DA SERVIRE</div>}</>)}
+                                        {isLocked ? (<><Lock size={20} className="mb-1"/><span className="text-xl font-black text-slate-500">{tId}</span><div className="absolute bottom-2 text-[8px] uppercase font-bold bg-slate-800 px-2 py-0.5 rounded text-slate-400 max-w-[90%] truncate">{info.owner}</div></>) : (
+                                            <>
+                                                <span className="text-2xl font-black">{tId}</span>
+                                                <span className="text-[9px] uppercase font-bold mt-1 leading-none text-center px-1">{statusText}</span>
+                                                {badge}
+                                                {info.delay > 0 && <div className="absolute bottom-1 right-1 bg-black/50 px-1 rounded text-[8px] font-mono text-white">+{info.delay}m</div>}
+                                            </>
+                                        )}
                                     </button>
                                 );
                             })}
@@ -557,26 +576,29 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                                 {existingOrders[0].items.map((item, idx) => {
                                                     const isReady = item.completed && !item.served;
                                                     const isServed = item.served;
+                                                    const isAddition = item.isAddedLater;
                                                     
+                                                    // Show served items dimmed to indicate progress
                                                     return (
-                                                        <div key={idx} className={`flex justify-between items-center p-2 rounded-xl border border-slate-700 ${isServed ? 'bg-slate-900/50 opacity-60' : 'bg-slate-900'}`}>
+                                                        <div key={idx} className={`flex justify-between items-center p-2 rounded-xl border ${isServed ? 'bg-slate-800/30 border-slate-800' : 'bg-slate-900 border-slate-700'}`}>
                                                             <div className="flex flex-col">
-                                                                <span className={`text-sm font-bold ${isServed ? 'text-slate-500 line-through' : 'text-white'}`}>{item.quantity}x {item.menuItem.name}</span>
-                                                                <span className={`text-[9px] uppercase font-bold ${isServed ? 'text-slate-600' : isReady ? 'text-green-400' : 'text-slate-500'}`}>
-                                                                    {isServed ? 'SERVITO' : isReady ? 'PRONTO' : 'IN PREPARAZIONE'}
-                                                                </span>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className={`text-sm font-bold ${isServed ? 'text-slate-500 line-through' : 'text-white'}`}>{item.quantity}x {item.menuItem.name}</span>
+                                                                    {isAddition && <span className="text-[8px] bg-blue-600 text-white px-1 py-0.5 rounded font-bold uppercase flex items-center gap-1 shadow-sm"><PlusCircle size={8}/> AGGIUNTA</span>}
+                                                                </div>
+                                                                <span className={`text-[9px] uppercase font-bold ${isServed ? 'text-slate-600' : isReady ? 'text-green-400' : 'text-slate-500'}`}>{isServed ? 'SERVITO' : isReady ? 'PRONTO' : 'IN PREPARAZIONE'}</span>
                                                             </div>
-                                                            {isServed ? (
-                                                                <div className="w-8 h-8 flex items-center justify-center text-green-600/50"><CheckCircle size={16}/></div>
-                                                            ) : isReady ? (
-                                                                <button onClick={() => handleServeItem(existingOrders[0].id, idx)} className="bg-green-600 hover:bg-green-500 text-white text-[10px] font-bold uppercase px-3 py-2 rounded-lg shadow-lg shadow-green-600/20 flex items-center gap-1 animate-pulse"><CheckCircle size={12}/> SERVIRE</button>
+                                                            {isReady ? (
+                                                                <button onClick={() => handleServeItem(existingOrders[0].id, idx)} className="bg-green-600 hover:bg-green-500 text-white text-[10px] font-bold uppercase px-3 py-2 rounded-lg shadow-lg shadow-green-600/20 flex items-center gap-1 animate-pulse active:scale-95"><CheckCircle size={12}/> SERVIRE</button>
+                                                            ) : isServed ? (
+                                                                <div className="w-8 h-8 flex items-center justify-center text-slate-700"><CheckCircle size={16}/></div>
                                                             ) : (
                                                                 <div className="w-8 h-8 flex items-center justify-center text-slate-600"><Clock size={16}/></div>
                                                             )}
                                                         </div>
                                                     )
                                                 })}
-                                                {existingOrders[0].items.every(i => i.served) && <p className="text-center text-xs text-slate-500 italic py-2">Tutti i piatti sono stati serviti.</p>}
+                                                {existingOrders[0].items.every(i => i.served) && <p className="text-center text-xs text-orange-400 font-bold uppercase py-2 animate-pulse">Tutti i piatti sono serviti!</p>}
                                            </div>
                                        </div>
                                    ) : (

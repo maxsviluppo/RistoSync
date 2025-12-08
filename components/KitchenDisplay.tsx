@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Order, OrderStatus, Category, AppSettings } from '../types';
 import { getOrders, updateOrderStatus, clearHistory, toggleOrderItemCompletion, getAppSettings } from '../services/storageService';
-import { Clock, CheckCircle, ChefHat, Trash2, History, UtensilsCrossed, Bell, User, LogOut, Square, CheckSquare, Coffee, AlertOctagon, Timer } from 'lucide-react';
+import { Clock, CheckCircle, ChefHat, Trash2, History, UtensilsCrossed, Bell, User, LogOut, Square, CheckSquare, Coffee, AlertOctagon, Timer, PlusCircle } from 'lucide-react';
 
 const CATEGORY_PRIORITY: Record<Category, number> = {
     [Category.ANTIPASTI]: 1,
@@ -87,12 +87,8 @@ const OrderTimer: React.FC<{ timestamp: number; status: OrderStatus; onCritical:
         return () => clearInterval(interval);
     }, [timestamp, status, onCritical]);
 
-    if (status === OrderStatus.READY) {
-        return <div className="text-green-400 font-bold text-sm flex items-center gap-1 animate-pulse"><CheckCircle size={14}/> PRONTO</div>;
-    }
-    
-    if (status === OrderStatus.DELIVERED) {
-        return <div className="text-emerald-500 font-bold text-sm flex items-center gap-1"><CheckCircle size={14}/> SERVITO</div>;
+    if (status === OrderStatus.READY || status === OrderStatus.DELIVERED) {
+        return <div className="text-green-400 font-bold text-sm flex items-center gap-1"><CheckCircle size={14}/> Completato</div>;
     }
 
     let colorClass = "text-slate-400";
@@ -158,13 +154,6 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
         const prevOrderIds = prevOrders.map(o => o.id);
         const addedOrders = sorted.filter(o => !prevOrderIds.includes(o.id));
         
-        // CHECK FOR MODIFICATIONS (Items added later)
-        const modifiedOrders = sorted.filter(o => {
-            const prev = prevOrders.find(p => p.id === o.id);
-            if (!prev) return false;
-            return o.items.length > prev.items.length;
-        });
-
         // NOTIFY ONLY FOR KITCHEN ITEMS
         const hasKitchenItems = addedOrders.some(order => 
             order.items.some(item => {
@@ -172,15 +161,10 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
                 return dest !== 'Sala'; 
             })
         );
-        
-        const hasModifiedKitchenItems = modifiedOrders.some(order => 
-             order.items.some(item => item.isAddedLater && appSettings.categoryDestinations[item.menuItem.category] !== 'Sala')
-        );
 
-        if (hasKitchenItems || hasModifiedKitchenItems) {
+        if (hasKitchenItems) {
             playNotificationSound('new');
-            const tableNum = addedOrders.length > 0 ? addedOrders[0].tableNumber : modifiedOrders[0]?.tableNumber;
-            showNotification(hasModifiedKitchenItems ? `Modifica Ordine: Tavolo ${tableNum}` : `Nuovo Ordine: Tavolo ${tableNum}`, 'info');
+            showNotification(`Nuovo Ordine: Tavolo ${addedOrders[0].tableNumber}`, 'info');
         }
 
         sorted.forEach(newOrder => {
@@ -233,15 +217,12 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
       case OrderStatus.PENDING: return 'bg-yellow-100 border-yellow-400 text-yellow-800';
       case OrderStatus.COOKING: return 'bg-orange-100 border-orange-400 text-orange-800';
       case OrderStatus.READY: return 'bg-green-100 border-green-400 text-green-800';
-      case OrderStatus.DELIVERED: return 'bg-emerald-900 border-emerald-600 text-emerald-100 shadow-[0_0_15px_rgba(16,185,129,0.3)]';
+      case OrderStatus.DELIVERED: return 'bg-slate-700 border-slate-500 text-slate-300 opacity-80';
       default: return 'bg-gray-100 border-gray-400';
     }
   };
 
-  // DISPLAY LOGIC:
-  // Active View: Show ALL orders (including DELIVERED/Served) so kitchen knows they are eating.
-  // History View: Usually Supabase handles cleaning old ones via clearHistory, but effectively same view here for now.
-  const displayedOrders = orders; // Show all. Deletion happens via Free Table (Waiter).
+  const displayedOrders = orders.filter(o => viewMode === 'active' ? true : o.status === OrderStatus.DELIVERED);
 
   return (
     <div className="min-h-screen bg-slate-900 text-white p-6 font-sans flex flex-col relative overflow-hidden">
@@ -276,10 +257,12 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
           <button onClick={() => loadOrders()} className="ml-4 p-2 rounded-full bg-slate-800 text-slate-500 hover:text-white"><History size={16} /></button>
           <div className="ml-4 flex bg-slate-800 rounded-lg p-1 border border-slate-700">
              <button onClick={() => setViewMode('active')} className={`px-6 py-2 rounded-md font-bold text-sm uppercase ${viewMode === 'active' ? 'bg-slate-600 text-white' : 'text-slate-400'}`}>Attivi</button>
+             <button onClick={() => setViewMode('history')} className={`px-6 py-2 rounded-md font-bold text-sm uppercase ${viewMode === 'history' ? 'bg-slate-600 text-white' : 'text-slate-400'}`}>Storico</button>
           </div>
         </div>
         <div className="flex gap-4 items-center">
             <div className="bg-slate-800 px-4 py-2 rounded-lg border border-slate-700"><span className="text-2xl font-mono text-orange-400 font-bold">{new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}</span></div>
+            {viewMode === 'history' && <button onClick={() => { if(confirm('Svuotare lo storico?')) clearHistory(); }} className="bg-red-900/30 text-red-200 px-4 py-2 rounded-lg font-bold uppercase flex gap-2"><Trash2 size={16} /> Svuota</button>}
             <button onClick={onExit} className="bg-slate-800 text-slate-400 hover:text-white p-2.5 rounded-lg"><LogOut size={20} /></button>
         </div>
       </div>
@@ -308,13 +291,11 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
              if (kitchenItemsWithIndex.length === 0) return null;
 
             return (
-              <div key={order.id} className={`flex flex-col rounded-xl shadow-xl border-t-8 ${borderColor} bg-slate-800 text-slate-200 overflow-hidden relative ${viewMode === 'active' ? 'hover:-translate-y-1 transition-transform' : 'opacity-75'}`}>
-                <div className={`p-4 border-b border-slate-700 flex justify-between items-start bg-slate-800/50`}>
+              <div key={order.id} className={`flex flex-col rounded-xl shadow-2xl border-t-8 ${borderColor} bg-slate-800/95 bg-gradient-to-br from-slate-800 to-slate-900 text-slate-200 overflow-hidden relative ${viewMode === 'active' ? 'hover:-translate-y-1 transition-transform' : 'opacity-75'}`}>
+                <div className={`p-4 border-b border-slate-700/50 flex justify-between items-start bg-slate-800/50`}>
                   <div>
-                      <h2 className="text-3xl font-black text-white">Tav. {order.tableNumber}</h2>
-                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold uppercase mt-1 ${getStatusColor(order.status)}`}>
-                        {order.status === OrderStatus.DELIVERED ? 'COMPLETATO - AL TAVOLO' : order.status}
-                      </span>
+                      <h2 className="text-3xl font-black bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent">Tav. {order.tableNumber}</h2>
+                      <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold uppercase mt-1 ${getStatusColor(order.status)}`}>{order.status}</span>
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     {/* NEW TIMER COMPONENT */}
@@ -329,20 +310,19 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
                   </div>
                 </div>
 
-                <div className="p-4 flex-1 overflow-y-auto max-h-[300px] bg-slate-900/50">
-                  <ul className="space-y-3">
+                <div className="p-4 flex-1 overflow-y-auto max-h-[300px] bg-slate-900/30">
+                  <ul className="space-y-4">
                     {kitchenItemsWithIndex.map(({ item, originalIndex }) => (
-                      <li key={`${order.id}-${originalIndex}`} onClick={() => viewMode === 'active' && order.status !== OrderStatus.DELIVERED && handleToggleItem(order.id, originalIndex)} className={`flex justify-between items-start border-b border-dashed border-slate-700 pb-3 last:border-0 rounded-lg p-2 ${item.completed ? 'bg-green-900/10 opacity-50' : 'hover:bg-slate-800 cursor-pointer'}`}>
+                      <li key={`${order.id}-${originalIndex}`} onClick={() => viewMode === 'active' && order.status !== OrderStatus.DELIVERED && handleToggleItem(order.id, originalIndex)} className={`flex justify-between items-start border-b border-dashed border-slate-700 pb-3 last:border-0 rounded-lg p-2 transition-colors ${item.completed ? 'bg-green-900/10 opacity-50' : 'hover:bg-slate-800/50 cursor-pointer'}`}>
                         <div className="w-full">
-                            {/* BLUE ALERT FOR ADDED ITEMS */}
-                            {item.isAddedLater && order.status !== OrderStatus.DELIVERED && <div className="flex items-center gap-1 mb-1 animate-pulse"><Bell size={12} className="text-blue-400" /><span className="text-[9px] font-black text-blue-200 uppercase bg-blue-600 px-1.5 rounded shadow-lg shadow-blue-500/40">NUOVA AGGIUNTA</span></div>}
-                            <div className="flex gap-3 items-center w-full">
-                                <div className={item.completed ? 'text-green-500' : 'text-slate-600'}>{item.completed ? <CheckSquare size={24} /> : <Square size={24} />}</div>
-                                <span className={`font-black text-xl w-8 h-8 flex items-center justify-center rounded-lg shadow-inner mt-1 ${item.completed ? 'bg-green-900/30 text-green-400' : 'bg-slate-700 text-white'}`}>{item.quantity}</span>
-                                <div className="flex-1">
+                            {item.isAddedLater && order.status !== OrderStatus.DELIVERED && <div className="flex items-center gap-1 mb-1 bg-blue-600 w-max px-2 py-0.5 rounded-md shadow-sm border border-blue-400"><PlusCircle size={10} className="text-white animate-pulse" /><span className="text-[10px] font-black text-white uppercase tracking-wide">AGGIUNTA</span></div>}
+                            <div className="flex gap-4 items-start w-full">
+                                <div className={`pt-1 ${item.completed ? 'text-green-500' : 'text-slate-600'}`}>{item.completed ? <CheckSquare size={28} /> : <Square size={28} />}</div>
+                                <span className={`font-black text-2xl w-10 h-10 flex items-center justify-center rounded-lg shadow-inner ${item.completed ? 'bg-green-900/30 text-green-400' : 'bg-slate-700 text-white'}`}>{item.quantity}</span>
+                                <div className="flex-1 min-w-0">
                                     <p className="text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-0.5">{item.menuItem.category}</p>
-                                    <p className={`font-bold text-lg leading-tight ${item.completed ? 'text-slate-500 line-through' : 'text-slate-200'}`}>{item.menuItem.name}</p>
-                                    {item.notes && <p className="text-red-300 text-sm font-bold mt-1 bg-red-900/20 inline-block px-2 py-0.5 rounded border border-red-900/30">⚠️ {item.notes}</p>}
+                                    <p className={`font-black text-3xl leading-none tracking-tight break-words ${item.completed ? 'text-slate-600 line-through' : 'bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent'}`}>{item.menuItem.name}</p>
+                                    {item.notes && <p className="text-red-300 text-sm font-bold mt-2 bg-red-900/20 inline-block px-3 py-1 rounded border border-red-900/30 shadow-sm">⚠️ {item.notes}</p>}
                                 </div>
                             </div>
                         </div>
@@ -351,15 +331,10 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
                   </ul>
                 </div>
 
-                {viewMode === 'active' && order.status !== OrderStatus.DELIVERED && (
+                {viewMode === 'active' && (
                     <button onClick={() => advanceStatus(order.id, order.status)} className={`w-full py-5 text-center font-black text-lg uppercase tracking-wider transition-all flex items-center justify-center gap-2 hover:brightness-110 ${order.status === OrderStatus.READY ? 'bg-green-600 text-white' : 'bg-orange-500 text-white'}`}>
                         {order.status === OrderStatus.READY ? <><CheckCircle /> SERVI AL TAVOLO</> : <>AVANZA STATO {order.status === OrderStatus.PENDING && '→ PREPARAZIONE'} {order.status === OrderStatus.COOKING && '→ PRONTO'}</>}
                     </button>
-                )}
-                 {order.status === OrderStatus.DELIVERED && (
-                    <div className="w-full py-3 text-center font-bold text-xs uppercase tracking-wider bg-emerald-900/50 text-emerald-400 flex items-center justify-center gap-2">
-                        <Coffee size={14}/> IN ATTESA LIBERA TAVOLO
-                    </div>
                 )}
               </div>
             );
