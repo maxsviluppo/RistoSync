@@ -486,14 +486,48 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                 const info = getTableStatusInfo(tId);
                                 const isSelected = table === tId;
                                 const isLocked = info.owner && info.owner !== waiterName; 
-                                let bgClass = 'bg-slate-800 border-slate-700 text-slate-400';
-                                let statusText = 'LIBERO';
-                                if (isLocked) { bgClass = 'bg-slate-900 border-slate-800 text-slate-600 opacity-70 cursor-not-allowed'; statusText = 'BLOCCATO'; } 
-                                else if (isSelected) { bgClass = 'bg-slate-800 border-green-500 text-green-500 ring-2 ring-green-500/30 shadow-[0_0_15px_rgba(34,197,94,0.4)]'; } 
-                                else if (info.status === 'ready') { bgClass = 'bg-green-600/20 border-green-500 text-green-400 animate-pulse'; statusText = 'SERVIMI'; }
-                                else if (info.status === 'eating') { bgClass = 'bg-orange-600 border-orange-400 text-white shadow-[0_0_20px_rgba(249,115,22,0.8)] animate-pulse'; statusText = 'IN ATTESA'; }
-                                else if (info.status === 'late') { bgClass = 'bg-red-900/40 border-red-500 text-red-100 shadow-[0_0_20px_rgba(220,38,38,0.6)] animate-pulse'; statusText = 'RITARDO'; }
-                                else if (info.status === 'occupied') { bgClass = 'bg-orange-900/40 border-orange-500 text-orange-100 shadow-[0_0_15px_rgba(249,115,22,0.5)]'; statusText = 'OCCUPATO'; }
+                                
+                                let bgClass = '';
+                                let statusText = '';
+                                
+                                // 1. Determine Base State & Color
+                                switch (info.status) {
+                                    case 'ready': // GREEN - Kitchen ready
+                                        bgClass = 'bg-green-600/20 border-green-500 text-green-400 animate-pulse';
+                                        statusText = 'SERVIMI';
+                                        break;
+                                    case 'eating': // NEON ORANGE - All served, eating
+                                        bgClass = 'bg-orange-600 border-orange-400 text-white shadow-[0_0_20px_rgba(249,115,22,0.8)]';
+                                        statusText = 'IN ATTESA';
+                                        break;
+                                    case 'occupied': // ORANGE - Cooking/Waiting
+                                        bgClass = 'bg-orange-900/40 border-orange-500 text-orange-100 shadow-[0_0_15px_rgba(249,115,22,0.5)]';
+                                        statusText = 'IN ATTESA';
+                                        break;
+                                    case 'late': // RED - Late
+                                        bgClass = 'bg-red-900/40 border-red-500 text-red-100 shadow-[0_0_20px_rgba(220,38,38,0.6)] animate-pulse';
+                                        statusText = 'RITARDO';
+                                        break;
+                                    default: // FREE - Grey
+                                        bgClass = 'bg-slate-800 border-slate-700 text-slate-400';
+                                        statusText = 'LIBERO';
+                                }
+
+                                // 2. Locked State Override
+                                if (isLocked) {
+                                     bgClass = 'bg-slate-900 border-slate-800 text-slate-600 opacity-70 cursor-not-allowed';
+                                     statusText = 'BLOCCATO';
+                                } 
+                                // 3. Selection Override (Visual only)
+                                else if (isSelected) {
+                                    if (info.status === 'free') {
+                                        // If free, selecting it makes it look active (Greenish for new order)
+                                        bgClass = 'bg-slate-800 border-green-500 text-green-500 ring-2 ring-green-500/30 shadow-[0_0_15px_rgba(34,197,94,0.4)]';
+                                    } else {
+                                        // If occupied/waiting, KEEP the base color but add selection border
+                                        bgClass += ' ring-2 ring-white scale-105 shadow-xl';
+                                    }
+                                }
                                 
                                 return (
                                     <button key={tId} onClick={() => !isLocked && handleSelectTable(tId)} disabled={!!isLocked} className={`aspect-square rounded-2xl border-2 flex flex-col items-center justify-center relative transition-all active:scale-95 ${bgClass}`}>
