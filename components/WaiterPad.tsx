@@ -214,6 +214,15 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       setTableManagerOpen(true);
   };
 
+  // Close map and RESET selection if not confirmed (The "X" button logic)
+  const handleCloseTableManager = () => {
+      setTableManagerOpen(false);
+      setIsSettingTables(false);
+      setTable(''); // Reset selection
+      setCart([]); // Clear any unconfirmed cart items
+      setEditingOrderId(null);
+  };
+
   const startEditing = (item: MenuItem) => { setEditingItemId(item.id); setEditQty(1); setEditNotes(''); };
   const cancelEditing = (e?: React.MouseEvent) => { if(e) e.stopPropagation(); setEditingItemId(null); setEditQty(1); setEditNotes(''); };
   const confirmItem = (item: MenuItem) => {
@@ -259,6 +268,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   };
 
   const proceedToOrder = () => {
+    // Just close modal, KEEP table selected
     setTableManagerOpen(false);
   };
 
@@ -471,7 +481,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                       {!isSettingTables ? (<div><h2 className="text-2xl font-bold text-white">Mappa Tavoli</h2>{table ? <p className="text-orange-400 text-sm font-bold">Selezionato: TAVOLO {table}</p> : <p className="text-slate-400 text-sm">Seleziona un tavolo</p>}</div>) : (<div><h2 className="text-xl font-bold text-white">Impostazioni</h2><p className="text-slate-400 text-sm">Numero tavoli sala</p></div>)}
                       <div className="flex gap-2">
                         {!isSettingTables && <button onClick={() => { setIsSettingTables(true); setTempTableCount(totalTables); }} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white"><Settings size={20} /></button>}
-                        <button onClick={() => { setTableManagerOpen(false); setIsSettingTables(false); }} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={20} /></button>
+                        <button onClick={handleCloseTableManager} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={20} /></button>
                       </div>
                   </div>
                   {isSettingTables ? (
