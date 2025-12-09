@@ -520,7 +520,12 @@ const App: React.FC = () => {
                                         
                                         {/* Live Component */}
                                         <div className="h-full w-full overflow-hidden bg-slate-50">
-                                            <DigitalMenu restaurantId={session?.user?.id} isPreview={true} />
+                                            <DigitalMenu 
+                                                restaurantId={session?.user?.id} 
+                                                isPreview={true} 
+                                                activeMenuData={menuItems}
+                                                activeRestaurantName={restaurantName}
+                                            />
                                         </div>
                                     </div>
                                 </div>

@@ -5,7 +5,9 @@ import { ChefHat, Utensils, Pizza, CakeSlice, Wine, Wheat, Milk, Egg, Nut, Fish,
 
 interface DigitalMenuProps {
     restaurantId: string;
-    isPreview?: boolean; // New Prop for embedded mode
+    isPreview?: boolean;
+    activeMenuData?: MenuItem[]; // Data injected directly (for Preview)
+    activeRestaurantName?: string; // Name injected directly (for Preview)
 }
 
 const CATEGORY_ORDER = [Category.ANTIPASTI, Category.PRIMI, Category.SECONDI, Category.DOLCI, Category.BEVANDE];
@@ -15,17 +17,32 @@ const ALLERGENS_ICONS: Record<string, any> = {
     'Pesce': Fish, 'Soia': Bean, 'Piccante': Flame, 'Vegano': Leaf
 };
 
-const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = false }) => {
-    const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-    const [restaurantName, setRestaurantName] = useState('Menu Digitale');
-    const [loading, setLoading] = useState(true);
+const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = false, activeMenuData, activeRestaurantName }) => {
+    const [menuItems, setMenuItems] = useState<MenuItem[]>(activeMenuData || []);
+    const [restaurantName, setRestaurantName] = useState(activeRestaurantName || 'Menu Digitale');
+    // If data is provided via props, we are not loading.
+    const [loading, setLoading] = useState(!activeMenuData);
     const [error, setError] = useState<string | null>(null);
     const [activeCategory, setActiveCategory] = useState<Category>(Category.ANTIPASTI);
     const [searchTerm, setSearchTerm] = useState('');
     const [showScrollTop, setShowScrollTop] = useState(false);
     const [rlsError, setRlsError] = useState(false);
 
+    // Sync state if props change (for real-time preview updates)
     useEffect(() => {
+        if (activeMenuData) {
+            setMenuItems(activeMenuData);
+            setLoading(false);
+        }
+        if (activeRestaurantName) {
+            setRestaurantName(activeRestaurantName);
+        }
+    }, [activeMenuData, activeRestaurantName]);
+
+    useEffect(() => {
+        // If we have direct data (Preview mode), skip fetching
+        if (activeMenuData) return;
+
         const fetchData = async () => {
             if (!supabase) {
                 setError("Database non connesso.");
@@ -74,7 +91,7 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
         };
         fetchData();
 
-        // Scroll listener (only attach to window if not preview, otherwise attach to container ref would be better but simplified here)
+        // Scroll listener logic
         const handleScroll = () => setShowScrollTop(window.scrollY > 300);
         if (!isPreview) {
             window.addEventListener('scroll', handleScroll);
@@ -82,20 +99,18 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
         return () => {
             if (!isPreview) window.removeEventListener('scroll', handleScroll);
         };
-    }, [restaurantId, isPreview]);
+    }, [restaurantId, isPreview]); // activeMenuData removed from dep array to avoid re-triggering fetch logic if it becomes null
 
     const scrollToCategory = (cat: Category) => {
         setActiveCategory(cat);
         const element = document.getElementById(`cat-${cat}`);
         if (element) {
-            // Adjust offset for preview mode vs full screen
             const container = isPreview ? document.getElementById('digital-menu-container') : window;
-            const offset = 140; 
             
             if (isPreview && container instanceof HTMLElement) {
-                 // For preview, we need to scroll the container
                  element.scrollIntoView({ behavior: 'smooth', block: 'start' });
             } else {
+                 const offset = 140; 
                  const bodyRect = document.body.getBoundingClientRect().top;
                  const elementRect = element.getBoundingClientRect().top;
                  const elementPosition = elementRect - bodyRect;
@@ -110,10 +125,12 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
     };
 
     const filteredItems = useMemo(() => {
-        return menuItems.filter(item => 
-            item.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-            (item.description && item.description.toLowerCase().includes(searchTerm.toLowerCase()))
-        );
+        return menuItems.filter(item => {
+            const name = item.name || '';
+            const desc = item.description || '';
+            return name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                   desc.toLowerCase().includes(searchTerm.toLowerCase());
+        });
     }, [menuItems, searchTerm]);
 
     const exitMenuMode = () => {
@@ -129,8 +146,8 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
         </div>
     );
 
-    // SCREEN ERRORI
-    if (rlsError || (menuItems.length === 0 && !loading)) {
+    // SCREEN ERRORI (Mostra solo se non abbiamo dati e non siamo in loading)
+    if ((rlsError || (menuItems.length === 0 && !loading)) && !activeMenuData) {
         return (
             <div className={`${isPreview ? 'h-full bg-slate-950 rounded-[2.5rem]' : 'min-h-screen bg-slate-950'} flex flex-col items-center justify-center text-white p-8 text-center`}>
                 <div className="w-20 h-20 bg-orange-500/10 rounded-full flex items-center justify-center mb-6 animate-pulse">
