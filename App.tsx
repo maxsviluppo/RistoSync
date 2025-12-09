@@ -718,7 +718,6 @@ export default function App() {
                             </div>
                         )}
                         
-                        {/* OTHER TABS (Menu, Info, AI, Analytics) kept for brevity but logic exists in user file provided, assuming user wants full file content */}
                         {/* MENU TAB */}
                         {adminTab === 'menu' && (
                              <div className="max-w-4xl mx-auto pb-20">
@@ -790,6 +789,72 @@ export default function App() {
                                 </div>
                                 <div className="mt-8 flex justify-center"><button onClick={handleDeleteDailyHistory} className="flex items-center gap-2 px-6 py-3 rounded-xl bg-red-900/20 text-red-500 font-bold border border-red-900/50 hover:bg-red-900/40 transition-colors"><Trash2 size={18}/> ELIMINA STORICO DEL GIORNO</button></div>
                              </div>
+                        )}
+
+                        {/* AI TAB - RESTORED */}
+                        {adminTab === 'ai' && (
+                            <div className="max-w-xl mx-auto pb-20">
+                                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                                    <Bot className="text-indigo-500"/> AI Configuration
+                                </h3>
+                                <div className="bg-slate-900 p-6 rounded-2xl border border-indigo-500/30 shadow-lg shadow-indigo-500/10">
+                                    <p className="text-slate-400 text-sm mb-4">
+                                        Inserisci la tua <strong>Google Gemini API Key</strong> per abilitare l'assistente chef intelligente.
+                                        L'AI risponderà a domande su ingredienti e allergeni.
+                                    </p>
+                                    <div className="mb-4">
+                                        <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">API Key</label>
+                                        <div className="relative">
+                                            <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
+                                            <input 
+                                                type="password" 
+                                                value={apiKeyInput} 
+                                                onChange={(e) => setApiKeyInput(e.target.value)} 
+                                                className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white focus:border-indigo-500 outline-none font-mono" 
+                                                placeholder="AIzaSy..."
+                                            />
+                                        </div>
+                                    </div>
+                                    <button onClick={handleSaveApiKey} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20">
+                                        <Save size={18}/> SALVA CHIAVE
+                                    </button>
+                                    <div className="mt-6 pt-6 border-t border-slate-800 text-center">
+                                        <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-indigo-400 text-xs font-bold hover:text-white flex items-center justify-center gap-1">
+                                            Ottieni una chiave gratuita qui <ExternalLink size={12}/>
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* INFO TAB - RESTORED */}
+                        {adminTab === 'info' && (
+                            <div className="max-w-2xl mx-auto pb-20">
+                                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                                    <Info className="text-slate-400"/> Legenda Stati & Icone
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800">
+                                        <h4 className="text-slate-400 text-xs font-bold uppercase mb-4 tracking-widest">Stati Ordine</h4>
+                                        <div className="space-y-3">
+                                            <div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.5)]"></div><span className="text-white font-bold">In Attesa</span><span className="text-slate-500 text-xs ml-auto">Appena arrivato</span></div>
+                                            <div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full bg-orange-500"></div><span className="text-white font-bold">In Preparazione</span><span className="text-slate-500 text-xs ml-auto">Preso in carico</span></div>
+                                            <div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]"></div><span className="text-white font-bold">Pronto</span><span className="text-slate-500 text-xs ml-auto">Da servire</span></div>
+                                            <div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full bg-slate-500"></div><span className="text-white font-bold">Servito</span><span className="text-slate-500 text-xs ml-auto">Completato</span></div>
+                                            <div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full bg-red-600 animate-pulse"></div><span className="text-white font-bold">Ritardo Critico</span><span className="text-slate-500 text-xs ml-auto">&gt; 25 min</span></div>
+                                        </div>
+                                    </div>
+                                    <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800">
+                                        <h4 className="text-slate-400 text-xs font-bold uppercase mb-4 tracking-widest">Reparti</h4>
+                                        <div className="space-y-3">
+                                            <div className="flex items-center gap-3"><div className="p-2 bg-orange-500/20 rounded text-orange-500"><ChefHat size={16}/></div><span className="text-white font-bold">Cucina</span><span className="text-slate-500 text-xs ml-auto">Colore Arancio</span></div>
+                                            <div className="flex items-center gap-3"><div className="p-2 bg-red-500/20 rounded text-red-500"><Pizza size={16}/></div><span className="text-white font-bold">Pizzeria</span><span className="text-slate-500 text-xs ml-auto">Colore Rosso</span></div>
+                                            <div className="flex items-center gap-3"><div className="p-2 bg-amber-500/20 rounded text-amber-500"><Sandwich size={16}/></div><span className="text-white font-bold">Pub</span><span className="text-slate-500 text-xs ml-auto">Colore Ambra</span></div>
+                                            <div className="flex items-center gap-3"><div className="p-2 bg-blue-500/20 rounded text-blue-500"><Wine size={16}/></div><span className="text-white font-bold">Sala/Bar</span><span className="text-slate-500 text-xs ml-auto">Colore Blu</span></div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         )}
                     </div>
                 </div>
