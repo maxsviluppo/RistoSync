@@ -10,7 +10,7 @@ interface DigitalMenuProps {
     activeRestaurantName?: string; // Name injected directly (for Preview)
 }
 
-const CATEGORY_ORDER = [Category.ANTIPASTI, Category.PRIMI, Category.SECONDI, Category.DOLCI, Category.BEVANDE];
+const CATEGORY_ORDER = [Category.ANTIPASTI, Category.PIZZE, Category.PRIMI, Category.SECONDI, Category.DOLCI, Category.BEVANDE];
 
 const ALLERGENS_ICONS: Record<string, any> = {
     'Glutine': Wheat, 'Latticini': Milk, 'Uova': Egg, 'Frutta a guscio': Nut,
@@ -120,7 +120,7 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
     };
 
     const getCategoryIcon = (cat: Category, size: number = 18) => {
-        switch (cat) { case Category.ANTIPASTI: return <Pizza size={size} />; case Category.PRIMI: return <ChefHat size={size} />; case Category.SECONDI: return <Utensils size={size} />; case Category.DOLCI: return <CakeSlice size={size} />; case Category.BEVANDE: return <Wine size={size} />; default: return <Utensils size={size} />; }
+        switch (cat) { case Category.ANTIPASTI: return <Pizza size={size} />; case Category.PIZZE: return <Pizza size={size} />; case Category.PRIMI: return <ChefHat size={size} />; case Category.SECONDI: return <Utensils size={size} />; case Category.DOLCI: return <CakeSlice size={size} />; case Category.BEVANDE: return <Wine size={size} />; default: return <Utensils size={size} />; }
     };
 
     const exitMenuMode = () => {
@@ -128,6 +128,11 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
         url.searchParams.delete('menu');
         window.location.href = url.toString();
     };
+
+    // FILTER: Determine visible categories (hide empty ones)
+    const visibleCategories = useMemo(() => {
+        return CATEGORY_ORDER.filter(cat => menuItems.some(item => item.category === cat));
+    }, [menuItems]);
 
     if (loading) return (
         <div className={`${isPreview ? 'h-full bg-slate-900 rounded-[2.5rem]' : 'min-h-screen bg-slate-900'} flex flex-col items-center justify-center text-white p-4`}>
@@ -202,7 +207,7 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
             {/* CATEGORY NAV (STICKY BELOW HEADER) */}
             <div className={`sticky z-10 bg-slate-50/95 backdrop-blur-md shadow-sm border-b border-slate-200/50 ${isPreview ? 'top-0 py-2' : 'top-[60px] py-3'}`}>
                 <div className="flex overflow-x-auto gap-2 px-4 no-scrollbar snap-x">
-                    {CATEGORY_ORDER.map(cat => (
+                    {visibleCategories.map(cat => (
                         <button 
                             key={cat} 
                             onClick={() => scrollToCategory(cat)}
@@ -211,16 +216,16 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
                             {getCategoryIcon(cat, isPreview ? 12 : 14)} {cat}
                         </button>
                     ))}
+                    {visibleCategories.length === 0 && (
+                         <div className="w-full text-center text-xs text-slate-400 py-2 italic">Nessuna categoria disponibile</div>
+                    )}
                 </div>
             </div>
 
             {/* MENU CONTENT */}
             <div className={`px-4 max-w-2xl mx-auto ${isPreview ? 'py-4 space-y-6' : 'py-6 space-y-10'}`}>
-                {CATEGORY_ORDER.map(cat => {
-                    // Filter items directly here since search is removed
+                {visibleCategories.map(cat => {
                     const items = menuItems.filter(i => i.category === cat);
-                    if (items.length === 0) return null;
-
                     return (
                         <div key={cat} id={`cat-${cat}`} className="scroll-mt-36">
                             <div className={`flex items-center gap-2 mb-3 ${isPreview ? 'mt-2' : 'mt-0'}`}>
@@ -264,7 +269,7 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
                     );
                 })}
 
-                {menuItems.length === 0 && (
+                {visibleCategories.length === 0 && (
                     <div className="text-center py-10 text-slate-400">
                         <Search size={40} className="mx-auto mb-4 opacity-20"/>
                         <p className="font-bold text-sm">Menu vuoto</p>

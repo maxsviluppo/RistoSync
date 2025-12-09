@@ -5,10 +5,11 @@ import { Clock, CheckCircle, ChefHat, Bell, User, LogOut, Square, CheckSquare, A
 
 const CATEGORY_PRIORITY: Record<Category, number> = {
     [Category.ANTIPASTI]: 1,
-    [Category.PRIMI]: 2,
-    [Category.SECONDI]: 3,
-    [Category.DOLCI]: 4,
-    [Category.BEVANDE]: 5
+    [Category.PIZZE]: 2,
+    [Category.PRIMI]: 3,
+    [Category.SECONDI]: 4,
+    [Category.DOLCI]: 5,
+    [Category.BEVANDE]: 6
 };
 
 // Configurazione Soglie Ritardo (minuti)

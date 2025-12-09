@@ -4,7 +4,7 @@ import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, g
 import { askChefAI } from '../services/geminiService';
 import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen, Bell, ArrowRight, Lock, PlusCircle, Coffee, CheckCircle, Mic, MicOff, AlertOctagon, Flag } from 'lucide-react';
 
-const CATEGORY_ORDER = [Category.ANTIPASTI, Category.PRIMI, Category.SECONDI, Category.DOLCI, Category.BEVANDE];
+const CATEGORY_ORDER = [Category.ANTIPASTI, Category.PIZZE, Category.PRIMI, Category.SECONDI, Category.DOLCI, Category.BEVANDE];
 
 const capitalize = (str: string) => str ? str.charAt(0).toUpperCase() + str.slice(1) : '';
 
@@ -301,7 +301,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   };
 
   const getCategoryIcon = (cat: Category, size: number = 18) => {
-    switch (cat) { case Category.ANTIPASTI: return <Pizza size={size} />; case Category.PRIMI: return <ChefHat size={size} />; case Category.SECONDI: return <Utensils size={size} />; case Category.DOLCI: return <CakeSlice size={size} />; case Category.BEVANDE: return <Wine size={size} />; default: return <Utensils size={size} />; }
+    switch (cat) { case Category.ANTIPASTI: return <Pizza size={size} />; case Category.PIZZE: return <Pizza size={size} />; case Category.PRIMI: return <ChefHat size={size} />; case Category.SECONDI: return <Utensils size={size} />; case Category.DOLCI: return <CakeSlice size={size} />; case Category.BEVANDE: return <Wine size={size} />; default: return <Utensils size={size} />; }
   };
   
   // Logic to determine table status color and badge

@@ -11,6 +11,7 @@ import { MenuItem, Category, Department, AppSettings, OrderStatus, Order, Restau
 
 const ADMIN_CATEGORY_ORDER = [
     Category.ANTIPASTI,
+    Category.PIZZE,
     Category.PRIMI,
     Category.SECONDI,
     Category.DOLCI,
@@ -158,6 +159,7 @@ export default function App() {
           setAppSettingsState(currentSettings); 
           setTempDestinations(currentSettings.categoryDestinations || {
               [Category.ANTIPASTI]: 'Cucina',
+              [Category.PIZZE]: 'Pizzeria',
               [Category.PRIMI]: 'Cucina',
               [Category.SECONDI]: 'Cucina',
               [Category.DOLCI]: 'Cucina',
@@ -753,8 +755,24 @@ export default function App() {
                         )}
                         {/* INFO TAB */}
                         {adminTab === 'info' && (
-                             <div className="max-w-3xl mx-auto">
+                             <div className="max-w-4xl mx-auto">
                                 <h3 className="text-xl font-bold text-white mb-6">Legenda & Info</h3>
+                                
+                                {/* Allergeni Table */}
+                                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 mb-6">
+                                    <h4 className="font-bold text-white mb-4 flex items-center gap-2"><Info size={18} className="text-yellow-500"/> Tabella Allergeni</h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        {ALLERGENS_CONFIG.map(alg => (
+                                            <div key={alg.id} className="flex items-center gap-3 p-3 bg-slate-950 rounded-xl border border-slate-800">
+                                                <div className="w-8 h-8 bg-slate-800 rounded-full flex items-center justify-center text-slate-400">
+                                                    <alg.icon size={16} />
+                                                </div>
+                                                <span className="text-sm font-bold text-slate-300">{alg.label}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                     <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h4 className="font-bold text-white mb-4 flex items-center gap-2"><LayoutGrid size={18} className="text-orange-500"/> Stati Tavolo</h4><ul className="space-y-3 text-sm">{[{l:'LIBERO', c:'text-slate-400', d:'Nessun ordine attivo'}, {l:'OCCUPATO', c:'text-orange-400', d:'Clienti al tavolo, in attesa'}, {l:'IN RITARDO', c:'text-red-400', d:'Attesa > 25 min'}, {l:'SERVIMI', c:'text-green-400', d:'Piatti pronti in cucina'}, {l:'IN ATTESA', c:'text-orange-500', d:'Tutti i piatti serviti (mangiando)'}].map((s,i) => (<li key={i}><span className={`font-black ${s.c}`}>{s.l}</span><p className="text-slate-500 text-xs">{s.d}</p></li>))}</ul></div>
                                     <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h4 className="font-bold text-white mb-4 flex items-center gap-2"><ChefHat size={18} className="text-blue-500"/> Stati Cucina</h4><ul className="space-y-3 text-sm">{[{l:'IN ARRIVO', c:'bg-slate-700 text-white', d:'Nuovo ordine'}, {l:'IN PREPARAZIONE', c:'bg-orange-500 text-white', d:'Chef sta cucinando'}, {l:'PRONTO', c:'bg-green-500 text-white', d:'Da portare al tavolo'}, {l:'SERVITO', c:'text-slate-500 line-through', d:'Consegnato al cliente'}].map((s,i) => (<li key={i} className="flex items-center gap-3"><span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${s.c}`}>{s.l}</span><span className="text-slate-500 text-xs">{s.d}</span></li>))}</ul></div>

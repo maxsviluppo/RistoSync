@@ -7,6 +7,7 @@ export enum OrderStatus {
 
 export enum Category {
   ANTIPASTI = 'Antipasti',
+  PIZZE = 'Pizze',
   PRIMI = 'Primi',
   SECONDI = 'Secondi',
   DOLCI = 'Dolci',
