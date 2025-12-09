@@ -4,11 +4,11 @@ import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import DigitalMenu from './components/DigitalMenu';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft, CheckCircle, LayoutGrid, SlidersHorizontal, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft, CheckCircle, LayoutGrid, SlidersHorizontal, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, List, FileSpreadsheet } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { askChefAI, generateRestaurantAnalysis } from './services/geminiService';
-import { MenuItem, Category, Department, AppSettings, OrderStatus, Order, RestaurantProfile } from './types';
+import { MenuItem, Category, Department, AppSettings, OrderStatus, Order, RestaurantProfile, OrderItem } from './types';
 
 const ADMIN_CATEGORY_ORDER = [
     Category.ANTIPASTI,
@@ -34,6 +34,56 @@ const ALLERGENS_CONFIG = [
 const capitalize = (str: string) => {
     if (!str) return '';
     return str.charAt(0).toUpperCase() + str.slice(1);
+};
+
+// Admin-side Receipt Generator
+const generateAdminReceiptHtml = (items: OrderItem[], table: string, waiter: string, restaurantName: string, dateObj: Date) => {
+    const time = dateObj.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const date = dateObj.toLocaleDateString('it-IT');
+    const total = items.reduce((acc, i) => acc + (i.menuItem.price * i.quantity), 0);
+
+    return `
+    <html>
+        <head>
+            <title>Ristampa Scontrino ${table}</title>
+            <style>
+                body { font-family: 'Courier New', monospace; width: 300px; margin: 0; padding: 10px; font-size: 14px; color: black; background: white; }
+                .header { text-align: center; border-bottom: 2px dashed black; padding-bottom: 10px; margin-bottom: 10px; }
+                .title { font-size: 18px; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; }
+                .dept { font-size: 14px; font-weight: bold; margin: 5px 0; }
+                .meta { font-size: 14px; margin: 2px 0; font-weight: bold; }
+                .item { display: flex; margin-bottom: 8px; align-items: baseline; }
+                .qty { font-weight: bold; width: 30px; font-size: 16px; }
+                .name { flex: 1; font-weight: bold; font-size: 16px; }
+                .footer { border-top: 2px dashed black; margin-top: 15px; padding-top: 10px; text-align: center; font-size: 10px; }
+                .total { margin-top: 10px; padding-top: 5px; border-top: 1px solid black; font-weight: bold; font-size: 20px; text-align: right; }
+                .price { font-size: 14px; font-weight: normal; margin-left: 10px; }
+                @media print { .no-print { display: none !important; } }
+                .close-btn { display: block; width: 100%; background-color: #ef4444; color: white; text-align: center; padding: 15px 0; font-weight: bold; font-size: 16px; border: none; cursor: pointer; position: fixed; bottom: 0; left: 0; right: 0; text-transform: uppercase; }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <div class="title">${restaurantName}</div>
+                <div class="dept">DUPLICATO SCONTRINO</div>
+                <div class="meta">TAVOLO: ${table}</div>
+                <div class="meta">Staff: ${waiter}</div>
+                <div style="font-size: 12px; margin-top:5px;">${date} - ${time}</div>
+            </div>
+            ${items.map(item => `
+                <div class="item">
+                    <span class="qty">${item.quantity}</span>
+                    <span class="name">${item.menuItem.name}</span>
+                    <span class="price">€ ${(item.menuItem.price * item.quantity).toFixed(2)}</span>
+                </div>
+            `).join('')}
+            <div class="total">TOTALE: € ${total.toFixed(2)}</div>
+            <div class="footer">RistoSync AI - Archivio Storico<br>*** NON FISCALE ***</div>
+            <button class="no-print close-btn" onclick="window.close()">✖ CHIUDI FINESTRA</button>
+            <script>window.onload = function() { setTimeout(function(){ window.focus(); window.print(); }, 500); }</script>
+        </body>
+    </html>
+    `;
 };
 
 export default function App() {
@@ -70,6 +120,7 @@ export default function App() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [aiAnalysisResult, setAiAnalysisResult] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analyticsView, setAnalyticsView] = useState<'stats' | 'receipts'>('stats'); // Toggle between Graphs and Receipt Log
 
   // Delete Confirmation State
   const [itemToDelete, setItemToDelete] = useState<MenuItem | null>(null);
@@ -417,6 +468,27 @@ export default function App() {
       const result = await generateRestaurantAnalysis(stats, formatDate(selectedDate));
       setAiAnalysisResult(result);
       setIsAnalyzing(false);
+  };
+
+  const handleReprintReceipt = (order: Order) => {
+      const items = order.items;
+      const total = items.reduce((acc, i) => acc + (i.menuItem.price * i.quantity), 0);
+      const cleanTable = order.tableNumber.replace('_HISTORY', '');
+      const dateObj = new Date(order.createdAt || order.timestamp);
+      
+      const printContent = generateAdminReceiptHtml(
+          items,
+          cleanTable,
+          order.waiterName || 'Staff',
+          restaurantName,
+          dateObj
+      );
+
+      const printWindow = window.open('', `REPRINT_${order.id}`, 'height=600,width=400');
+      if (printWindow) {
+          printWindow.document.write(printContent);
+          printWindow.document.close();
+      }
   };
 
   const getCategoryIcon = (cat: Category) => {
@@ -962,103 +1034,172 @@ export default function App() {
                             </div>
                         )}
 
-                        {/* ANALYTICS TAB */}
+                        {/* ANALYTICS TAB with RECEIPT LOG */}
                         {adminTab === 'analytics' && (
                              <div className="max-w-5xl mx-auto pb-20">
                                 <div className="flex justify-between items-center mb-6 bg-slate-900 p-4 rounded-2xl border border-slate-800">
-                                    <div><h3 className="text-xl font-bold text-white">Analisi Vendite</h3><p className="text-slate-400 text-sm">Report giornaliero</p></div>
+                                    <div><h3 className="text-xl font-bold text-white">Analisi & Cassa</h3><p className="text-slate-400 text-sm">Resoconto Giornaliero</p></div>
                                     <div className="flex items-center bg-slate-950 rounded-xl p-1 border border-slate-800"><button onClick={() => changeDate(-1)} className="p-3 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white"><ChevronLeft/></button><div className="px-6 font-bold text-white flex items-center gap-2 uppercase tracking-wide"><Calendar size={18} className="text-orange-500"/> {formatDate(selectedDate)}</div><button onClick={() => changeDate(1)} className="p-3 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white"><ChevronRight/></button></div>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><div className="flex justify-between items-start mb-2"><div className="p-3 bg-green-900/20 rounded-xl text-green-500"><DollarSign/></div><span className="text-xs font-bold text-slate-500 uppercase">Incasso</span></div><p className="text-3xl font-black text-white">€ {stats.totalRevenue.toFixed(2)}</p></div>
-                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><div className="flex justify-between items-start mb-2"><div className="p-3 bg-blue-900/20 rounded-xl text-blue-500"><UtensilsCrossed/></div><span className="text-xs font-bold text-slate-500 uppercase">Piatti</span></div><p className="text-3xl font-black text-white">{stats.totalItems}</p></div>
-                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><div className="flex justify-between items-start mb-2"><div className="p-3 bg-purple-900/20 rounded-xl text-purple-500"><History/></div><span className="text-xs font-bold text-slate-500 uppercase">Attesa Media</span></div><p className="text-3xl font-black text-white">{stats.avgWait} <span className="text-base font-medium text-slate-500">min</span></p></div>
-                                </div>
-                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h4 className="font-bold text-white mb-6 uppercase text-sm tracking-wider flex items-center gap-2"><BarChart3 size={16} className="text-orange-500"/> Ore di Punta</h4><div className="h-48 flex items-end gap-2">{stats.chartHours.map(d => (<div key={d.hour} className="flex-1 bg-slate-800 rounded-t-sm relative group hover:bg-orange-500 transition-colors" style={{ height: `${(d.count / stats.maxHourly) * 100}%` }}><div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-white text-slate-900 text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">{d.count}</div></div>))}</div><div className="flex justify-between mt-2 text-[10px] text-slate-500 font-mono"><span>00:00</span><span>12:00</span><span>23:00</span></div></div>
-                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h4 className="font-bold text-white mb-6 uppercase text-sm tracking-wider flex items-center gap-2"><Star size={16} className="text-yellow-500"/> Piatti Top</h4><div className="space-y-4">{stats.topDishes.map((d, i) => (<div key={i} className="flex items-center justify-between"><div className="flex items-center gap-3"><div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-500 border border-slate-700">{i+1}</div><span className="font-bold text-slate-300">{d.name}</span></div><div className="text-right"><span className="block font-black text-white">{d.count}x</span><span className="text-[10px] text-slate-500">€ {d.revenue.toFixed(2)}</span></div></div>))}</div></div>
-                                </div>
-                                
-                                {/* AI ANALYSIS SECTION */}
-                                <div className="mt-8 relative group">
-                                    {/* Animated Border Gradient */}
-                                    <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-[2rem] opacity-30 blur group-hover:opacity-50 transition duration-1000"></div>
-                                    
-                                    <div className="relative bg-slate-900 rounded-[1.8rem] p-1 h-full">
-                                        {/* Inner Content Container */}
-                                        <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-[1.6rem] p-6 h-full relative overflow-hidden">
-                                            
-                                            {/* Background Decorations */}
-                                            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 blur-[80px] rounded-full pointer-events-none"></div>
-                                            <div className="absolute bottom-0 left-0 w-40 h-40 bg-purple-500/10 blur-[60px] rounded-full pointer-events-none"></div>
 
-                                            <div className="relative z-10">
-                                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-                                                    <div>
-                                                        <h3 className="text-2xl font-black text-white flex items-center gap-3">
-                                                            <div className="p-2 bg-indigo-500/20 rounded-xl text-indigo-400">
-                                                                <Sparkles size={24} className="animate-pulse"/>
-                                                            </div>
-                                                            <span className="bg-gradient-to-r from-indigo-200 via-white to-purple-200 bg-clip-text text-transparent">
-                                                                AI Business Insight
-                                                            </span>
-                                                        </h3>
-                                                        <p className="text-slate-400 font-medium text-sm mt-2 ml-1">
-                                                            Analisi strategica e suggerimenti operativi basati sui dati in tempo reale.
-                                                        </p>
-                                                    </div>
+                                {/* VIEW TOGGLE */}
+                                <div className="flex mb-6 bg-slate-900 p-1 rounded-xl w-max border border-slate-800">
+                                    <button onClick={() => setAnalyticsView('stats')} className={`px-6 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${analyticsView === 'stats' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
+                                        <BarChart3 size={16}/> Statistiche
+                                    </button>
+                                    <button onClick={() => setAnalyticsView('receipts')} className={`px-6 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${analyticsView === 'receipts' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
+                                        <FileSpreadsheet size={16}/> Registro Scontrini
+                                    </button>
+                                </div>
+
+                                {analyticsView === 'stats' ? (
+                                    <>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><div className="flex justify-between items-start mb-2"><div className="p-3 bg-green-900/20 rounded-xl text-green-500"><DollarSign/></div><span className="text-xs font-bold text-slate-500 uppercase">Incasso</span></div><p className="text-3xl font-black text-white">€ {stats.totalRevenue.toFixed(2)}</p></div>
+                                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><div className="flex justify-between items-start mb-2"><div className="p-3 bg-blue-900/20 rounded-xl text-blue-500"><UtensilsCrossed/></div><span className="text-xs font-bold text-slate-500 uppercase">Piatti</span></div><p className="text-3xl font-black text-white">{stats.totalItems}</p></div>
+                                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><div className="flex justify-between items-start mb-2"><div className="p-3 bg-purple-900/20 rounded-xl text-purple-500"><History/></div><span className="text-xs font-bold text-slate-500 uppercase">Attesa Media</span></div><p className="text-3xl font-black text-white">{stats.avgWait} <span className="text-base font-medium text-slate-500">min</span></p></div>
+                                        </div>
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h4 className="font-bold text-white mb-6 uppercase text-sm tracking-wider flex items-center gap-2"><BarChart3 size={16} className="text-orange-500"/> Ore di Punta</h4><div className="h-48 flex items-end gap-2">{stats.chartHours.map(d => (<div key={d.hour} className="flex-1 bg-slate-800 rounded-t-sm relative group hover:bg-orange-500 transition-colors" style={{ height: `${(d.count / stats.maxHourly) * 100}%` }}><div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-white text-slate-900 text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">{d.count}</div></div>))}</div><div className="flex justify-between mt-2 text-[10px] text-slate-500 font-mono"><span>00:00</span><span>12:00</span><span>23:00</span></div></div>
+                                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h4 className="font-bold text-white mb-6 uppercase text-sm tracking-wider flex items-center gap-2"><Star size={16} className="text-yellow-500"/> Piatti Top</h4><div className="space-y-4">{stats.topDishes.map((d, i) => (<div key={i} className="flex items-center justify-between"><div className="flex items-center gap-3"><div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-500 border border-slate-700">{i+1}</div><span className="font-bold text-slate-300">{d.name}</span></div><div className="text-right"><span className="block font-black text-white">{d.count}x</span><span className="text-[10px] text-slate-500">€ {d.revenue.toFixed(2)}</span></div></div>))}</div></div>
+                                        </div>
+                                        
+                                        {/* AI ANALYSIS SECTION */}
+                                        <div className="mt-8 relative group">
+                                            {/* Animated Border Gradient */}
+                                            <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-[2rem] opacity-30 blur group-hover:opacity-50 transition duration-1000"></div>
+                                            
+                                            <div className="relative bg-slate-900 rounded-[1.8rem] p-1 h-full">
+                                                {/* Inner Content Container */}
+                                                <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-[1.6rem] p-6 h-full relative overflow-hidden">
                                                     
-                                                    {!aiAnalysisResult && (
-                                                        <button 
-                                                            onClick={handleRunAiAnalysis} 
-                                                            disabled={isAnalyzing}
-                                                            className="group relative px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold shadow-xl shadow-indigo-600/20 transition-all active:scale-95 disabled:opacity-50 overflow-hidden"
-                                                        >
-                                                            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-                                                            <div className="flex items-center gap-3 relative z-10">
-                                                                {isAnalyzing ? <Loader className="animate-spin" size={20}/> : <Bot size={20}/>}
-                                                                <span>{isAnalyzing ? 'Elaborazione in corso...' : 'Genera Analisi'}</span>
+                                                    {/* Background Decorations */}
+                                                    <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 blur-[80px] rounded-full pointer-events-none"></div>
+                                                    <div className="absolute bottom-0 left-0 w-40 h-40 bg-purple-500/10 blur-[60px] rounded-full pointer-events-none"></div>
+
+                                                    <div className="relative z-10">
+                                                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                                                            <div>
+                                                                <h3 className="text-2xl font-black text-white flex items-center gap-3">
+                                                                    <div className="p-2 bg-indigo-500/20 rounded-xl text-indigo-400">
+                                                                        <Sparkles size={24} className="animate-pulse"/>
+                                                                    </div>
+                                                                    <span className="bg-gradient-to-r from-indigo-200 via-white to-purple-200 bg-clip-text text-transparent">
+                                                                        AI Business Insight
+                                                                    </span>
+                                                                </h3>
+                                                                <p className="text-slate-400 font-medium text-sm mt-2 ml-1">
+                                                                    Analisi strategica e suggerimenti operativi basati sui dati in tempo reale.
+                                                                </p>
                                                             </div>
-                                                        </button>
-                                                    )}
-                                                </div>
-                                                
-                                                {aiAnalysisResult && (
-                                                    <div className="animate-slide-up">
-                                                        <div className="bg-slate-950/80 backdrop-blur-sm rounded-2xl p-8 border border-indigo-500/20 shadow-inner relative">
-                                                            <button onClick={() => setAiAnalysisResult('')} className="absolute top-4 right-4 text-slate-500 hover:text-white p-2 hover:bg-slate-800 rounded-xl transition-colors"><X size={20}/></button>
                                                             
-                                                            <div className="flex items-start gap-4">
-                                                                <div className="hidden sm:block p-3 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg mt-1">
-                                                                    <Bot size={24} className="text-white"/>
-                                                                </div>
-                                                                <div className="flex-1">
-                                                                    <h4 className="text-indigo-300 font-bold text-xs uppercase tracking-widest mb-4 flex items-center gap-2">
-                                                                        <div className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse"></div>
-                                                                        Report Generato
-                                                                    </h4>
-                                                                    <div className="prose prose-invert max-w-none">
-                                                                        <p className="whitespace-pre-wrap text-slate-200 text-base leading-7 font-medium font-sans">
-                                                                            {aiAnalysisResult}
-                                                                        </p>
+                                                            {!aiAnalysisResult && (
+                                                                <button 
+                                                                    onClick={handleRunAiAnalysis} 
+                                                                    disabled={isAnalyzing}
+                                                                    className="group relative px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold shadow-xl shadow-indigo-600/20 transition-all active:scale-95 disabled:opacity-50 overflow-hidden"
+                                                                >
+                                                                    <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                                                                    <div className="flex items-center gap-3 relative z-10">
+                                                                        {isAnalyzing ? <Loader className="animate-spin" size={20}/> : <Bot size={20}/>}
+                                                                        <span>{isAnalyzing ? 'Elaborazione in corso...' : 'Genera Analisi'}</span>
+                                                                    </div>
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                        
+                                                        {aiAnalysisResult && (
+                                                            <div className="animate-slide-up">
+                                                                <div className="bg-slate-950/80 backdrop-blur-sm rounded-2xl p-8 border border-indigo-500/20 shadow-inner relative">
+                                                                    <button onClick={() => setAiAnalysisResult('')} className="absolute top-4 right-4 text-slate-500 hover:text-white p-2 hover:bg-slate-800 rounded-xl transition-colors"><X size={20}/></button>
+                                                                    
+                                                                    <div className="flex items-start gap-4">
+                                                                        <div className="hidden sm:block p-3 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg mt-1">
+                                                                            <Bot size={24} className="text-white"/>
+                                                                        </div>
+                                                                        <div className="flex-1">
+                                                                            <h4 className="text-indigo-300 font-bold text-xs uppercase tracking-widest mb-4 flex items-center gap-2">
+                                                                                <div className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse"></div>
+                                                                                Report Generato
+                                                                            </h4>
+                                                                            <div className="prose prose-invert max-w-none">
+                                                                                <p className="whitespace-pre-wrap text-slate-200 text-base leading-7 font-medium font-sans">
+                                                                                    {aiAnalysisResult}
+                                                                                </p>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="mt-6 pt-4 border-t border-white/5 flex justify-between items-center text-xs text-slate-500">
+                                                                        <span className="font-mono">RistoSync Intelligence v1.0</span>
+                                                                        <span className="flex items-center gap-1"><Sparkles size={10} className="text-indigo-400"/> Powered by Gemini 2.5</span>
                                                                     </div>
                                                                 </div>
+                                                                <div className="text-center mt-4">
+                                                                    <button onClick={() => setAiAnalysisResult('')} className="text-indigo-400 hover:text-indigo-300 text-sm font-bold">Genera nuova analisi</button>
+                                                                </div>
                                                             </div>
-
-                                                            <div className="mt-6 pt-4 border-t border-white/5 flex justify-between items-center text-xs text-slate-500">
-                                                                <span className="font-mono">RistoSync Intelligence v1.0</span>
-                                                                <span className="flex items-center gap-1"><Sparkles size={10} className="text-indigo-400"/> Powered by Gemini 2.5</span>
-                                                            </div>
-                                                        </div>
-                                                        <div className="text-center mt-4">
-                                                             <button onClick={() => setAiAnalysisResult('')} className="text-indigo-400 hover:text-indigo-300 text-sm font-bold">Genera nuova analisi</button>
-                                                        </div>
+                                                        )}
                                                     </div>
-                                                )}
+                                                </div>
                                             </div>
                                         </div>
+                                    </>
+                                ) : (
+                                    /* RECEIPT LOG VIEW */
+                                    <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
+                                        <div className="p-6 border-b border-slate-800 flex items-center gap-3">
+                                            <Receipt size={24} className="text-green-500"/>
+                                            <h3 className="text-xl font-bold text-white">Archivio Scontrini</h3>
+                                        </div>
+                                        
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left">
+                                                <thead className="bg-slate-950 text-slate-400 text-xs uppercase font-bold">
+                                                    <tr>
+                                                        <th className="p-4">Ora</th>
+                                                        <th className="p-4">Tavolo</th>
+                                                        <th className="p-4">Staff</th>
+                                                        <th className="p-4 text-right">Totale</th>
+                                                        <th className="p-4 text-center">Azioni</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-800">
+                                                    {filteredHistoryOrders.length === 0 ? (
+                                                        <tr>
+                                                            <td colSpan={5} className="p-8 text-center text-slate-500">
+                                                                Nessuno scontrino emesso in questa data.
+                                                            </td>
+                                                        </tr>
+                                                    ) : (
+                                                        filteredHistoryOrders.map(order => {
+                                                            const orderTotal = order.items.reduce((acc, i) => acc + (i.menuItem.price * i.quantity), 0);
+                                                            const orderTime = new Date(order.createdAt || order.timestamp).toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'});
+                                                            const cleanTable = order.tableNumber.replace('_HISTORY', '');
+                                                            
+                                                            return (
+                                                                <tr key={order.id} className="hover:bg-slate-800/50 transition-colors">
+                                                                    <td className="p-4 font-mono text-slate-300">{orderTime}</td>
+                                                                    <td className="p-4 font-bold text-white">{cleanTable}</td>
+                                                                    <td className="p-4 text-slate-400 text-sm">{order.waiterName || 'Staff'}</td>
+                                                                    <td className="p-4 text-right font-black text-green-400">€ {orderTotal.toFixed(2)}</td>
+                                                                    <td className="p-4 text-center">
+                                                                        <button 
+                                                                            onClick={() => handleReprintReceipt(order)}
+                                                                            className="bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-700 flex items-center gap-2 mx-auto transition-colors"
+                                                                        >
+                                                                            <Printer size={14}/> RISTAMPA
+                                                                        </button>
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </div>
-                                </div>
+                                )}
 
                                 <div className="mt-8 flex justify-center"><button onClick={handleDeleteDailyHistory} className="flex items-center gap-2 px-6 py-3 rounded-xl bg-red-900/20 text-red-500 font-bold border border-red-900/50 hover:bg-red-900/40 transition-colors"><Trash2 size={18}/> ELIMINA STORICO DEL GIORNO</button></div>
                              </div>
