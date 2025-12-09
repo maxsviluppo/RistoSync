@@ -96,6 +96,7 @@ const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, wa
     return `
     <html>
         <head>
+            <title>Scontrino ${table}</title>
             <style>
                 body { font-family: 'Courier New', monospace; width: 300px; margin: 0; padding: 10px; font-size: 14px; color: black; background: white; }
                 .header { text-align: center; border-bottom: 2px dashed black; padding-bottom: 10px; margin-bottom: 10px; }
@@ -107,7 +108,7 @@ const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, wa
                 .name { flex: 1; font-weight: bold; font-size: 16px; }
                 .notes { display: block; font-size: 12px; margin-left: 30px; font-style: italic; margin-top: 2px; }
                 .footer { border-top: 2px dashed black; margin-top: 15px; padding-top: 10px; text-align: center; font-size: 10px; }
-                .total { margin-top: 10px; padding-top: 5px; border-top: 1px solid black; font-weight: bold; font-size: 18px; text-align: right; }
+                .total { margin-top: 10px; padding-top: 5px; border-top: 1px solid black; font-weight: bold; font-size: 20px; text-align: right; }
                 .price { font-size: 14px; font-weight: normal; margin-left: 10px; }
             </style>
         </head>
@@ -135,9 +136,17 @@ const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, wa
 
             <div class="footer">
                 RistoSync AI - Copia di Cortesia
+                <br>*** NON FISCALE ***
             </div>
             <script>
-                window.onload = function() { window.print(); setTimeout(function(){ window.close(); }, 100); }
+                window.onload = function() { 
+                    setTimeout(function(){ 
+                        window.focus(); 
+                        window.print(); 
+                        // Optional: window.close() after printing
+                        // setTimeout(function(){ window.close(); }, 500);
+                    }, 500); 
+                }
             </script>
         </body>
     </html>
@@ -332,33 +341,54 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
         addOrder({ id: Date.now().toString(), tableNumber: table, items: cart, status: OrderStatus.PENDING, timestamp: Date.now(), waiterName: waiterName || 'Cameriere', createdAt: Date.now() });
     }
 
-    // --- NEW DISTRIBUTED PRINTING LOGIC ---
-    // The WaiterPad ONLY prints the "Cassa / Totale" receipt.
-    // The individual departments (Kitchen, Pizzeria, Pub) will auto-print their own tickets 
-    // when they receive the new order in KitchenDisplay.tsx
-    
-    if (appSettings && appSettings.printEnabled && appSettings.printEnabled['Cassa']) {
-        const printContent = generateReceiptHtml(
-            currentOrderItems, 
-            'Cassa / Totale', 
-            table, 
-            waiterName || 'Staff', 
-            appSettings.restaurantProfile?.name || 'Ristorante'
-        );
-        
-        const printWindow = window.open('', `PRINT_CASSA_${Date.now()}`, 'height=600,width=400');
-        if (printWindow) {
-            printWindow.document.write(printContent);
-            printWindow.document.close();
-            printWindow.focus();
-            // printWindow.print() is called inside the HTML onload
-        }
-    }
+    // NOTE: Department Printing is now handled by the Kitchen Display terminals automatically when they receive the order.
+    // Cassa Printing is handled in handleFreeTable (End of Meal).
     
     setTimeout(() => { setCart([]); setIsSending(false); setSheetHeight(80); setEditingOrderId(null); loadData(); setTable(''); }, 500);
   };
 
-  const handleFreeTable = () => { if (table) { freeTable(table); setTable(''); setCart([]); setEditingOrderId(null); setFreeTableConfirmOpen(false); loadData(); } };
+  const handleFreeTable = () => {
+      if (table) {
+          // 1. AGGREGATE ALL ITEMS FOR THE FINAL RECEIPT
+          // Filter all restaurant orders to find those belonging to this table
+          // Note: In a real DB scenario we might query specifically, here we use local cache state
+          const tableOrders = allRestaurantOrders.filter(o => o.tableNumber === table);
+          
+          let allItems: OrderItem[] = [];
+          tableOrders.forEach(o => {
+              allItems = [...allItems, ...o.items];
+          });
+
+          // 2. PRINT CASSA RECEIPT (Total Bill)
+          if (appSettings && appSettings.printEnabled && appSettings.printEnabled['Cassa']) {
+                if (allItems.length > 0) {
+                    const printContent = generateReceiptHtml(
+                        allItems,
+                        'Cassa / Totale',
+                        table,
+                        waiterName || 'Staff',
+                        appSettings.restaurantProfile?.name || 'Ristorante'
+                    );
+                    
+                    // Open print window - Browser will open "Save as PDF" if no printer connected
+                    const printWindow = window.open('', `PRINT_CASSA_${Date.now()}`, 'height=600,width=400');
+                    if (printWindow) {
+                        printWindow.document.write(printContent);
+                        printWindow.document.close();
+                        // print() is called via onload in HTML
+                    }
+                }
+          }
+
+          // 3. FREE TABLE LOGIC
+          freeTable(table);
+          setTable('');
+          setCart([]);
+          setEditingOrderId(null);
+          setFreeTableConfirmOpen(false);
+          loadData();
+      }
+  };
   
   const handleServeItem = (orderId: string, itemIndex: number) => {
       serveItem(orderId, itemIndex);

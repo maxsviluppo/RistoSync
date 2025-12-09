@@ -75,6 +75,7 @@ const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, wa
     return `
     <html>
         <head>
+            <title>Stampa ${dept} - Tavolo ${table}</title>
             <style>
                 body { font-family: 'Courier New', monospace; width: 300px; margin: 0; padding: 10px; font-size: 14px; color: black; background: white; }
                 .header { text-align: center; border-bottom: 2px dashed black; padding-bottom: 10px; margin-bottom: 10px; }
@@ -107,7 +108,13 @@ const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, wa
                 RistoSync AI - Copia di Cortesia
             </div>
             <script>
-                window.onload = function() { window.print(); setTimeout(function(){ window.close(); }, 100); }
+                window.onload = function() { 
+                    setTimeout(function(){ 
+                        window.focus(); 
+                        window.print(); 
+                        // window.close(); // Optional: close automatically
+                    }, 500); 
+                }
             </script>
         </body>
     </html>
@@ -246,14 +253,19 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
                     
                     // We use a slight timeout to ensure the UI update doesn't clash with the print dialog
                     setTimeout(() => {
+                        // SIMULATION FEEDBACK
+                        showNotification(`🖨️ Stampa Comanda ${department}...`, 'info');
+
                         const printWindow = window.open('', `AUTO_PRINT_${department}_${Date.now()}`, 'height=600,width=400');
                         if (printWindow) {
                             printWindow.document.write(printContent);
                             printWindow.document.close();
                             printWindow.focus();
                             // The receipt HTML contains window.print() onload
+                        } else {
+                            console.warn("Popup bloccato. Impossibile stampare.");
                         }
-                    }, 500);
+                    }, 800);
                 }
             }
         }
