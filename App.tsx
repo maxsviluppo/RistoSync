@@ -29,6 +29,12 @@ const ALLERGENS_CONFIG = [
     { id: 'Vegano', icon: Leaf, label: 'Vegano' },
 ];
 
+// FIX: Spostato a livello globale per evitare ReferenceError nel render condizionale
+const ALLERGENS_ICONS: Record<string, any> = {
+    'Glutine': Wheat, 'Latticini': Milk, 'Uova': Egg, 'Frutta a guscio': Nut,
+    'Pesce': Fish, 'Soia': Bean, 'Piccante': Flame, 'Vegano': Leaf
+};
+
 const capitalize = (str: string) => {
     if (!str) return '';
     return str.charAt(0).toUpperCase() + str.slice(1);
@@ -460,6 +466,29 @@ const App: React.FC = () => {
                              <button onClick={() => setAdminTab('info')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'info' ? 'bg-slate-700 text-white' : 'bg-slate-800 text-slate-400'}`}>Legenda</button>
                         </div>
                         
+                        {/* NOTIFICHE TAB (RESTORED) */}
+                        {adminTab === 'notif' && (
+                            <div className="max-w-md">
+                                <h3 className="text-xl font-bold text-white mb-6">Impostazioni Notifiche</h3>
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center bg-slate-900 p-4 rounded-xl border border-slate-800">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-orange-500/20 rounded-lg text-orange-500"><Bell size={20}/></div>
+                                            <div><p className="font-bold text-white">Suoni Cucina</p><p className="text-xs text-slate-400">Audio all'arrivo ordini</p></div>
+                                        </div>
+                                        <button onClick={() => toggleNotif('kitchenSound')} className={`w-12 h-6 rounded-full relative transition-colors ${notifSettings.kitchenSound ? 'bg-green-500' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${notifSettings.kitchenSound ? 'left-7' : 'left-1'}`}></div></button>
+                                    </div>
+                                    <div className="flex justify-between items-center bg-slate-900 p-4 rounded-xl border border-slate-800">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-blue-500/20 rounded-lg text-blue-500"><Smartphone size={20}/></div>
+                                            <div><p className="font-bold text-white">Suoni Sala</p><p className="text-xs text-slate-400">Audio piatti pronti</p></div>
+                                        </div>
+                                        <button onClick={() => toggleNotif('waiterSound')} className={`w-12 h-6 rounded-full relative transition-colors ${notifSettings.waiterSound ? 'bg-green-500' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${notifSettings.waiterSound ? 'left-7' : 'left-1'}`}></div></button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* NEW: SHARE / DIGITAL MENU TAB WITH PREVIEW */}
                         {adminTab === 'share' && (
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start max-w-5xl mx-auto">
@@ -865,9 +894,6 @@ const App: React.FC = () => {
              </div>
         )}
         
-        {/* IMPORTANTE: Allergeni Icons map for main view reuse */}
-        {/* Note: I'm reusing ALLERGENS_CONFIG defined at top */}
-        
         {/* DETAIL MODAL FOR ADMIN */}
         {detailOrder && (
             <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in" onClick={() => setDetailOrder(null)}>
@@ -930,11 +956,6 @@ const App: React.FC = () => {
       </div>
     );
   }
-
-  const ALLERGENS_ICONS: Record<string, any> = {
-    'Glutine': Wheat, 'Latticini': Milk, 'Uova': Egg, 'Frutta a guscio': Nut,
-    'Pesce': Fish, 'Soia': Bean, 'Piccante': Flame, 'Vegano': Leaf
-  };
 
   return (
     <>
