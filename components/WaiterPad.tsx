@@ -110,6 +110,30 @@ const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, wa
                 .footer { border-top: 2px dashed black; margin-top: 15px; padding-top: 10px; text-align: center; font-size: 10px; }
                 .total { margin-top: 10px; padding-top: 5px; border-top: 1px solid black; font-weight: bold; font-size: 20px; text-align: right; }
                 .price { font-size: 14px; font-weight: normal; margin-left: 10px; }
+                
+                /* NO PRINT UI */
+                @media print {
+                    .no-print { display: none !important; }
+                }
+                .close-btn {
+                    display: block;
+                    width: 100%;
+                    background-color: #ef4444;
+                    color: white;
+                    text-align: center;
+                    padding: 15px 0;
+                    font-weight: bold;
+                    font-size: 16px;
+                    border: none;
+                    cursor: pointer;
+                    position: fixed;
+                    bottom: 0;
+                    left: 0;
+                    right: 0;
+                    text-transform: uppercase;
+                    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+                }
+                .close-btn:hover { background-color: #dc2626; }
             </style>
         </head>
         <body>
@@ -138,13 +162,15 @@ const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, wa
                 RistoSync AI - Copia di Cortesia
                 <br>*** NON FISCALE ***
             </div>
+
+            <!-- BUTTON FOR UI ONLY -->
+            <button class="no-print close-btn" onclick="window.close()">✖ CHIUDI FINESTRA</button>
+
             <script>
                 window.onload = function() { 
                     setTimeout(function(){ 
                         window.focus(); 
                         window.print(); 
-                        // Optional: window.close() after printing
-                        // setTimeout(function(){ window.close(); }, 500);
                     }, 500); 
                 }
             </script>

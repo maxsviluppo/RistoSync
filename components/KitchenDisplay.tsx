@@ -87,6 +87,30 @@ const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, wa
                 .name { flex: 1; font-weight: bold; font-size: 16px; }
                 .notes { display: block; font-size: 12px; margin-left: 30px; font-style: italic; margin-top: 2px; }
                 .footer { border-top: 2px dashed black; margin-top: 15px; padding-top: 10px; text-align: center; font-size: 10px; }
+                
+                /* NO PRINT UI */
+                @media print {
+                    .no-print { display: none !important; }
+                }
+                .close-btn {
+                    display: block;
+                    width: 100%;
+                    background-color: #ef4444;
+                    color: white;
+                    text-align: center;
+                    padding: 15px 0;
+                    font-weight: bold;
+                    font-size: 16px;
+                    border: none;
+                    cursor: pointer;
+                    position: fixed;
+                    bottom: 0;
+                    left: 0;
+                    right: 0;
+                    text-transform: uppercase;
+                    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+                }
+                .close-btn:hover { background-color: #dc2626; }
             </style>
         </head>
         <body>
@@ -107,6 +131,10 @@ const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, wa
             <div class="footer">
                 RistoSync AI - Copia di Cortesia
             </div>
+
+            <!-- BUTTON FOR UI ONLY -->
+            <button class="no-print close-btn" onclick="window.close()">✖ CHIUDI FINESTRA</button>
+
             <script>
                 window.onload = function() { 
                     setTimeout(function(){ 
