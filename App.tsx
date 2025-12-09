@@ -121,6 +121,7 @@ export default function App() {
   const [aiAnalysisResult, setAiAnalysisResult] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyticsView, setAnalyticsView] = useState<'stats' | 'receipts'>('stats'); // Toggle between Graphs and Receipt Log
+  const [viewOrderDetails, setViewOrderDetails] = useState<Order | null>(null); // NEW: View Modal
 
   // Delete Confirmation State
   const [itemToDelete, setItemToDelete] = useState<MenuItem | null>(null);
@@ -1184,12 +1185,20 @@ export default function App() {
                                                                     <td className="p-4 text-slate-400 text-sm">{order.waiterName || 'Staff'}</td>
                                                                     <td className="p-4 text-right font-black text-green-400">€ {orderTotal.toFixed(2)}</td>
                                                                     <td className="p-4 text-center">
-                                                                        <button 
-                                                                            onClick={() => handleReprintReceipt(order)}
-                                                                            className="bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-700 flex items-center gap-2 mx-auto transition-colors"
-                                                                        >
-                                                                            <Printer size={14}/> RISTAMPA
-                                                                        </button>
+                                                                        <div className="flex items-center justify-center gap-2">
+                                                                            <button 
+                                                                                onClick={() => setViewOrderDetails(order)}
+                                                                                className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold border border-blue-500/50 flex items-center gap-2 transition-colors shadow-lg shadow-blue-600/20"
+                                                                            >
+                                                                                <Eye size={14}/> VISUALIZZA
+                                                                            </button>
+                                                                            <button 
+                                                                                onClick={() => handleReprintReceipt(order)}
+                                                                                className="bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-700 flex items-center gap-2 transition-colors"
+                                                                            >
+                                                                                <Printer size={14}/> RISTAMPA
+                                                                            </button>
+                                                                        </div>
                                                                     </td>
                                                                 </tr>
                                                             );
@@ -1337,6 +1346,66 @@ export default function App() {
                             </div>
                         </div>
                         <button onClick={handleSaveMenu} className="w-full py-4 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl shadow-lg shadow-orange-600/20 mt-4 flex items-center justify-center gap-2"><Save size={20}/> SALVA PIATTO</button>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* VIEW ORDER DETAILS MODAL */}
+        {viewOrderDetails && (
+            <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+                <div className="bg-slate-900 w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-slate-700 flex flex-col max-h-[80vh] relative animate-slide-up">
+                    <button onClick={() => setViewOrderDetails(null)} className="absolute top-4 right-4 text-slate-400 hover:text-white bg-slate-800 p-2 rounded-full transition-colors"><X size={18}/></button>
+                    
+                    <div className="text-center mb-6 pb-4 border-b border-slate-800">
+                        <h3 className="text-xl font-bold text-white mb-1">{restaurantName}</h3>
+                        <div className="flex items-center justify-center gap-2 text-slate-400 text-xs uppercase font-bold tracking-widest">
+                            <Receipt size={14}/> Dettaglio Ordine
+                        </div>
+                    </div>
+
+                    <div className="flex justify-between items-center mb-4 bg-slate-950 p-3 rounded-xl border border-slate-800">
+                        <div>
+                            <p className="text-[10px] text-slate-500 uppercase font-bold">Tavolo</p>
+                            <p className="text-lg font-black text-white">{viewOrderDetails.tableNumber.replace('_HISTORY', '')}</p>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-[10px] text-slate-500 uppercase font-bold">Data & Ora</p>
+                            <p className="text-sm font-mono text-slate-300">
+                                {new Date(viewOrderDetails.createdAt || viewOrderDetails.timestamp).toLocaleDateString('it-IT')} <br/>
+                                {new Date(viewOrderDetails.createdAt || viewOrderDetails.timestamp).toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex-1 overflow-y-auto mb-4 custom-scroll pr-1">
+                        <div className="space-y-3">
+                            {viewOrderDetails.items.map((item, idx) => (
+                                <div key={idx} className="flex justify-between items-start text-sm">
+                                    <div className="flex gap-3">
+                                        <span className="font-bold text-white w-6 text-center bg-slate-800 rounded">{item.quantity}</span>
+                                        <div>
+                                            <span className="text-slate-200 font-bold block">{item.menuItem.name}</span>
+                                            {item.notes && <span className="text-xs text-slate-500 italic block">Note: {item.notes}</span>}
+                                        </div>
+                                    </div>
+                                    <span className="font-mono text-slate-400">€ {(item.menuItem.price * item.quantity).toFixed(2)}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="pt-4 border-t border-slate-800">
+                        <div className="flex justify-between items-end mb-4">
+                            <span className="text-slate-400 font-bold uppercase text-xs">Totale</span>
+                            <span className="text-2xl font-black text-green-500">
+                                € {viewOrderDetails.items.reduce((acc, i) => acc + (i.menuItem.price * i.quantity), 0).toFixed(2)}
+                            </span>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => setViewOrderDetails(null)} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-colors">Chiudi</button>
+                            <button onClick={() => { handleReprintReceipt(viewOrderDetails); }} className="flex-1 py-3 bg-white text-slate-900 font-bold rounded-xl hover:bg-slate-200 transition-colors flex items-center justify-center gap-2"><Printer size={18}/> Stampa</button>
+                        </div>
                     </div>
                 </div>
             </div>
