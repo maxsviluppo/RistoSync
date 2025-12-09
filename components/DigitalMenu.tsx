@@ -48,11 +48,6 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
         if (activeRestaurantName) {
             setRestaurantName(activeRestaurantName);
         }
-        // Assuming parent might pass updated settings in future, but for now we rely on fetch or initial mount for real updates.
-        // In Preview Mode, we don't have direct prop for Socials yet unless we update props, 
-        // but typically preview is used for Menu Items. 
-        // For full preview including socials, the parent component needs to pass the profile data.
-        // However, for simplicity, preview fetches from DB or just shows static items.
     }, [activeMenuData, activeRestaurantName]);
 
     useEffect(() => {
@@ -268,31 +263,39 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
                                 {items.map(item => (
                                     <div key={item.id} className={`bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col relative overflow-hidden group ${isPreview ? 'p-3 gap-1.5' : 'p-5 gap-3'}`}>
                                         <div className="flex justify-between items-start gap-3">
-                                            <h3 className={`${isPreview ? 'text-sm' : 'text-base'} font-bold text-slate-900 leading-tight w-[75%]`}>{item.name}</h3>
-                                            <div className="font-bold text-orange-600 text-sm whitespace-nowrap">
-                                                € {item.price.toFixed(2)}
+                                            <div className="flex-1">
+                                                <div className="flex justify-between items-start">
+                                                    <h3 className={`${isPreview ? 'text-sm' : 'text-base'} font-bold text-slate-900 leading-tight`}>{item.name}</h3>
+                                                    <div className="font-bold text-orange-600 text-sm whitespace-nowrap ml-2">
+                                                        € {item.price.toFixed(2)}
+                                                    </div>
+                                                </div>
+                                                <p className={`text-slate-500 leading-snug mt-1 ${isPreview ? 'text-[10px]' : 'text-xs'}`}>
+                                                    {item.description || <span className="italic opacity-50">Nessuna descrizione.</span>}
+                                                </p>
+                                                
+                                                {/* Allergens */}
+                                                {item.allergens && item.allergens.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1.5 pt-2 mt-1">
+                                                        {item.allergens.map(alg => {
+                                                            const Icon = ALLERGENS_ICONS[alg] || Info;
+                                                            return (
+                                                                <span key={alg} className={`inline-flex items-center gap-1 font-bold uppercase text-slate-500 bg-slate-100 rounded-md ${isPreview ? 'text-[8px] px-1.5 py-0.5' : 'text-[9px] px-2 py-1'}`}>
+                                                                    <Icon size={isPreview ? 8 : 10} className="text-orange-500"/> {alg}
+                                                                </span>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                )}
                                             </div>
+                                            
+                                            {/* DISH IMAGE */}
+                                            {item.image && (
+                                                <div className={`shrink-0 rounded-full border-2 border-orange-400 overflow-hidden shadow-sm ${isPreview ? 'w-14 h-14' : 'w-20 h-20'}`}>
+                                                    <img src={item.image} alt={item.name} className="w-full h-full object-cover"/>
+                                                </div>
+                                            )}
                                         </div>
-                                        
-                                        <div className="flex gap-2">
-                                            <p className={`text-slate-500 leading-snug flex-1 ${isPreview ? 'text-[10px]' : 'text-xs'}`}>
-                                                {item.description || <span className="italic opacity-50">Nessuna descrizione.</span>}
-                                            </p>
-                                        </div>
-
-                                        {/* Allergens */}
-                                        {item.allergens && item.allergens.length > 0 && (
-                                            <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-50 mt-1">
-                                                {item.allergens.map(alg => {
-                                                    const Icon = ALLERGENS_ICONS[alg] || Info;
-                                                    return (
-                                                        <span key={alg} className={`inline-flex items-center gap-1 font-bold uppercase text-slate-500 bg-slate-100 rounded-md ${isPreview ? 'text-[8px] px-1.5 py-0.5' : 'text-[9px] px-2 py-1'}`}>
-                                                            <Icon size={isPreview ? 8 : 10} className="text-orange-500"/> {alg}
-                                                        </span>
-                                                    )
-                                                })}
-                                            </div>
-                                        )}
                                     </div>
                                 ))}
                             </div>

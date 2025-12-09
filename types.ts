@@ -55,6 +55,7 @@ export interface MenuItem {
   category: Category;
   description?: string; // Used for AI context
   allergens?: string[]; // Array of allergen names (e.g., 'Glutine', 'Latte')
+  image?: string; // Base64 encoded image
 }
 
 export interface OrderItem {

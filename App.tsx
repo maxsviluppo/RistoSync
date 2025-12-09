@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import KitchenDisplay from './components/KitchenDisplay';
 import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import DigitalMenu from './components/DigitalMenu';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft, CheckCircle, LayoutGrid, SlidersHorizontal, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, List, FileSpreadsheet } from 'lucide-react';
-import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate } from './services/storageService';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft, CheckCircle, LayoutGrid, SlidersHorizontal, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, List, FileSpreadsheet, Image as ImageIcon, Upload, FileImage } from 'lucide-react';
+import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate, saveMenuItems } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { askChefAI, generateRestaurantAnalysis } from './services/geminiService';
 import { MenuItem, Category, Department, AppSettings, OrderStatus, Order, RestaurantProfile, OrderItem } from './types';
@@ -114,6 +114,8 @@ export default function App() {
   const [isEditingItem, setIsEditingItem] = useState(false);
   const [editingItem, setEditingItem] = useState<Partial<MenuItem>>({});
   const [isListening, setIsListening] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const bulkInputRef = useRef<HTMLInputElement>(null);
   
   // Analytics State
   const [ordersForAnalytics, setOrdersForAnalytics] = useState<Order[]>([]);
@@ -299,7 +301,8 @@ export default function App() {
               price: Number(editingItem.price),
               category: editingItem.category as Category,
               description: editingItem.description || '',
-              allergens: editingItem.allergens || []
+              allergens: editingItem.allergens || [],
+              image: editingItem.image // Save Image Base64
           };
           if (editingItem.id) updateMenuItem(itemToSave);
           else addMenuItem(itemToSave);
@@ -307,6 +310,79 @@ export default function App() {
           setIsEditingItem(false);
           setEditingItem({});
       }
+  };
+
+  // --- IMAGE UPLOAD LOGIC ---
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              setEditingItem(prev => ({ ...prev, image: reader.result as string }));
+          };
+          reader.readAsDataURL(file);
+      }
+  };
+
+  const removeImage = () => {
+      setEditingItem(prev => ({ ...prev, image: undefined }));
+      if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleBulkImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+
+      const currentMenuItems = [...menuItems];
+      let matchCount = 0;
+
+      // Process files sequentially to avoid freezing UI
+      for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          const fileNameNoExt = file.name.split('.')[0].toLowerCase().trim();
+          
+          // Find matching dish (Case insensitive)
+          const targetIndex = currentMenuItems.findIndex(
+              item => item.name.toLowerCase().trim() === fileNameNoExt
+          );
+
+          if (targetIndex !== -1) {
+              // Convert to Base64
+              const base64 = await new Promise<string>((resolve) => {
+                  const reader = new FileReader();
+                  reader.onloadend = () => resolve(reader.result as string);
+                  reader.readAsDataURL(file);
+              });
+
+              // Update item
+              currentMenuItems[targetIndex] = {
+                  ...currentMenuItems[targetIndex],
+                  image: base64
+              };
+              matchCount++;
+          }
+      }
+
+      if (matchCount > 0) {
+          // Save Updated List via Storage Service which also syncs to cloud
+          // We can't use saveMenuItems directly for bulk sync usually, but for local loop it's ok.
+          // Better to iterate and call updateMenuItem for robustness with cloud sync individually
+          // OR bulk update if API supported. For now, iterate updates.
+          currentMenuItems.forEach(item => {
+              // Only update if it changed? Optimization.
+              const original = menuItems.find(o => o.id === item.id);
+              if (original && original.image !== item.image) {
+                  updateMenuItem(item);
+              }
+          });
+          
+          setMenuItems(getMenuItems()); // Refresh UI
+          alert(`✅ Completato! Associate ${matchCount} immagini ai piatti.`);
+      } else {
+          alert("⚠️ Nessuna corrispondenza trovata. Assicurati che i nomi dei file (es. 'carbonara.jpg') corrispondano ai nomi dei piatti.");
+      }
+      
+      if (bulkInputRef.current) bulkInputRef.current.value = '';
   };
 
   const confirmDeleteMenu = () => {
@@ -731,7 +807,27 @@ export default function App() {
                              <div className="max-w-4xl mx-auto pb-20">
                                 <div className="flex justify-between items-center mb-6">
                                     <div><h3 className="text-xl font-bold text-white">Gestione Menu</h3><p className="text-slate-400 text-sm">Aggiungi, modifica o rimuovi piatti.</p></div>
-                                    <button onClick={() => { setIsEditingItem(true); setEditingItem({}); }} className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-orange-600/20"><Plus size={18}/> Nuovo Piatto</button>
+                                    
+                                    <div className="flex gap-2">
+                                        {/* BULK UPLOAD BUTTON */}
+                                        <button 
+                                            onClick={() => bulkInputRef.current?.click()}
+                                            className="bg-slate-800 hover:bg-slate-700 text-blue-400 px-4 py-2 rounded-xl font-bold flex items-center gap-2 border border-slate-700 transition-all active:scale-95"
+                                            title="Carica foto in massa (Nome file = Nome piatto)"
+                                        >
+                                            <FileImage size={18}/> Foto Smart
+                                        </button>
+                                        <input 
+                                            type="file" 
+                                            ref={bulkInputRef} 
+                                            multiple 
+                                            accept="image/*" 
+                                            onChange={handleBulkImageUpload} 
+                                            className="hidden"
+                                        />
+
+                                        <button onClick={() => { setIsEditingItem(true); setEditingItem({}); }} className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-orange-600/20 active:scale-95"><Plus size={18}/> Nuovo Piatto</button>
+                                    </div>
                                 </div>
                                 
                                 <div className="space-y-8">
@@ -750,7 +846,10 @@ export default function App() {
                                                             <div className="flex items-center gap-4">
                                                                 <div className="text-orange-500 font-black text-lg min-w-[3.5rem] text-center">€ {item.price.toFixed(2)}</div>
                                                                 <div>
-                                                                    <h4 className="font-bold text-white text-lg">{item.name}</h4>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <h4 className="font-bold text-white text-lg">{item.name}</h4>
+                                                                        {item.image && <ImageIcon size={14} className="text-green-500" />}
+                                                                    </div>
                                                                     <div className="flex items-center gap-2 text-xs">
                                                                         <span className="text-slate-500">{item.description || 'Nessuna descrizione'}</span>
                                                                     </div>
@@ -1302,12 +1401,8 @@ export default function App() {
                                 </div>
                             </div>
                         )}
-                    </div>
-                </div>
-            </div>
-        )}
 
-        {/* ... Modal Editor Piatti and Delete Confirm ... */}
+                        {/* ... Modal Editor Piatti and Delete Confirm ... */}
         {isEditingItem && (
             <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
                 {/* Editor Content Preserved */}
@@ -1327,6 +1422,31 @@ export default function App() {
                                 ))}
                             </div>
                         </div>
+                        
+                        {/* IMAGE UPLOAD SECTION */}
+                        <div>
+                            <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Foto Piatto</label>
+                            <div className="flex items-center gap-4">
+                                {editingItem.image ? (
+                                    <div className="relative group">
+                                        <img src={editingItem.image} alt="Preview" className="w-16 h-16 rounded-xl object-cover border-2 border-orange-500" />
+                                        <button onClick={removeImage} className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full p-1 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"><X size={12}/></button>
+                                    </div>
+                                ) : (
+                                    <div className="w-16 h-16 bg-slate-950 rounded-xl border border-dashed border-slate-700 flex items-center justify-center text-slate-500">
+                                        <ImageIcon size={20}/>
+                                    </div>
+                                )}
+                                <div className="flex-1">
+                                    <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" id="dish-image-upload"/>
+                                    <label htmlFor="dish-image-upload" className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold uppercase rounded-lg cursor-pointer transition-colors border border-slate-700">
+                                        <Upload size={14}/> Carica Foto
+                                    </label>
+                                    <p className="text-[10px] text-slate-500 mt-1">Formati: JPG, PNG. Max 1MB consigliato.</p>
+                                </div>
+                            </div>
+                        </div>
+
                         <div>
                             <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Descrizione</label>
                             <div className="relative">
