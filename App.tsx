@@ -4,7 +4,7 @@ import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import DigitalMenu from './components/DigitalMenu';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft, CheckCircle, LayoutGrid, SlidersHorizontal, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft, CheckCircle, LayoutGrid, SlidersHorizontal, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { askChefAI, generateRestaurantAnalysis } from './services/geminiService';
@@ -179,7 +179,8 @@ export default function App() {
               landlineNumber: currentSettings.restaurantProfile?.landlineNumber || '',
               whatsappNumber: currentSettings.restaurantProfile?.whatsappNumber || '',
               email: currentSettings.restaurantProfile?.email || '',
-              website: currentSettings.restaurantProfile?.website || ''
+              website: currentSettings.restaurantProfile?.website || '',
+              socials: currentSettings.restaurantProfile?.socials || {}
           });
 
           setHasUnsavedDestinations(false);
@@ -337,6 +338,16 @@ export default function App() {
           setRestaurantName(newProfile.name);
       }
       alert("Profilo aggiornato con successo!");
+  };
+
+  const handleSocialChange = (network: string, value: string) => {
+      setProfileForm(prev => ({
+          ...prev,
+          socials: {
+              ...prev.socials,
+              [network]: value
+          }
+      }));
   };
 
   const filteredHistoryOrders = useMemo(() => {
@@ -785,7 +796,50 @@ export default function App() {
                                         <p className="text-[10px] text-slate-500 mt-1 pl-1">Questa è l'email usata per l'accesso e non può essere modificata qui.</p>
                                     </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* --- SOCIAL MEDIA & WEB PRESENCE --- */}
+                                    <div className="pt-6 border-t border-slate-800">
+                                        <h4 className="text-white font-bold mb-4 flex items-center gap-2 text-sm uppercase tracking-wide">
+                                            <Share2 size={16} className="text-pink-500"/> Social & Web Presence (Link in Bio)
+                                        </h4>
+                                        <p className="text-slate-400 text-xs mb-4">Inserisci i link completi (es. <em>https://instagram.com/tuonome</em>). Le icone appariranno nel Menu Digitale.</p>
+                                        
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="relative">
+                                                <Facebook className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-600" size={18}/>
+                                                <input type="text" value={profileForm.socials?.facebook || ''} onChange={e => handleSocialChange('facebook', e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white text-sm focus:border-blue-600 outline-none" placeholder="Facebook Link"/>
+                                            </div>
+                                            <div className="relative">
+                                                <Instagram className="absolute left-4 top-1/2 -translate-y-1/2 text-pink-500" size={18}/>
+                                                <input type="text" value={profileForm.socials?.instagram || ''} onChange={e => handleSocialChange('instagram', e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white text-sm focus:border-pink-500 outline-none" placeholder="Instagram Link"/>
+                                            </div>
+                                            <div className="relative">
+                                                <Music className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-100" size={18}/>
+                                                <input type="text" value={profileForm.socials?.tiktok || ''} onChange={e => handleSocialChange('tiktok', e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white text-sm focus:border-slate-500 outline-none" placeholder="TikTok Link"/>
+                                            </div>
+                                            <div className="relative">
+                                                <Store className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-400" size={18}/>
+                                                <input type="text" value={profileForm.socials?.google || ''} onChange={e => handleSocialChange('google', e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white text-sm focus:border-blue-400 outline-none" placeholder="Google Business"/>
+                                            </div>
+                                            <div className="relative">
+                                                <Compass className="absolute left-4 top-1/2 -translate-y-1/2 text-green-500" size={18}/>
+                                                <input type="text" value={profileForm.socials?.tripadvisor || ''} onChange={e => handleSocialChange('tripadvisor', e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white text-sm focus:border-green-500 outline-none" placeholder="TripAdvisor"/>
+                                            </div>
+                                            <div className="relative">
+                                                <UtensilsCrossed className="absolute left-4 top-1/2 -translate-y-1/2 text-green-600" size={18}/>
+                                                <input type="text" value={profileForm.socials?.thefork || ''} onChange={e => handleSocialChange('thefork', e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white text-sm focus:border-green-600 outline-none" placeholder="TheFork"/>
+                                            </div>
+                                            <div className="relative">
+                                                <Youtube className="absolute left-4 top-1/2 -translate-y-1/2 text-red-600" size={18}/>
+                                                <input type="text" value={profileForm.socials?.youtube || ''} onChange={e => handleSocialChange('youtube', e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white text-sm focus:border-red-600 outline-none" placeholder="YouTube Channel"/>
+                                            </div>
+                                            <div className="relative">
+                                                <Linkedin className="absolute left-4 top-1/2 -translate-y-1/2 text-blue-700" size={18}/>
+                                                <input type="text" value={profileForm.socials?.linkedin || ''} onChange={e => handleSocialChange('linkedin', e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white text-sm focus:border-blue-700 outline-none" placeholder="LinkedIn"/>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-6 border-t border-slate-800">
                                         <div>
                                             <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Email Contatti (Clienti)</label>
                                             <div className="relative">
@@ -1103,7 +1157,7 @@ export default function App() {
             </div>
         )}
 
-        {/* ... Modal Editor Piatti and Delete Confirm remain unchanged but are needed ... */}
+        {/* ... Modal Editor Piatti and Delete Confirm ... */}
         {isEditingItem && (
             <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
                 {/* Editor Content Preserved */}

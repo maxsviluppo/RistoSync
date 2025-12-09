@@ -17,16 +17,28 @@ export enum Category {
 
 export type Department = 'Cucina' | 'Sala' | 'Pizzeria' | 'Pub';
 
+export interface SocialLinks {
+  facebook?: string;
+  instagram?: string;
+  tiktok?: string;
+  google?: string; // Google Business
+  tripadvisor?: string;
+  thefork?: string;
+  youtube?: string;
+  linkedin?: string;
+}
+
 export interface RestaurantProfile {
   name?: string;
   address?: string;
-  billingAddress?: string; // New
+  billingAddress?: string;
   vatNumber?: string;
-  phoneNumber?: string; // Mobile/Cell
-  landlineNumber?: string; // New
-  whatsappNumber?: string; // New
-  email?: string; // Contact Email
+  phoneNumber?: string;
+  landlineNumber?: string;
+  whatsappNumber?: string;
+  email?: string;
   website?: string;
+  socials?: SocialLinks; // New Field
 }
 
 export interface AppSettings {

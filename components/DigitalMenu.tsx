@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../services/supabase';
-import { Category, MenuItem } from '../types';
-import { ChefHat, Utensils, Pizza, CakeSlice, Wine, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, Search, Star, MapPin, Instagram, Facebook, ArrowUp, AlertTriangle, LogOut, Loader, Smartphone, UtensilsCrossed, Sandwich } from 'lucide-react';
+import { Category, MenuItem, SocialLinks } from '../types';
+import { ChefHat, Utensils, Pizza, CakeSlice, Wine, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, Search, Star, MapPin, Instagram, Facebook, ArrowUp, AlertTriangle, LogOut, Loader, Smartphone, UtensilsCrossed, Sandwich, Youtube, Linkedin, Music, Compass, Store, Globe } from 'lucide-react';
 
 interface DigitalMenuProps {
     restaurantId: string;
@@ -31,6 +31,7 @@ const ALLERGENS_ICONS: Record<string, any> = {
 const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = false, activeMenuData, activeRestaurantName }) => {
     const [menuItems, setMenuItems] = useState<MenuItem[]>(activeMenuData || []);
     const [restaurantName, setRestaurantName] = useState(activeRestaurantName || 'Menu Digitale');
+    const [socials, setSocials] = useState<SocialLinks>({});
     // If data is provided via props, we are not loading.
     const [loading, setLoading] = useState(!activeMenuData);
     const [error, setError] = useState<string | null>(null);
@@ -47,29 +48,34 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
         if (activeRestaurantName) {
             setRestaurantName(activeRestaurantName);
         }
+        // Assuming parent might pass updated settings in future, but for now we rely on fetch or initial mount for real updates.
+        // In Preview Mode, we don't have direct prop for Socials yet unless we update props, 
+        // but typically preview is used for Menu Items. 
+        // For full preview including socials, the parent component needs to pass the profile data.
+        // However, for simplicity, preview fetches from DB or just shows static items.
     }, [activeMenuData, activeRestaurantName]);
 
     useEffect(() => {
-        // If we have direct data (Preview mode), skip fetching
-        if (activeMenuData) return;
-
         const fetchData = async () => {
             if (!supabase) {
-                setError("Database non connesso.");
+                if (!activeMenuData) setError("Database non connesso.");
                 setLoading(false);
                 return;
             }
 
             try {
-                // 1. Fetch Restaurant Profile (Name)
+                // 1. Fetch Restaurant Profile (Name & Socials)
                 const { data: profile, error: profileError } = await supabase
                     .from('profiles')
-                    .select('restaurant_name')
+                    .select('restaurant_name, settings')
                     .eq('id', restaurantId)
                     .single();
                 
                 if (profile) {
                     setRestaurantName(profile.restaurant_name);
+                    if (profile.settings?.restaurantProfile?.socials) {
+                        setSocials(profile.settings.restaurantProfile.socials);
+                    }
                 } else if (profileError) {
                     console.error("Profile Fetch Error:", profileError);
                     if (profileError.code === 'PGRST116' || profileError.message.includes('security')) {
@@ -78,23 +84,26 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
                 }
 
                 // 2. Fetch Menu Items (Public Read)
-                const { data: items, error: menuError } = await supabase
-                    .from('menu_items')
-                    .select('*')
-                    .eq('user_id', restaurantId);
+                // If activeMenuData provided (Preview), we skip fetching menu items
+                if (!activeMenuData) {
+                    const { data: items, error: menuError } = await supabase
+                        .from('menu_items')
+                        .select('*')
+                        .eq('user_id', restaurantId);
 
-                if (menuError) {
-                    console.error("Menu fetch error:", menuError);
-                }
+                    if (menuError) {
+                        console.error("Menu fetch error:", menuError);
+                    }
 
-                if (items && items.length > 0) {
-                    setMenuItems(items);
-                    setRlsError(false); 
+                    if (items && items.length > 0) {
+                        setMenuItems(items);
+                        setRlsError(false); 
+                    }
                 }
 
             } catch (error: any) {
                 console.error("Critical Error fetching public menu:", error);
-                setError("Errore di caricamento.");
+                if (!activeMenuData) setError("Errore di caricamento.");
             } finally {
                 setLoading(false);
             }
@@ -109,7 +118,7 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
         return () => {
             if (!isPreview) window.removeEventListener('scroll', handleScroll);
         };
-    }, [restaurantId, isPreview]); // activeMenuData removed from dep array to avoid re-triggering fetch logic if it becomes null
+    }, [restaurantId, isPreview, activeMenuData]); 
 
     const scrollToCategory = (cat: Category) => {
         setActiveCategory(cat);
@@ -145,6 +154,17 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
         return CATEGORY_ORDER.filter(cat => menuItems.some(item => item.category === cat));
     }, [menuItems]);
 
+    // Social Button Helper
+    const SocialButton = ({ link, icon: Icon, colorClass, label }: { link?: string, icon: any, colorClass: string, label: string }) => {
+        if (!link) return null;
+        const href = link.startsWith('http') ? link : `https://${link}`;
+        return (
+            <a href={href} target="_blank" rel="noopener noreferrer" className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm border border-slate-200 hover:scale-110 transition-transform ${colorClass}`} title={label}>
+                <Icon size={20} />
+            </a>
+        );
+    };
+
     if (loading) return (
         <div className={`${isPreview ? 'h-full bg-slate-900 rounded-[2.5rem]' : 'min-h-screen bg-slate-900'} flex flex-col items-center justify-center text-white p-4`}>
             <Loader className="animate-spin text-orange-500 mb-4" size={48} />
@@ -152,7 +172,7 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
         </div>
     );
 
-    // SCREEN ERRORI (Mostra solo se non abbiamo dati e non siamo in loading)
+    // SCREEN ERRORI
     if ((rlsError || (menuItems.length === 0 && !loading)) && !activeMenuData) {
         return (
             <div className={`${isPreview ? 'h-full bg-slate-950 rounded-[2.5rem]' : 'min-h-screen bg-slate-950'} flex flex-col items-center justify-center text-white p-8 text-center`}>
@@ -185,7 +205,7 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
         );
     }
 
-    if (error) return (
+    if (error && !activeMenuData) return (
         <div className={`${isPreview ? 'h-full' : 'min-h-screen'} bg-slate-950 flex flex-col items-center justify-center text-white p-6 text-center`}>
             <AlertTriangle size={48} className="text-red-500 mb-4" />
             <p className="text-slate-400 mb-6">{error}</p>
@@ -288,13 +308,26 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
                 )}
             </div>
 
-            {/* FOOTER */}
-            <div className={`text-center bg-white rounded-t-[2rem] shadow-[0_-10px_40px_rgba(0,0,0,0.05)] border-t border-slate-100 ${isPreview ? 'py-6 mt-4' : 'py-8 mt-8'}`}>
-                 <p className="text-slate-400 text-[9px] font-bold uppercase tracking-widest mb-3">Seguici</p>
-                 <div className="flex justify-center gap-3 mb-4">
-                     <button className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-pink-600 shadow-sm border border-slate-100"><Instagram size={16}/></button>
-                     <button className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-blue-600 shadow-sm border border-slate-100"><Facebook size={16}/></button>
+            {/* FOOTER - SOCIAL & LINKS */}
+            <div className={`text-center bg-white rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.05)] border-t border-slate-100 ${isPreview ? 'py-6 mt-4' : 'py-8 mt-8'}`}>
+                 <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-4">Seguici & Contattaci</p>
+                 
+                 <div className="flex flex-wrap justify-center gap-3 mb-6 px-6">
+                     <SocialButton link={socials.instagram} icon={Instagram} colorClass="text-pink-600 bg-pink-50" label="Instagram" />
+                     <SocialButton link={socials.facebook} icon={Facebook} colorClass="text-blue-600 bg-blue-50" label="Facebook" />
+                     <SocialButton link={socials.tiktok} icon={Music} colorClass="text-slate-900 bg-slate-100" label="TikTok" />
+                     <SocialButton link={socials.google} icon={Store} colorClass="text-blue-500 bg-blue-50" label="Google Business" />
+                     <SocialButton link={socials.tripadvisor} icon={Compass} colorClass="text-green-600 bg-green-50" label="TripAdvisor" />
+                     <SocialButton link={socials.thefork} icon={UtensilsCrossed} colorClass="text-emerald-600 bg-emerald-50" label="TheFork" />
+                     <SocialButton link={socials.youtube} icon={Youtube} colorClass="text-red-600 bg-red-50" label="YouTube" />
+                     <SocialButton link={socials.linkedin} icon={Linkedin} colorClass="text-blue-700 bg-blue-50" label="LinkedIn" />
                  </div>
+
+                 {/* Website Fallback */}
+                 {!Object.values(socials).some(v => !!v) && (
+                     <p className="text-xs text-slate-300 italic mb-4">Nessun social collegato</p>
+                 )}
+
                  <div className="flex items-center justify-center gap-1.5 text-slate-300 font-bold text-[10px]">
                      <ChefHat size={12}/> Powered by RistoSync
                  </div>
