@@ -5,7 +5,7 @@ import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import DigitalMenu from './components/DigitalMenu';
 import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft, CheckCircle, LayoutGrid, SlidersHorizontal, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, List, FileSpreadsheet, Image as ImageIcon, Upload, FileImage } from 'lucide-react';
-import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate, saveMenuItems } from './services/storageService';
+import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate, saveMenuItems, performFactoryReset } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { askChefAI, generateRestaurantAnalysis } from './services/geminiService';
 import { MenuItem, Category, Department, AppSettings, OrderStatus, Order, RestaurantProfile, OrderItem } from './types';
@@ -108,6 +108,7 @@ export default function App() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminTab, setAdminTab] = useState<'profile' | 'menu' | 'notif' | 'info' | 'ai' | 'analytics' | 'share'>('menu');
   const [adminViewMode, setAdminViewMode] = useState<'dashboard' | 'app'>('dashboard');
+  const [showResetModal, setShowResetModal] = useState(false);
   
   // Menu Manager State
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
@@ -566,6 +567,15 @@ export default function App() {
           printWindow.document.write(printContent);
           printWindow.document.close();
       }
+  };
+
+  const handleFactoryReset = async () => {
+      setShowResetModal(false);
+      await performFactoryReset();
+      // Force reload UI data
+      setMenuItems([]); 
+      setOrdersForAnalytics([]);
+      alert("✅ Reset completato con successo. Tutti i dati operativi sono stati cancellati.");
   };
 
   const getCategoryIcon = (cat: Category) => {
@@ -1130,6 +1140,25 @@ export default function App() {
                                     <div className="pt-4 border-t border-slate-800">
                                         <button onClick={handleSaveProfile} className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-green-600/20 active:scale-95 transition-all"><Save size={20}/> SALVA PROFILO</button>
                                     </div>
+
+                                    {/* DANGER ZONE - FACTORY RESET */}
+                                    <div className="mt-12 border-t border-red-900/30 pt-8">
+                                        <h3 className="text-red-500 font-bold flex items-center gap-2 mb-4 text-sm uppercase tracking-wider"><AlertTriangle size={18}/> Zona Pericolosa</h3>
+                                        <div className="bg-red-950/20 border border-red-900/30 rounded-2xl p-6">
+                                            <div className="flex justify-between items-center flex-wrap gap-4">
+                                                <div>
+                                                    <h4 className="text-white font-bold mb-1">Factory Reset Dati</h4>
+                                                    <p className="text-red-400 text-xs max-w-sm">
+                                                        Elimina definitivamente <strong>Tutti gli Ordini</strong>, <strong>Tutto il Menu</strong> e le <strong>Statistiche</strong>.
+                                                        <br/><span className="text-slate-400 italic">Mantiene le impostazioni del profilo e l'API Key.</span>
+                                                    </p>
+                                                </div>
+                                                <button onClick={() => setShowResetModal(true)} className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-red-900/20 active:scale-95 transition-all border border-red-500/50">
+                                                    <Trash2 size={18}/> ELIMINA TUTTO
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}
@@ -1530,6 +1559,35 @@ export default function App() {
                             <button onClick={() => setViewOrderDetails(null)} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-colors">Chiudi</button>
                             <button onClick={() => { handleReprintReceipt(viewOrderDetails); }} className="flex-1 py-3 bg-white text-slate-900 font-bold rounded-xl hover:bg-slate-200 transition-colors flex items-center justify-center gap-2"><Printer size={18}/> Stampa</button>
                         </div>
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* FACTORY RESET CONFIRMATION MODAL */}
+        {showResetModal && (
+            <div className="absolute inset-0 z-[100] bg-red-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+                <div className="bg-slate-900 w-full max-w-md rounded-3xl p-8 shadow-2xl border-2 border-red-600 flex flex-col items-center text-center animate-slide-up relative overflow-hidden">
+                    <div className="absolute top-0 left-0 w-full h-2 bg-red-600 animate-pulse"></div>
+                    <div className="w-20 h-20 bg-red-600/20 rounded-full flex items-center justify-center mb-6 text-red-500 animate-pulse border border-red-500/50">
+                        <Trash2 size={40} />
+                    </div>
+                    <h2 className="text-3xl font-black text-white mb-2">SEI SICURO?</h2>
+                    <p className="text-slate-300 mb-6 font-medium leading-relaxed">
+                        Stai per cancellare <strong className="text-red-400">TUTTI GLI ORDINI</strong>, il <strong className="text-red-400">MENU</strong> e le <strong className="text-red-400">STATISTICHE</strong>.
+                        <br/><br/>
+                        Questa operazione è <span className="underline decoration-red-500">irreversibile</span>.
+                        <br/>
+                        Le impostazioni del profilo e l'API Key rimarranno salvate.
+                    </p>
+                    
+                    <div className="flex flex-col gap-3 w-full">
+                        <button onClick={handleFactoryReset} className="w-full py-4 bg-red-600 hover:bg-red-700 text-white font-black text-lg rounded-xl shadow-[0_0_20px_rgba(220,38,38,0.4)] active:scale-95 transition-all">
+                            SÌ, CANCELLA TUTTO
+                        </button>
+                        <button onClick={() => setShowResetModal(false)} className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition-all">
+                            ANNULLA
+                        </button>
                     </div>
                 </div>
             </div>

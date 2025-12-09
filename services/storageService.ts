@@ -403,6 +403,33 @@ export const freeTable = async (tableNumber: string) => {
     }
 };
 
+// --- FACTORY RESET (DANGER ZONE) ---
+export const performFactoryReset = async () => {
+    // 1. Clear Local Data (Orders & Menu)
+    localStorage.setItem(STORAGE_KEY, '[]');
+    localStorage.setItem(MENU_KEY, '[]');
+    // Note: We deliberately do NOT clear:
+    // - APP_SETTINGS_KEY (Printer configs, destinations)
+    // - GOOGLE_API_KEY_STORAGE
+    // - WAITER_KEY (Session convenience)
+    // - TABLES_COUNT_KEY (Layout)
+    
+    // Notify Local Listeners
+    window.dispatchEvent(new Event('local-storage-update'));
+    window.dispatchEvent(new Event('local-menu-update'));
+
+    // 2. Clear Cloud Data
+    if (supabase && currentUserId) {
+        // Delete all Orders
+        await supabase.from('orders').delete().eq('user_id', currentUserId);
+        
+        // Delete all Menu Items
+        await supabase.from('menu_items').delete().eq('user_id', currentUserId);
+        
+        // We do NOT delete from 'profiles' to keep API keys and Settings
+    }
+};
+
 // --- DYNAMIC TABLE COUNT ---
 export const getTableCount = (): number => {
     const count = localStorage.getItem(TABLES_COUNT_KEY);
