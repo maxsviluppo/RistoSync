@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, signOut } from '../services/supabase';
-import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy } from 'lucide-react';
+import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe } from 'lucide-react';
 
 interface SuperAdminDashboardProps {
     onEnterApp: () => void;
@@ -14,9 +14,11 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     const [copiedSQL, setCopiedSQL] = useState(false);
     const [copiedDemo, setCopiedDemo] = useState(false);
     const [copiedRecovery, setCopiedRecovery] = useState(false);
+    const [copiedPublic, setCopiedPublic] = useState(false);
     const [currentEmail, setCurrentEmail] = useState<string>('');
     const [showSqlModal, setShowSqlModal] = useState(false);
     const [showRecoveryModal, setShowRecoveryModal] = useState(false);
+    const [showPublicModal, setShowPublicModal] = useState(false);
     
     // Recovery State
     const [recoveryEmail, setRecoveryEmail] = useState('');
@@ -201,8 +203,24 @@ where email = '${email}'
 on conflict (id) do update 
 set subscription_status = 'active';`;
     };
+
+    const getPublicAccessSQL = () => {
+        return `-- PERMETTI LETTURA PUBBLICA DEL MENU (Per Menu Digitale)
+
+-- 1. Permetti a chiunque di LEGGERE il nome del ristorante
+drop policy if exists "Public profiles are viewable by everyone" on public.profiles;
+create policy "Public profiles are viewable by everyone" 
+on public.profiles for select 
+using (true);
+
+-- 2. Permetti a chiunque di LEGGERE i piatti
+drop policy if exists "Public menu items are viewable by everyone" on public.menu_items;
+create policy "Public menu items are viewable by everyone" 
+on public.menu_items for select 
+using (true);`;
+    };
     
-    const copySQL = (sql: string, type: 'reset' | 'demo' | 'recovery') => {
+    const copySQL = (sql: string, type: 'reset' | 'demo' | 'recovery' | 'public') => {
         navigator.clipboard.writeText(sql);
         if (type === 'reset') {
             setCopiedSQL(true);
@@ -210,6 +228,9 @@ set subscription_status = 'active';`;
         } else if (type === 'demo') {
             setCopiedDemo(true);
             setTimeout(() => setCopiedDemo(false), 2000);
+        } else if (type === 'public') {
+            setCopiedPublic(true);
+            setTimeout(() => setCopiedPublic(false), 2000);
         } else {
             setCopiedRecovery(true);
             setTimeout(() => setCopiedRecovery(false), 2000);
@@ -301,6 +322,13 @@ create policy "Super Admin Delete" on public.profiles for delete using ( lower(a
                             <div className="p-3 bg-orange-500/10 rounded-xl text-orange-400"><FlaskConical /></div>
                             <div className="flex gap-2">
                                 <button 
+                                    onClick={() => setShowPublicModal(true)}
+                                    className="text-xs bg-pink-600/20 hover:bg-pink-600 hover:text-white text-pink-400 w-8 h-8 rounded-lg flex items-center justify-center transition-colors border border-pink-500/30"
+                                    title="Abilita Menu Pubblico"
+                                >
+                                    <Globe size={16}/>
+                                </button>
+                                <button 
                                     onClick={() => setShowRecoveryModal(true)}
                                     className="text-xs bg-slate-700 hover:bg-slate-600 text-white w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
                                     title="SOS Recovery Utente"
@@ -315,7 +343,7 @@ create policy "Super Admin Delete" on public.profiles for delete using ( lower(a
                                 </button>
                             </div>
                         </div>
-                        <h3 className="text-slate-400 font-bold uppercase text-xs tracking-wider mb-2">Area Demo & Test</h3>
+                        <h3 className="text-slate-400 font-bold uppercase text-xs tracking-wider mb-2">Area Demo & Utility</h3>
                         <button onClick={simulateDemoRow} className="text-orange-400 text-xs hover:underline text-left">
                             + Aggiungi riga simulata alla tabella
                         </button>
@@ -538,6 +566,41 @@ create policy "Super Admin Delete" on public.profiles for delete using ( lower(a
                         
                         <div className="mt-6 flex justify-end">
                             <button onClick={() => setShowRecoveryModal(false)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold">Chiudi</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* PUBLIC ACCESS MODAL */}
+            {showPublicModal && (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+                    <div className="bg-slate-900 border border-pink-500/30 rounded-3xl p-6 w-full max-w-2xl shadow-2xl animate-slide-up relative">
+                        <button onClick={() => setShowPublicModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white"><X /></button>
+                        
+                        <div className="flex items-center gap-3 mb-4 text-pink-400">
+                             <div className="p-2 bg-pink-500/10 rounded-lg"><Globe size={24} /></div>
+                             <h2 className="text-xl font-bold text-white">Abilita Menu Digitale</h2>
+                        </div>
+                        
+                        <p className="text-slate-400 text-sm mb-4">
+                            Per permettere ai clienti di visualizzare il menu tramite QR Code senza fare login, devi eseguire questo comando SQL <strong>una sola volta</strong>.
+                        </p>
+
+                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 relative group text-left mb-6">
+                            <pre className="text-left text-xs text-green-400 font-mono whitespace-pre-wrap overflow-x-auto h-40 custom-scroll p-2">
+{getPublicAccessSQL()}
+                            </pre>
+                            <button 
+                                onClick={() => copySQL(getPublicAccessSQL(), 'public')}
+                                className="absolute top-4 right-4 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 shadow-lg transition-all"
+                            >
+                                {copiedPublic ? <Check size={16} className="text-green-500"/> : <Copy size={16}/>}
+                                {copiedPublic ? 'COPIATO!' : 'COPIA SQL'}
+                            </button>
+                        </div>
+                        
+                        <div className="mt-6 flex justify-end">
+                            <button onClick={() => setShowPublicModal(false)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold">Chiudi</button>
                         </div>
                     </div>
                 </div>

@@ -3,7 +3,8 @@ import KitchenDisplay from './components/KitchenDisplay';
 import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft, CheckCircle, LayoutGrid, SlidersHorizontal, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight } from 'lucide-react';
+import DigitalMenu from './components/DigitalMenu'; // New Component
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft, CheckCircle, LayoutGrid, SlidersHorizontal, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { MenuItem, Category, Department, AppSettings, OrderStatus, Order } from './types';
@@ -34,6 +35,10 @@ const capitalize = (str: string) => {
 };
 
 const App: React.FC = () => {
+  // ROUTING FOR DIGITAL MENU (Public Access)
+  const queryParams = new URLSearchParams(window.location.search);
+  const publicMenuId = queryParams.get('menu');
+
   const [session, setSession] = useState<any>(null);
   const [loadingSession, setLoadingSession] = useState(true);
   const [isSuspended, setIsSuspended] = useState(false); 
@@ -49,7 +54,7 @@ const App: React.FC = () => {
 
   // Admin State
   const [showAdmin, setShowAdmin] = useState(false);
-  const [adminTab, setAdminTab] = useState<'menu' | 'notif' | 'info' | 'ai' | 'analytics'>('menu');
+  const [adminTab, setAdminTab] = useState<'menu' | 'notif' | 'info' | 'ai' | 'analytics' | 'share'>('menu');
   const [adminViewMode, setAdminViewMode] = useState<'dashboard' | 'app'>('dashboard');
   
   // Menu Manager State
@@ -80,6 +85,12 @@ const App: React.FC = () => {
   const isSuperAdmin = session?.user?.email === SUPER_ADMIN_EMAIL;
 
   useEffect(() => {
+      // If we are in Public Menu mode, skip session check
+      if (publicMenuId) {
+          setLoadingSession(false);
+          return;
+      }
+
       const timer = setTimeout(() => {
           setLoadingSession((prev) => {
               if (prev) return false;
@@ -87,9 +98,11 @@ const App: React.FC = () => {
           });
       }, 5000); 
       return () => clearTimeout(timer);
-  }, []);
+  }, [publicMenuId]);
 
   useEffect(() => {
+      if (publicMenuId) return; // Skip auth check for public menu
+
       if (supabase) {
           const checkUserStatus = async (user: any) => {
              try {
@@ -130,7 +143,7 @@ const App: React.FC = () => {
           });
           return () => subscription.unsubscribe();
       } else { setLoadingSession(false); }
-  }, []);
+  }, [publicMenuId]);
 
   // FIX: Separato l'effetto di inizializzazione da quello di ascolto eventi
   useEffect(() => {
@@ -347,6 +360,11 @@ const App: React.FC = () => {
       }
   };
 
+  // --- RENDER DIGITAL MENU IF PUBLIC URL ---
+  if (publicMenuId) {
+      return <DigitalMenu restaurantId={publicMenuId} />;
+  }
+
   if (loadingSession) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-orange-500 font-bold">Avvio...</div>;
 
   if ((isSuspended || accountDeleted || isBanned) && !isSuperAdmin) {
@@ -419,6 +437,7 @@ const App: React.FC = () => {
                          <button onClick={() => setAdminTab('menu')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'menu' ? 'bg-orange-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><Utensils size={20}/> Menu & Destinazioni</button>
                          <button onClick={() => setAdminTab('analytics')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'analytics' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><TrendingUp size={20}/> Analisi & Storico</button>
                          <button onClick={() => setAdminTab('notif')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'notif' ? 'bg-green-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><Bell size={20}/> Notifiche</button>
+                         <button onClick={() => setAdminTab('share')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'share' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><QrCode size={20}/> Menu Digitale</button>
                          <button onClick={() => setAdminTab('ai')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'ai' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><Bot size={20}/> AI Intelligence</button>
                          <button onClick={() => setAdminTab('info')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'info' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><Info size={20}/> Legenda</button>
                     </div>
@@ -430,10 +449,57 @@ const App: React.FC = () => {
                              <button onClick={() => setAdminTab('menu')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'menu' ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Menu</button>
                              <button onClick={() => setAdminTab('analytics')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'analytics' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Analisi</button>
                              <button onClick={() => setAdminTab('notif')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'notif' ? 'bg-green-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Notifiche</button>
+                             <button onClick={() => setAdminTab('share')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'share' ? 'bg-pink-600 text-white' : 'bg-slate-800 text-slate-400'}`}>QR Code</button>
                              <button onClick={() => setAdminTab('ai')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'ai' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>AI</button>
                              <button onClick={() => setAdminTab('info')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'info' ? 'bg-slate-700 text-white' : 'bg-slate-800 text-slate-400'}`}>Legenda</button>
                         </div>
+                        
+                        {/* NEW: SHARE / DIGITAL MENU TAB */}
+                        {adminTab === 'share' && (
+                            <div className="max-w-xl mx-auto text-center">
+                                <div className="bg-white p-8 rounded-3xl inline-block mb-6 shadow-2xl">
+                                    <QrCode size={200} className="text-slate-900"/>
+                                </div>
+                                <h3 className="text-2xl font-black text-white mb-2">Il tuo Menu Digitale</h3>
+                                <p className="text-slate-400 mb-6">Scansiona questo codice o condividi il link con i tuoi clienti.</p>
+                                
+                                <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex items-center justify-between gap-4 mb-4">
+                                    <code className="text-xs text-blue-400 font-mono truncate flex-1">
+                                        {window.location.origin}?menu={session?.user?.id}
+                                    </code>
+                                    <button 
+                                        onClick={() => {
+                                            navigator.clipboard.writeText(`${window.location.origin}?menu=${session?.user?.id}`);
+                                            alert("Link copiato!");
+                                        }}
+                                        className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700 text-white"
+                                    >
+                                        <Copy size={16}/>
+                                    </button>
+                                </div>
 
+                                <a 
+                                    href={`?menu=${session?.user?.id}`} 
+                                    target="_blank" 
+                                    className="inline-flex items-center gap-2 px-6 py-3 bg-pink-600 text-white font-bold rounded-xl hover:bg-pink-500 shadow-lg shadow-pink-600/20"
+                                >
+                                    <ExternalLink size={18}/> Apri Anteprima
+                                </a>
+
+                                <div className="mt-8 p-4 bg-yellow-900/20 border border-yellow-600/30 rounded-xl text-left">
+                                    <p className="text-xs text-yellow-500 font-bold mb-1 flex items-center gap-2"><AlertTriangle size={14}/> Attenzione</p>
+                                    <p className="text-xs text-yellow-200/70 mb-2">
+                                        Se cliccando il link vedi una pagina di errore o bianca, significa che l'accesso pubblico al database non è attivo.
+                                    </p>
+                                    <p className="text-xs text-yellow-200/70">
+                                        Chiedi al Super Admin di eseguire lo script <strong>"Public Menu Access"</strong> dalla sua Dashboard.
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                        {/* Rest of the component ... (Menu, Analytics, etc.) */}
+                        {/* ... (Existing implementation for other tabs) ... */}
+                        
                         {/* ANALYTICS TAB (ADVANCED CHARTS + DELETE BUTTON) */}
                         {adminTab === 'analytics' && (
                             <div className="pb-20">
@@ -592,20 +658,6 @@ const App: React.FC = () => {
                             </div>
                         )}
 
-                        {/* NOTIF TAB */}
-                        {adminTab === 'notif' && (
-                            <div className="max-w-xl space-y-4">
-                                <div className="flex justify-between bg-slate-900 p-4 rounded-xl border border-slate-800 text-white items-center">
-                                    <span>Suoni Cucina</span>
-                                    <button onClick={() => toggleNotif('kitchenSound')} className={`w-12 h-6 rounded-full relative ${notifSettings.kitchenSound ? 'bg-green-600' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${notifSettings.kitchenSound ? 'left-7' : 'left-1'}`}></div></button>
-                                </div>
-                                <div className="flex justify-between bg-slate-900 p-4 rounded-xl border border-slate-800 text-white items-center">
-                                    <span>Suoni Cameriere</span>
-                                    <button onClick={() => toggleNotif('waiterSound')} className={`w-12 h-6 rounded-full relative ${notifSettings.waiterSound ? 'bg-green-600' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${notifSettings.waiterSound ? 'left-7' : 'left-1'}`}></div></button>
-                                </div>
-                            </div>
-                        )}
-
                         {/* MENU & DESTINATIONS TAB */}
                         {adminTab === 'menu' && (
                             <div className="pb-20">
@@ -732,11 +784,12 @@ const App: React.FC = () => {
                                                                     {item.allergens && item.allergens.length > 0 ? (
                                                                         <div className="flex flex-wrap gap-2">
                                                                             {item.allergens.map(aId => {
-                                                                                const alg = ALLERGENS_CONFIG.find(a => a.id === aId);
+                                                                                const alg = ALLERGENS_ICONS[aId] ? {icon: ALLERGENS_ICONS[aId], label: aId} : ALLERGENS_CONFIG.find(a => a.id === aId);
                                                                                 if (!alg) return null;
+                                                                                const Icon = alg.icon || Info;
                                                                                 return (
                                                                                     <span key={aId} className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md border border-slate-700 text-[10px] font-bold uppercase text-slate-300 tracking-wider">
-                                                                                        <alg.icon size={12} className="text-orange-500"/> {alg.label}
+                                                                                        <Icon size={12} className="text-orange-500"/> {alg.label}
                                                                                     </span>
                                                                                 );
                                                                             })}
@@ -779,7 +832,10 @@ const App: React.FC = () => {
                  </div>
              </div>
         )}
-
+        
+        {/* IMPORTANTE: Allergeni Icons map for main view reuse */}
+        {/* Note: I'm reusing ALLERGENS_CONFIG defined at top */}
+        
         {/* DETAIL MODAL FOR ADMIN */}
         {detailOrder && (
             <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in" onClick={() => setDetailOrder(null)}>
@@ -842,6 +898,11 @@ const App: React.FC = () => {
       </div>
     );
   }
+
+  const ALLERGENS_ICONS: Record<string, any> = {
+    'Glutine': Wheat, 'Latticini': Milk, 'Uova': Egg, 'Frutta a guscio': Nut,
+    'Pesce': Fish, 'Soia': Bean, 'Piccante': Flame, 'Vegano': Leaf
+  };
 
   return (
     <>
