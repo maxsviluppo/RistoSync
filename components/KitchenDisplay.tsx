@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { Order, OrderStatus, Category, AppSettings, Department } from '../types';
+import { Order, OrderStatus, Category, AppSettings, Department, OrderItem } from '../types';
 import { getOrders, updateOrderStatus, toggleOrderItemCompletion, getAppSettings } from '../services/storageService';
 import { Clock, CheckCircle, ChefHat, Bell, User, LogOut, Square, CheckSquare, AlertOctagon, Timer, PlusCircle, History, Calendar, ChevronLeft, ChevronRight, DollarSign, UtensilsCrossed, Receipt, Pizza, ArrowRightLeft, Utensils, CakeSlice, Wine, Sandwich } from 'lucide-react';
 
@@ -65,6 +65,53 @@ const playNotificationSound = (type: 'new' | 'ready' | 'alert') => {
             osc2.stop(now + 0.9);
         }
     } catch (e) { console.error("Audio error", e); }
+};
+
+// --- RECEIPT GENERATOR (Duplicated for Distributed Printing) ---
+const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, waiter: string, restaurantName: string) => {
+    const time = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const date = new Date().toLocaleDateString('it-IT');
+    
+    return `
+    <html>
+        <head>
+            <style>
+                body { font-family: 'Courier New', monospace; width: 300px; margin: 0; padding: 10px; font-size: 14px; color: black; background: white; }
+                .header { text-align: center; border-bottom: 2px dashed black; padding-bottom: 10px; margin-bottom: 10px; }
+                .title { font-size: 18px; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; }
+                .dept { font-size: 24px; font-weight: bold; background: black; color: white; display: inline-block; padding: 2px 10px; margin: 5px 0; }
+                .meta { font-size: 14px; margin: 2px 0; font-weight: bold; }
+                .item { display: flex; margin-bottom: 8px; align-items: baseline; }
+                .qty { font-weight: bold; width: 30px; font-size: 16px; }
+                .name { flex: 1; font-weight: bold; font-size: 16px; }
+                .notes { display: block; font-size: 12px; margin-left: 30px; font-style: italic; margin-top: 2px; }
+                .footer { border-top: 2px dashed black; margin-top: 15px; padding-top: 10px; text-align: center; font-size: 10px; }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <div class="title">${restaurantName}</div>
+                <div class="dept">${dept}</div>
+                <div class="meta">TAVOLO: ${table}</div>
+                <div class="meta">Staff: ${waiter}</div>
+                <div style="font-size: 12px; margin-top:5px;">${date} - ${time}</div>
+            </div>
+            ${items.map(item => `
+                <div class="item">
+                    <span class="qty">${item.quantity}</span>
+                    <span class="name">${item.menuItem.name}</span>
+                </div>
+                ${item.notes ? `<span class="notes">Note: ${item.notes}</span>` : ''}
+            `).join('')}
+            <div class="footer">
+                RistoSync AI - Copia di Cortesia
+            </div>
+            <script>
+                window.onload = function() { window.print(); setTimeout(function(){ window.close(); }, 100); }
+            </script>
+        </body>
+    </html>
+    `;
 };
 
 // --- SUB-COMPONENT: ORDER TIMER ---
@@ -165,19 +212,50 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
     if (!isFirstLoad.current) {
         const prevOrders = previousOrdersRef.current;
         const prevOrderIds = prevOrders.map(o => o.id);
+        
+        // Find newly added orders
         const addedOrders = sorted.filter(o => !prevOrderIds.includes(o.id));
         
-        // NOTIFY ONLY FOR ITEMS BELONGING TO THIS DEPARTMENT
-        const hasRelevantItems = addedOrders.some(order => 
+        // 1. FILTER FOR RELEVANT ITEMS
+        const relevantNewOrders = addedOrders.filter(order => 
             order.items.some(item => {
                 const dest = appSettings.categoryDestinations[item.menuItem.category];
                 return dest === department; 
             })
         );
 
-        if (hasRelevantItems) {
+        if (relevantNewOrders.length > 0) {
+            const newOrder = relevantNewOrders[0];
             playNotificationSound('new');
-            showNotification(`Nuovo Ordine ${department}: Tavolo ${addedOrders[0].tableNumber}`, 'info');
+            showNotification(`Nuovo Ordine ${department}: Tavolo ${newOrder.tableNumber}`, 'info');
+
+            // --- AUTO PRINT LOGIC (DISTRIBUTED) ---
+            // If Admin enabled auto-print for this department, we print HERE, on the receiving terminal.
+            // This prevents popup blockers on the waiter's device.
+            if (appSettings.printEnabled && appSettings.printEnabled[department]) {
+                const itemsForDept = newOrder.items.filter(i => appSettings.categoryDestinations[i.menuItem.category] === department);
+                
+                if (itemsForDept.length > 0) {
+                    const printContent = generateReceiptHtml(
+                        itemsForDept, 
+                        department, 
+                        newOrder.tableNumber, 
+                        newOrder.waiterName || 'Staff', 
+                        appSettings.restaurantProfile?.name || 'Ristorante'
+                    );
+                    
+                    // We use a slight timeout to ensure the UI update doesn't clash with the print dialog
+                    setTimeout(() => {
+                        const printWindow = window.open('', `AUTO_PRINT_${department}_${Date.now()}`, 'height=600,width=400');
+                        if (printWindow) {
+                            printWindow.document.write(printContent);
+                            printWindow.document.close();
+                            printWindow.focus();
+                            // The receipt HTML contains window.print() onload
+                        }
+                    }, 500);
+                }
+            }
         }
 
         // Check if an order became READY (handled similarly for both, usually controlled by Chef/Pizzaiolo finishing items)
@@ -273,6 +351,9 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
   // CORRECT FILTER LOGIC
   const displayedOrders = orders.filter(o => viewMode === 'active' && o.status !== OrderStatus.DELIVERED);
 
+  // Check if Auto Print is active for visual indication
+  const isAutoPrintActive = appSettings.printEnabled && appSettings.printEnabled[department];
+
   return (
     <div className="min-h-screen bg-slate-900 text-white p-6 font-sans flex flex-col relative overflow-hidden">
       <style>{`
@@ -319,6 +400,11 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
           </div>
         </div>
         <div className="flex gap-4 items-center">
+            {isAutoPrintActive && (
+                <div className="flex items-center gap-2 px-3 py-1 bg-green-900/30 border border-green-500/30 rounded-lg text-green-400 text-xs font-bold uppercase animate-pulse">
+                    <Receipt size={14}/> Auto-Print ON
+                </div>
+            )}
             <div className="bg-slate-800 px-4 py-2 rounded-lg border border-slate-700"><span className={`text-2xl font-mono font-bold ${isPizzeria ? 'text-red-400' : isPub ? 'text-amber-400' : 'text-orange-400'}`}>{new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}</span></div>
             <button onClick={onExit} className="bg-slate-800 text-slate-400 hover:text-white p-2.5 rounded-lg"><LogOut size={20} /></button>
         </div>

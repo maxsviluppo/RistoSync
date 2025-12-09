@@ -703,8 +703,8 @@ export default function App() {
                                             <h4 className="font-bold text-white uppercase tracking-wider">Stampanti Wi-Fi (Scontrino Fisico)</h4>
                                         </div>
                                         <p className="text-slate-400 text-sm mb-6">
-                                            Attiva la stampa automatica per i reparti che hanno una stampante termica. 
-                                            Il dispositivo che invia l'ordine (Tablet/PC) deve essere connesso alla stampante via driver di sistema.
+                                            Abilitando queste opzioni, il <strong>Terminale del Reparto (es. Cucina)</strong> lancerà automaticamente la stampa quando arriva un nuovo ordine.
+                                            <br/>La "Cassa / Totale" viene invece stampata subito dal terminale di Sala.
                                         </p>
                                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                             {(['Cucina', 'Pizzeria', 'Pub', 'Cassa'] as string[]).map(dept => (
@@ -714,7 +714,10 @@ export default function App() {
                                                         {dept === 'Pizzeria' && <Pizza size={18} className="text-red-500"/>}
                                                         {dept === 'Pub' && <Sandwich size={18} className="text-amber-500"/>}
                                                         {dept === 'Cassa' && <Receipt size={18} className="text-green-500"/>}
-                                                        <span className="font-bold text-white">{dept === 'Cassa' ? 'Cassa / Totale' : dept}</span>
+                                                        <div className="flex flex-col">
+                                                            <span className="font-bold text-white">{dept === 'Cassa' ? 'Cassa / Totale' : dept}</span>
+                                                            <span className="text-[9px] text-slate-500 uppercase">{dept === 'Cassa' ? 'Stampa da Sala' : 'Stampa al Reparto'}</span>
+                                                        </div>
                                                     </div>
                                                     <button 
                                                         onClick={() => toggleTempPrint(dept)} 

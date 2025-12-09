@@ -332,46 +332,27 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
         addOrder({ id: Date.now().toString(), tableNumber: table, items: cart, status: OrderStatus.PENDING, timestamp: Date.now(), waiterName: waiterName || 'Cameriere', createdAt: Date.now() });
     }
 
-    // --- PRINTING LOGIC ---
-    if (appSettings && appSettings.printEnabled) {
-        const printQueue: { items: OrderItem[], dept: string }[] = [];
-
-        // 1. Queue specific departments (Kitchen, Pizzeria, Pub)
-        const specificDepts: Department[] = ['Cucina', 'Pizzeria', 'Pub'];
-        specificDepts.forEach(dept => {
-            if (appSettings.printEnabled[dept]) {
-                const itemsForDept = currentOrderItems.filter(i => appSettings.categoryDestinations[i.menuItem.category] === dept);
-                if (itemsForDept.length > 0) {
-                    printQueue.push({ items: itemsForDept, dept });
-                }
-            }
-        });
-
-        // 2. Queue Master Receipt (Cassa/Totale)
-        if (appSettings.printEnabled['Cassa']) {
-            printQueue.push({ items: currentOrderItems, dept: 'Cassa / Totale' });
+    // --- NEW DISTRIBUTED PRINTING LOGIC ---
+    // The WaiterPad ONLY prints the "Cassa / Totale" receipt.
+    // The individual departments (Kitchen, Pizzeria, Pub) will auto-print their own tickets 
+    // when they receive the new order in KitchenDisplay.tsx
+    
+    if (appSettings && appSettings.printEnabled && appSettings.printEnabled['Cassa']) {
+        const printContent = generateReceiptHtml(
+            currentOrderItems, 
+            'Cassa / Totale', 
+            table, 
+            waiterName || 'Staff', 
+            appSettings.restaurantProfile?.name || 'Ristorante'
+        );
+        
+        const printWindow = window.open('', `PRINT_CASSA_${Date.now()}`, 'height=600,width=400');
+        if (printWindow) {
+            printWindow.document.write(printContent);
+            printWindow.document.close();
+            printWindow.focus();
+            // printWindow.print() is called inside the HTML onload
         }
-
-        // 3. Execute Print Queue Sequentially (2.5s Delay)
-        printQueue.forEach((job, index) => {
-            setTimeout(() => {
-                const printContent = generateReceiptHtml(
-                    job.items, 
-                    job.dept, 
-                    table, 
-                    waiterName || 'Staff', 
-                    appSettings.restaurantProfile?.name || 'Ristorante'
-                );
-                
-                const printWindow = window.open('', `PRINT_${job.dept}_${Date.now()}`, 'height=600,width=400');
-                if (printWindow) {
-                    printWindow.document.write(printContent);
-                    printWindow.document.close();
-                    printWindow.focus();
-                    // printWindow.print() is called inside the HTML onload
-                }
-            }, index * 2500); // 2.5s sequential delay
-        });
     }
     
     setTimeout(() => { setCart([]); setIsSending(false); setSheetHeight(80); setEditingOrderId(null); loadData(); setTable(''); }, 500);
