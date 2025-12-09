@@ -460,46 +460,69 @@ const App: React.FC = () => {
                              <button onClick={() => setAdminTab('info')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'info' ? 'bg-slate-700 text-white' : 'bg-slate-800 text-slate-400'}`}>Legenda</button>
                         </div>
                         
-                        {/* NEW: SHARE / DIGITAL MENU TAB */}
+                        {/* NEW: SHARE / DIGITAL MENU TAB WITH PREVIEW */}
                         {adminTab === 'share' && (
-                            <div className="max-w-xl mx-auto text-center">
-                                <div className="bg-white p-8 rounded-3xl inline-block mb-6 shadow-2xl">
-                                    <QrCode size={200} className="text-slate-900"/>
-                                </div>
-                                <h3 className="text-2xl font-black text-white mb-2">Il tuo Menu Digitale</h3>
-                                <p className="text-slate-400 mb-6">Scansiona questo codice o condividi il link con i tuoi clienti.</p>
-                                
-                                <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex items-center justify-between gap-4 mb-4">
-                                    <code className="text-xs text-blue-400 font-mono truncate flex-1">
-                                        {window.location.origin}?menu={session?.user?.id}
-                                    </code>
-                                    <button 
-                                        onClick={() => {
-                                            navigator.clipboard.writeText(`${window.location.origin}?menu=${session?.user?.id}`);
-                                            alert("Link copiato!");
-                                        }}
-                                        className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700 text-white"
-                                    >
-                                        <Copy size={16}/>
-                                    </button>
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start max-w-5xl mx-auto">
+                                {/* Left Col: Info & QR */}
+                                <div className="text-center lg:text-left">
+                                    <div className="bg-white p-8 rounded-3xl inline-block mb-6 shadow-2xl">
+                                        <QrCode size={180} className="text-slate-900"/>
+                                    </div>
+                                    <h3 className="text-3xl font-black text-white mb-2">Il tuo Menu Digitale</h3>
+                                    <p className="text-slate-400 mb-8 max-w-sm mx-auto lg:mx-0">
+                                        I clienti possono scansionare questo codice per vedere il menu completo, allergeni e foto dei piatti.
+                                    </p>
+                                    
+                                    <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex items-center justify-between gap-4 mb-6 max-w-md mx-auto lg:mx-0">
+                                        <code className="text-xs text-blue-400 font-mono truncate flex-1">
+                                            {window.location.origin}?menu={session?.user?.id}
+                                        </code>
+                                        <button 
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(`${window.location.origin}?menu=${session?.user?.id}`);
+                                                alert("Link copiato!");
+                                            }}
+                                            className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700 text-white"
+                                        >
+                                            <Copy size={16}/>
+                                        </button>
+                                    </div>
+
+                                    <div className="flex gap-4 justify-center lg:justify-start mb-8">
+                                        <a 
+                                            href={`?menu=${session?.user?.id}`} 
+                                            target="_blank" 
+                                            className="inline-flex items-center gap-2 px-6 py-3 bg-pink-600 text-white font-bold rounded-xl hover:bg-pink-500 shadow-lg shadow-pink-600/20"
+                                        >
+                                            <ExternalLink size={18}/> Apri Esterno
+                                        </a>
+                                        <button 
+                                            className="px-6 py-3 bg-slate-800 text-white font-bold rounded-xl border border-slate-700 cursor-default"
+                                        >
+                                            Status: Online
+                                        </button>
+                                    </div>
+
+                                    <div className="p-4 bg-yellow-900/20 border border-yellow-600/30 rounded-xl text-left max-w-md mx-auto lg:mx-0">
+                                        <p className="text-xs text-yellow-500 font-bold mb-1 flex items-center gap-2"><AlertTriangle size={14}/> Nota Tecnica</p>
+                                        <p className="text-xs text-yellow-200/70">
+                                            Se l'anteprima a destra funziona ma il link esterno no, chiedi al Super Admin di eseguire lo script SQL "Public Menu Access".
+                                        </p>
+                                    </div>
                                 </div>
 
-                                <a 
-                                    href={`?menu=${session?.user?.id}`} 
-                                    target="_blank" 
-                                    className="inline-flex items-center gap-2 px-6 py-3 bg-pink-600 text-white font-bold rounded-xl hover:bg-pink-500 shadow-lg shadow-pink-600/20"
-                                >
-                                    <ExternalLink size={18}/> Apri Anteprima
-                                </a>
-
-                                <div className="mt-8 p-4 bg-yellow-900/20 border border-yellow-600/30 rounded-xl text-left">
-                                    <p className="text-xs text-yellow-500 font-bold mb-1 flex items-center gap-2"><AlertTriangle size={14}/> Attenzione</p>
-                                    <p className="text-xs text-yellow-200/70 mb-2">
-                                        Se cliccando il link vedi una pagina di errore o bianca, significa che l'accesso pubblico al database non è attivo.
-                                    </p>
-                                    <p className="text-xs text-yellow-200/70">
-                                        Chiedi al Super Admin di eseguire lo script <strong>"Public Menu Access"</strong> dalla sua Dashboard.
-                                    </p>
+                                {/* Right Col: Live Preview (Phone Mockup) */}
+                                <div className="flex flex-col items-center">
+                                    <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-4">Anteprima Live</p>
+                                    <div className="border-[8px] border-slate-900 rounded-[3rem] overflow-hidden h-[600px] w-[320px] relative shadow-2xl bg-slate-950">
+                                        {/* Phone Notch */}
+                                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-6 bg-slate-900 rounded-b-xl z-50"></div>
+                                        
+                                        {/* Live Component */}
+                                        <div className="h-full w-full overflow-hidden bg-slate-50">
+                                            <DigitalMenu restaurantId={session?.user?.id} isPreview={true} />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         )}
