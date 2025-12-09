@@ -1401,8 +1401,12 @@ export default function App() {
                                 </div>
                             </div>
                         )}
+                    </div>
+                </div>
+            </div>
+        )}
 
-                        {/* ... Modal Editor Piatti and Delete Confirm ... */}
+        {/* ... Modal Editor Piatti and Delete Confirm ... */}
         {isEditingItem && (
             <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
                 {/* Editor Content Preserved */}
