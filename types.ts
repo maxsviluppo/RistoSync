@@ -31,6 +31,8 @@ export interface RestaurantProfile {
 
 export interface AppSettings {
   categoryDestinations: Record<Category, Department>;
+  // New: Toggle printing for each department
+  printEnabled: Record<Department, boolean>;
   restaurantProfile?: RestaurantProfile;
 }
 

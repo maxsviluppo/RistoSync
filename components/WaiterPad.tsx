@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Category, MenuItem, Order, OrderItem, OrderStatus, AppSettings } from '../types';
+import { Category, MenuItem, Order, OrderItem, OrderStatus, AppSettings, Department } from '../types';
 import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, getWaiterName, logoutWaiter, getMenuItems, freeTable, updateOrderStatus, getAppSettings, serveItem } from '../services/storageService';
 import { askChefAI } from '../services/geminiService';
-import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen, Bell, ArrowRight, Lock, PlusCircle, Coffee, CheckCircle, Mic, MicOff, AlertOctagon, Flag, UtensilsCrossed, Sandwich } from 'lucide-react';
+import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen, Bell, ArrowRight, Lock, PlusCircle, Coffee, CheckCircle, Mic, MicOff, AlertOctagon, Flag, UtensilsCrossed, Sandwich, Printer } from 'lucide-react';
 
 const CATEGORY_ORDER = [Category.ANTIPASTI, Category.PANINI, Category.PIZZE, Category.PRIMI, Category.SECONDI, Category.DOLCI, Category.BEVANDE];
 
@@ -82,6 +82,53 @@ const SwipeableCartItem: React.FC<SwipeableItemProps> = ({ item, index, onEdit, 
             {offsetX === 0 && !hasInteracted && isFirst && !isAnimating && (<><div className="absolute left-1 top-1/2 -translate-y-1/2 text-slate-600/30 animate-pulse"><ChevronDown className="rotate-90" size={12} /></div><div className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-600/30 animate-pulse"><ChevronDown className="-rotate-90" size={12} /></div></>)}
         </div>
     );
+};
+
+// --- RECEIPT GENERATOR ---
+const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, waiter: string, restaurantName: string) => {
+    const time = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const date = new Date().toLocaleDateString('it-IT');
+    
+    return `
+    <html>
+        <head>
+            <style>
+                body { font-family: 'Courier New', monospace; width: 300px; margin: 0; padding: 10px; font-size: 14px; color: black; background: white; }
+                .header { text-align: center; border-bottom: 2px dashed black; padding-bottom: 10px; margin-bottom: 10px; }
+                .title { font-size: 18px; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; }
+                .dept { font-size: 24px; font-weight: bold; background: black; color: white; display: inline-block; padding: 2px 10px; margin: 5px 0; }
+                .meta { font-size: 14px; margin: 2px 0; font-weight: bold; }
+                .item { display: flex; margin-bottom: 8px; align-items: baseline; }
+                .qty { font-weight: bold; width: 30px; font-size: 16px; }
+                .name { flex: 1; font-weight: bold; font-size: 16px; }
+                .notes { display: block; font-size: 12px; margin-left: 30px; font-style: italic; margin-top: 2px; }
+                .footer { border-top: 2px dashed black; margin-top: 15px; padding-top: 10px; text-align: center; font-size: 10px; }
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <div class="title">${restaurantName}</div>
+                <div class="dept">${dept}</div>
+                <div class="meta">TAVOLO: ${table}</div>
+                <div class="meta">Staff: ${waiter}</div>
+                <div style="font-size: 12px; margin-top:5px;">${date} - ${time}</div>
+            </div>
+            ${items.map(item => `
+                <div class="item">
+                    <span class="qty">${item.quantity}</span>
+                    <span class="name">${item.menuItem.name}</span>
+                </div>
+                ${item.notes ? `<span class="notes">Note: ${item.notes}</span>` : ''}
+            `).join('')}
+            <div class="footer">
+                RistoSync AI - Copia di Cortesia
+            </div>
+            <script>
+                window.onload = function() { window.print(); setTimeout(function(){ window.close(); }, 100); }
+            </script>
+        </body>
+    </html>
+    `;
 };
 
 interface WaiterPadProps { onExit: () => void; }
@@ -255,17 +302,50 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const editCartItem = (index: number) => { const itemToEdit = sortedCart[index]; setCart(prev => prev.filter(i => i !== itemToEdit)); setSelectedCategory(itemToEdit.menuItem.category); setEditingItemId(itemToEdit.menuItem.id); setEditQty(itemToEdit.quantity); setEditNotes(itemToEdit.notes || ''); setSheetHeight(80); };
 
   const requestSendOrder = () => { if (!table || cart.length === 0) return; setSendConfirmOpen(true); };
+  
   const handleSendOrder = () => {
-    setSendConfirmOpen(false); if (!table || cart.length === 0) return; setIsSending(true);
-    // Find ANY active order for this table, even if status is DELIVERED. 
-    // If it exists, we append to it. If it doesn't (free table), we create new.
+    setSendConfirmOpen(false); 
+    if (!table || cart.length === 0) return; 
+    setIsSending(true);
+
+    const currentOrderItems = [...cart]; // Copy for printing before clearing
+
+    // Find ANY active order for this table
     const activeOrder = allRestaurantOrders.find(o => o.tableNumber === table);
     
     if (activeOrder) {
-        // This will update items AND force status back to PENDING (see storageService)
         updateOrderItems(activeOrder.id, cart);
     } else {
         addOrder({ id: Date.now().toString(), tableNumber: table, items: cart, status: OrderStatus.PENDING, timestamp: Date.now(), waiterName: waiterName || 'Cameriere', createdAt: Date.now() });
+    }
+
+    // --- PRINTING LOGIC ---
+    if (appSettings && appSettings.printEnabled) {
+        const deptsToPrint: Department[] = ['Cucina', 'Pizzeria', 'Pub'];
+        
+        deptsToPrint.forEach(dept => {
+            if (appSettings.printEnabled[dept]) {
+                const itemsForDept = currentOrderItems.filter(i => appSettings.categoryDestinations[i.menuItem.category] === dept);
+                if (itemsForDept.length > 0) {
+                    // Trigger Print (This will open a new window/tab and print)
+                    const printContent = generateReceiptHtml(
+                        itemsForDept, 
+                        dept, 
+                        table, 
+                        waiterName || 'Staff', 
+                        appSettings.restaurantProfile?.name || 'Ristorante'
+                    );
+                    
+                    const printWindow = window.open('', `PRINT_${dept}_${Date.now()}`, 'height=600,width=400');
+                    if (printWindow) {
+                        printWindow.document.write(printContent);
+                        printWindow.document.close();
+                        printWindow.focus();
+                        // printWindow.print() is called inside the HTML onload
+                    }
+                }
+            }
+        });
     }
     
     setTimeout(() => { setCart([]); setIsSending(false); setSheetHeight(80); setEditingOrderId(null); loadData(); setTable(''); }, 500);

@@ -77,6 +77,7 @@ export default function App() {
   // App Settings (Destinations)
   const [appSettings, setAppSettingsState] = useState<AppSettings>(getAppSettings());
   const [tempDestinations, setTempDestinations] = useState<Record<Category, Department>>(getAppSettings().categoryDestinations);
+  const [tempPrintSettings, setTempPrintSettings] = useState<Record<Department, boolean>>(getAppSettings().printEnabled);
   const [hasUnsavedDestinations, setHasUnsavedDestinations] = useState(false);
   
   // Profile Settings State
@@ -162,6 +163,9 @@ export default function App() {
               [Category.DOLCI]: 'Cucina',
               [Category.BEVANDE]: 'Sala'
           });
+          setTempPrintSettings(currentSettings.printEnabled || {
+              'Cucina': false, 'Pizzeria': false, 'Pub': false, 'Sala': false
+          });
           
           setProfileForm({
               name: restaurantName,
@@ -189,6 +193,7 @@ export default function App() {
           setAppSettingsState(updated);
           if (!hasUnsavedDestinations) {
               setTempDestinations(updated.categoryDestinations);
+              setTempPrintSettings(updated.printEnabled);
           }
       };
       const handleOrderUpdate = () => { if(showAdmin) setOrdersForAnalytics(getOrders()); };
@@ -294,8 +299,17 @@ export default function App() {
       setHasUnsavedDestinations(true);
   };
 
+  const toggleTempPrint = (dept: Department) => {
+      setTempPrintSettings(prev => ({ ...prev, [dept]: !prev[dept] }));
+      setHasUnsavedDestinations(true);
+  };
+
   const saveDestinationsToCloud = async () => {
-      const newSettings = { ...appSettings, categoryDestinations: tempDestinations };
+      const newSettings = { 
+          ...appSettings, 
+          categoryDestinations: tempDestinations,
+          printEnabled: tempPrintSettings
+      };
       await saveAppSettings(newSettings); 
       setAppSettingsState(newSettings);
       setHasUnsavedDestinations(false);
@@ -551,12 +565,177 @@ export default function App() {
                              <button onClick={() => setAdminTab('info')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'info' ? 'bg-slate-700 text-white' : 'bg-slate-800 text-slate-400'}`}>Legenda</button>
                         </div>
                         
-                        {/* PROFILE TAB */}
+                        {/* SHARE TAB - FIXED QR SECTION */}
+                        {adminTab === 'share' && (
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start max-w-5xl mx-auto h-full">
+                                <div className="text-center lg:text-left flex flex-col items-center lg:items-start">
+                                    <div className="bg-white p-4 rounded-3xl inline-block mb-6 shadow-2xl">
+                                        {/* Use session ID directly or fallback to avoid empty src */}
+                                        <img 
+                                            src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`https://risto-sync.vercel.app/?menu=${session?.user?.id || 'demo'}`)}`}
+                                            alt="QR Code Menu"
+                                            className="w-48 h-48 bg-gray-200 rounded-xl"
+                                        />
+                                    </div>
+                                    <h3 className="text-3xl font-black text-white mb-2">Il tuo Menu Digitale</h3>
+                                    <p className="text-slate-400 mb-8 max-w-sm mx-auto lg:mx-0">
+                                        I clienti possono scansionare questo codice per vedere il menu completo, allergeni e foto dei piatti.
+                                    </p>
+                                    <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex items-center justify-between gap-4 mb-6 max-w-md mx-auto lg:mx-0 w-full">
+                                        <code className="text-xs text-blue-400 font-mono truncate flex-1">
+                                            https://risto-sync.vercel.app/?menu={session?.user?.id || '...'}
+                                        </code>
+                                        <button 
+                                            onClick={() => {
+                                                if (session?.user?.id) {
+                                                    navigator.clipboard.writeText(`https://risto-sync.vercel.app/?menu=${session.user.id}`);
+                                                    alert("Link copiato!");
+                                                }
+                                            }}
+                                            className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700 text-white"
+                                        >
+                                            <Copy size={16}/>
+                                        </button>
+                                    </div>
+                                    <div className="flex gap-4 justify-center lg:justify-start mb-8">
+                                        <a 
+                                            href={`https://risto-sync.vercel.app/?menu=${session?.user?.id || ''}`} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-2 px-6 py-3 bg-pink-600 text-white font-bold rounded-xl hover:bg-pink-500 shadow-lg shadow-pink-600/20"
+                                        >
+                                            <ExternalLink size={18}/> Apri Esterno
+                                        </a>
+                                        <button className="px-6 py-3 bg-slate-800 text-white font-bold rounded-xl border border-slate-700 cursor-default">Status: Online</button>
+                                    </div>
+                                </div>
+                                <div className="flex flex-col items-center">
+                                    <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-4">Anteprima Live</p>
+                                    <div className="border-[8px] border-slate-900 rounded-[3rem] overflow-hidden h-[600px] w-[320px] relative shadow-2xl bg-slate-950 flex flex-col">
+                                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-6 bg-slate-900 rounded-b-xl z-50"></div>
+                                        {/* DigitalMenu Container - Explicit height to prevent collapse */}
+                                        <div className="h-full w-full overflow-hidden bg-slate-50 flex-1 relative">
+                                            <DigitalMenu 
+                                                restaurantId={session?.user?.id || 'preview'} 
+                                                isPreview={true} 
+                                                activeMenuData={menuItems}
+                                                activeRestaurantName={restaurantName}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* MENU TAB */}
+                        {adminTab === 'menu' && (
+                             <div className="max-w-4xl mx-auto pb-20">
+                                <div className="flex justify-between items-center mb-6">
+                                    <div><h3 className="text-xl font-bold text-white">Gestione Menu</h3><p className="text-slate-400 text-sm">Aggiungi, modifica o rimuovi piatti.</p></div>
+                                    <button onClick={() => { setIsEditingItem(true); setEditingItem({}); }} className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-orange-600/20"><Plus size={18}/> Nuovo Piatto</button>
+                                </div>
+                                
+                                <div className="space-y-8">
+                                    {ADMIN_CATEGORY_ORDER.map(category => {
+                                        const items = menuItems.filter(i => i.category === category);
+                                        if (items.length === 0) return null;
+
+                                        return (
+                                            <div key={category} className="mb-8">
+                                                <h4 className="text-slate-400 font-bold text-xs uppercase tracking-widest mb-3 flex items-center gap-2 border-b border-slate-800 pb-2">
+                                                    {getCategoryIcon(category)} {category}
+                                                </h4>
+                                                <div className="space-y-3">
+                                                    {items.map(item => (
+                                                        <div key={item.id} className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex justify-between items-center hover:border-slate-700 transition-colors group">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="text-orange-500 font-black text-lg min-w-[3.5rem] text-center">€ {item.price.toFixed(2)}</div>
+                                                                <div>
+                                                                    <h4 className="font-bold text-white text-lg">{item.name}</h4>
+                                                                    <div className="flex items-center gap-2 text-xs">
+                                                                        <span className="text-slate-500">{item.description || 'Nessuna descrizione'}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <button onClick={() => { setEditingItem(item); setIsEditingItem(true); }} className="p-2 bg-slate-800 text-blue-400 rounded-lg hover:bg-blue-600 hover:text-white"><Edit2 size={16}/></button>
+                                                                <button onClick={() => setItemToDelete(item)} className="p-2 bg-slate-800 text-red-400 rounded-lg hover:bg-red-600 hover:text-white"><Trash2 size={16}/></button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+
+                                {/* CONFIGURAZIONE DESTINAZIONI & STAMPE */}
+                                <div className="mt-12 pt-12 border-t border-slate-800">
+                                    <div className="flex justify-between items-center mb-6">
+                                        <div>
+                                            <h3 className="text-xl font-bold text-white">Configurazione Reparti</h3>
+                                            <p className="text-slate-400 text-sm">Dove inviare e stampare le comande?</p>
+                                        </div>
+                                        {hasUnsavedDestinations && <button onClick={saveDestinationsToCloud} className="bg-green-600 text-white px-4 py-2 rounded-xl font-bold shadow-lg animate-pulse">Salva Modifiche</button>}
+                                    </div>
+                                    
+                                    {/* 1. Mappatura Categorie -> Reparto */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                                        {ADMIN_CATEGORY_ORDER.map(cat => (
+                                            <div key={cat} className="flex items-center justify-between bg-slate-900 p-4 rounded-xl border border-slate-800">
+                                                <span className="font-bold text-slate-300 uppercase flex items-center gap-2">
+                                                    <div className="w-2 h-2 bg-orange-500 rounded-full"></div>{cat}
+                                                </span>
+                                                <div className="flex bg-slate-950 rounded-lg p-1 border border-slate-800 overflow-x-auto">
+                                                    <button onClick={() => handleTempDestinationChange(cat, 'Cucina')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${tempDestinations[cat] === 'Cucina' ? 'bg-orange-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>CUCINA</button>
+                                                    <button onClick={() => handleTempDestinationChange(cat, 'Sala')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${tempDestinations[cat] === 'Sala' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>SALA</button>
+                                                    <button onClick={() => handleTempDestinationChange(cat, 'Pizzeria')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${tempDestinations[cat] === 'Pizzeria' ? 'bg-red-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>PIZZERIA</button>
+                                                    <button onClick={() => handleTempDestinationChange(cat, 'Pub')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${tempDestinations[cat] === 'Pub' ? 'bg-amber-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>PUB</button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* 2. Configurazione Stampanti */}
+                                    <div className="bg-slate-900 rounded-2xl border border-slate-800 p-6">
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <Printer className="text-white"/>
+                                            <h4 className="font-bold text-white uppercase tracking-wider">Stampanti Wi-Fi (Scontrino Fisico)</h4>
+                                        </div>
+                                        <p className="text-slate-400 text-sm mb-6">
+                                            Attiva la stampa automatica per i reparti che hanno una stampante termica. 
+                                            Il dispositivo che invia l'ordine (Tablet/PC) deve essere connesso alla stampante via driver di sistema.
+                                        </p>
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                            {(['Cucina', 'Pizzeria', 'Pub'] as Department[]).map(dept => (
+                                                <div key={dept} className="flex justify-between items-center bg-slate-950 p-4 rounded-xl border border-slate-800">
+                                                    <div className="flex items-center gap-3">
+                                                        {dept === 'Cucina' && <ChefHat size={18} className="text-orange-500"/>}
+                                                        {dept === 'Pizzeria' && <Pizza size={18} className="text-red-500"/>}
+                                                        {dept === 'Pub' && <Sandwich size={18} className="text-amber-500"/>}
+                                                        <span className="font-bold text-white">{dept}</span>
+                                                    </div>
+                                                    <button 
+                                                        onClick={() => toggleTempPrint(dept)} 
+                                                        className={`w-12 h-6 rounded-full relative transition-colors ${tempPrintSettings[dept] ? 'bg-green-500' : 'bg-slate-700'}`}
+                                                    >
+                                                        <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all shadow-sm ${tempPrintSettings[dept] ? 'left-7' : 'left-1'}`}></div>
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                             </div>
+                        )}
+                        {/* Other Tabs... */}
                         {adminTab === 'profile' && (
                             <div className="max-w-2xl mx-auto pb-20">
+                                {/* Profile content preserved from previous version */}
                                 <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
                                     <Store className="text-slate-400"/> Dati Attività
                                 </h3>
+                                {/* ... Rest of Profile Code ... */}
                                 <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 space-y-6">
                                     {/* Nome Ristorante */}
                                     <div>
@@ -710,142 +889,7 @@ export default function App() {
                                 </div>
                             </div>
                         )}
-
-                        {/* NOTIFICHE TAB */}
-                        {adminTab === 'notif' && (
-                            <div className="max-w-md">
-                                <h3 className="text-xl font-bold text-white mb-6">Impostazioni Notifiche</h3>
-                                <div className="space-y-4">
-                                    <div className="flex justify-between items-center bg-slate-900 p-4 rounded-xl border border-slate-800">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-orange-500/20 rounded-lg text-orange-500"><Bell size={20}/></div>
-                                            <div><p className="font-bold text-white">Suoni Cucina</p><p className="text-xs text-slate-400">Audio all'arrivo ordini</p></div>
-                                        </div>
-                                        <button onClick={() => toggleNotif('kitchenSound')} className={`w-12 h-6 rounded-full relative transition-colors ${notifSettings.kitchenSound ? 'bg-green-500' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${notifSettings.kitchenSound ? 'left-7' : 'left-1'}`}></div></button>
-                                    </div>
-                                    <div className="flex justify-between items-center bg-slate-900 p-4 rounded-xl border border-slate-800">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-blue-500/20 rounded-lg text-blue-500"><Smartphone size={20}/></div>
-                                            <div><p className="font-bold text-white">Suoni Sala</p><p className="text-xs text-slate-400">Audio piatti pronti</p></div>
-                                        </div>
-                                        <button onClick={() => toggleNotif('waiterSound')} className={`w-12 h-6 rounded-full relative transition-colors ${notifSettings.waiterSound ? 'bg-green-500' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${notifSettings.waiterSound ? 'left-7' : 'left-1'}`}></div></button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* SHARE TAB */}
-                        {adminTab === 'share' && (
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start max-w-5xl mx-auto">
-                                <div className="text-center lg:text-left">
-                                    <div className="bg-white p-4 rounded-3xl inline-block mb-6 shadow-2xl">
-                                        <img 
-                                            src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`https://risto-sync.vercel.app/?menu=${session?.user?.id}`)}`}
-                                            alt="QR Code Menu"
-                                            className="w-48 h-48"
-                                        />
-                                    </div>
-                                    <h3 className="text-3xl font-black text-white mb-2">Il tuo Menu Digitale</h3>
-                                    <p className="text-slate-400 mb-8 max-w-sm mx-auto lg:mx-0">
-                                        I clienti possono scansionare questo codice per vedere il menu completo, allergeni e foto dei piatti.
-                                    </p>
-                                    <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex items-center justify-between gap-4 mb-6 max-w-md mx-auto lg:mx-0">
-                                        <code className="text-xs text-blue-400 font-mono truncate flex-1">
-                                            https://risto-sync.vercel.app/?menu={session?.user?.id}
-                                        </code>
-                                        <button 
-                                            onClick={() => {
-                                                navigator.clipboard.writeText(`https://risto-sync.vercel.app/?menu=${session?.user?.id}`);
-                                                alert("Link copiato!");
-                                            }}
-                                            className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700 text-white"
-                                        >
-                                            <Copy size={16}/>
-                                        </button>
-                                    </div>
-                                    <div className="flex gap-4 justify-center lg:justify-start mb-8">
-                                        <a 
-                                            href={`https://risto-sync.vercel.app/?menu=${session?.user?.id}`} 
-                                            target="_blank" 
-                                            rel="noopener noreferrer"
-                                            className="inline-flex items-center gap-2 px-6 py-3 bg-pink-600 text-white font-bold rounded-xl hover:bg-pink-500 shadow-lg shadow-pink-600/20"
-                                        >
-                                            <ExternalLink size={18}/> Apri Esterno
-                                        </a>
-                                        <button className="px-6 py-3 bg-slate-800 text-white font-bold rounded-xl border border-slate-700 cursor-default">Status: Online</button>
-                                    </div>
-                                </div>
-                                <div className="flex flex-col items-center">
-                                    <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-4">Anteprima Live</p>
-                                    <div className="border-[8px] border-slate-900 rounded-[3rem] overflow-hidden h-[600px] w-[320px] relative shadow-2xl bg-slate-950">
-                                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-6 bg-slate-900 rounded-b-xl z-50"></div>
-                                        <div className="h-full w-full overflow-hidden bg-slate-50">
-                                            <DigitalMenu 
-                                                restaurantId={session?.user?.id} 
-                                                isPreview={true} 
-                                                activeMenuData={menuItems}
-                                                activeRestaurantName={restaurantName}
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                        
-                        {/* MENU TAB */}
-                        {adminTab === 'menu' && (
-                             <div className="max-w-4xl mx-auto pb-20">
-                                <div className="flex justify-between items-center mb-6">
-                                    <div><h3 className="text-xl font-bold text-white">Gestione Menu</h3><p className="text-slate-400 text-sm">Aggiungi, modifica o rimuovi piatti.</p></div>
-                                    <button onClick={() => { setIsEditingItem(true); setEditingItem({}); }} className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-orange-600/20"><Plus size={18}/> Nuovo Piatto</button>
-                                </div>
-                                
-                                {/* REFACTORED MENU LIST GROUPED BY CATEGORY */}
-                                <div className="space-y-8">
-                                    {ADMIN_CATEGORY_ORDER.map(category => {
-                                        const items = menuItems.filter(i => i.category === category);
-                                        if (items.length === 0) return null;
-
-                                        return (
-                                            <div key={category} className="mb-8">
-                                                <h4 className="text-slate-400 font-bold text-xs uppercase tracking-widest mb-3 flex items-center gap-2 border-b border-slate-800 pb-2">
-                                                    {getCategoryIcon(category)} {category}
-                                                </h4>
-                                                <div className="space-y-3">
-                                                    {items.map(item => (
-                                                        <div key={item.id} className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex justify-between items-center hover:border-slate-700 transition-colors group">
-                                                            <div className="flex items-center gap-4">
-                                                                <div className="text-orange-500 font-black text-lg min-w-[3.5rem] text-center">€ {item.price.toFixed(2)}</div>
-                                                                <div>
-                                                                    <h4 className="font-bold text-white text-lg">{item.name}</h4>
-                                                                    <div className="flex items-center gap-2 text-xs">
-                                                                        <span className="text-slate-500">{item.description || 'Nessuna descrizione'}</span>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                <button onClick={() => { setEditingItem(item); setIsEditingItem(true); }} className="p-2 bg-slate-800 text-blue-400 rounded-lg hover:bg-blue-600 hover:text-white"><Edit2 size={16}/></button>
-                                                                <button onClick={() => setItemToDelete(item)} className="p-2 bg-slate-800 text-red-400 rounded-lg hover:bg-red-600 hover:text-white"><Trash2 size={16}/></button>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-
-                                <div className="mt-12 pt-12 border-t border-slate-800">
-                                    <div className="flex justify-between items-center mb-6"><div><h3 className="text-xl font-bold text-white">Destinazioni Ordini</h3><p className="text-slate-400 text-sm">Dove vengono stampate/inviate le comande?</p></div>{hasUnsavedDestinations && <button onClick={saveDestinationsToCloud} className="bg-green-600 text-white px-4 py-2 rounded-xl font-bold shadow-lg animate-pulse">Salva Modifiche</button>}</div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        {ADMIN_CATEGORY_ORDER.map(cat => (
-                                            <div key={cat} className="flex items-center justify-between bg-slate-900 p-4 rounded-xl border border-slate-800"><span className="font-bold text-slate-300 uppercase flex items-center gap-2"><div className="w-2 h-2 bg-orange-500 rounded-full"></div>{cat}</span><div className="flex bg-slate-950 rounded-lg p-1 border border-slate-800 overflow-x-auto"><button onClick={() => handleTempDestinationChange(cat, 'Cucina')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${tempDestinations[cat] === 'Cucina' ? 'bg-orange-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>CUCINA</button><button onClick={() => handleTempDestinationChange(cat, 'Sala')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${tempDestinations[cat] === 'Sala' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>SALA</button><button onClick={() => handleTempDestinationChange(cat, 'Pizzeria')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${tempDestinations[cat] === 'Pizzeria' ? 'bg-red-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>PIZZERIA</button><button onClick={() => handleTempDestinationChange(cat, 'Pub')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${tempDestinations[cat] === 'Pub' ? 'bg-amber-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>PUB</button></div></div>
-                                        ))}
-                                    </div>
-                                </div>
-                             </div>
-                        )}
-                        {/* ANALYTICS TAB */}
+                        {/* Remaining Tabs (analytics, notif, ai, share, info) unchanged but included in scope */}
                         {adminTab === 'analytics' && (
                              <div className="max-w-5xl mx-auto pb-20">
                                 <div className="flex justify-between items-center mb-6 bg-slate-900 p-4 rounded-2xl border border-slate-800">
@@ -864,8 +908,7 @@ export default function App() {
                                 <div className="mt-8 flex justify-center"><button onClick={handleDeleteDailyHistory} className="flex items-center gap-2 px-6 py-3 rounded-xl bg-red-900/20 text-red-500 font-bold border border-red-900/50 hover:bg-red-900/40 transition-colors"><Trash2 size={18}/> ELIMINA STORICO DEL GIORNO</button></div>
                              </div>
                         )}
-
-                        {/* AI TAB - RESTORED */}
+                        {/* Other tabs... */}
                         {adminTab === 'ai' && (
                             <div className="max-w-xl mx-auto pb-20">
                                 <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
@@ -900,8 +943,28 @@ export default function App() {
                                 </div>
                             </div>
                         )}
-
-                        {/* INFO TAB - RESTORED */}
+                        {/* Info & Notif tabs */}
+                        {adminTab === 'notif' && (
+                            <div className="max-w-md">
+                                <h3 className="text-xl font-bold text-white mb-6">Impostazioni Notifiche</h3>
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center bg-slate-900 p-4 rounded-xl border border-slate-800">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-orange-500/20 rounded-lg text-orange-500"><Bell size={20}/></div>
+                                            <div><p className="font-bold text-white">Suoni Cucina</p><p className="text-xs text-slate-400">Audio all'arrivo ordini</p></div>
+                                        </div>
+                                        <button onClick={() => toggleNotif('kitchenSound')} className={`w-12 h-6 rounded-full relative transition-colors ${notifSettings.kitchenSound ? 'bg-green-500' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${notifSettings.kitchenSound ? 'left-7' : 'left-1'}`}></div></button>
+                                    </div>
+                                    <div className="flex justify-between items-center bg-slate-900 p-4 rounded-xl border border-slate-800">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-blue-500/20 rounded-lg text-blue-500"><Smartphone size={20}/></div>
+                                            <div><p className="font-bold text-white">Suoni Sala</p><p className="text-xs text-slate-400">Audio piatti pronti</p></div>
+                                        </div>
+                                        <button onClick={() => toggleNotif('waiterSound')} className={`w-12 h-6 rounded-full relative transition-colors ${notifSettings.waiterSound ? 'bg-green-500' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${notifSettings.waiterSound ? 'left-7' : 'left-1'}`}></div></button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                         {adminTab === 'info' && (
                             <div className="max-w-2xl mx-auto pb-20">
                                 <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
@@ -935,9 +998,10 @@ export default function App() {
             </div>
         )}
 
-        {/* MODAL EDITOR PIATTI */}
+        {/* ... Modal Editor Piatti and Delete Confirm remain unchanged but are needed ... */}
         {isEditingItem && (
             <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+                {/* Editor Content Preserved */}
                 <div className="bg-slate-900 border border-orange-500/30 rounded-3xl p-6 w-full max-w-lg shadow-2xl animate-slide-up relative">
                     <button onClick={() => setIsEditingItem(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white"><X /></button>
                     <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2"><Edit2 className="text-orange-500"/> {editingItem.id ? 'Modifica Piatto' : 'Nuovo Piatto'}</h2>
@@ -978,7 +1042,6 @@ export default function App() {
             </div>
         )}
 
-        {/* DELETE CONFIRM */}
         {itemToDelete && (
             <div className="absolute inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
                 <div className="bg-slate-900 border border-red-500/30 rounded-3xl p-6 w-full max-w-sm shadow-2xl text-center">

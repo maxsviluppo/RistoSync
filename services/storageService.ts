@@ -505,12 +505,19 @@ export const saveGoogleApiKey = async (apiKey: string) => {
 const DEFAULT_SETTINGS: AppSettings = {
     categoryDestinations: {
         [Category.ANTIPASTI]: 'Cucina',
-        [Category.PANINI]: 'Pub', // Added Default
+        [Category.PANINI]: 'Pub', 
         [Category.PIZZE]: 'Pizzeria', 
         [Category.PRIMI]: 'Cucina',
         [Category.SECONDI]: 'Cucina',
         [Category.DOLCI]: 'Cucina',
         [Category.BEVANDE]: 'Sala'
+    },
+    // DEFAULT PRINT SETTINGS (Disabled by default)
+    printEnabled: {
+        'Cucina': false,
+        'Pizzeria': false,
+        'Pub': false,
+        'Sala': false
     },
     restaurantProfile: {}
 };
@@ -528,6 +535,10 @@ export const getAppSettings = (): AppSettings => {
             categoryDestinations: {
                 ...DEFAULT_SETTINGS.categoryDestinations,
                 ...(parsed.categoryDestinations || {})
+            },
+            printEnabled: {
+                ...DEFAULT_SETTINGS.printEnabled,
+                ...(parsed.printEnabled || {})
             },
             restaurantProfile: {
                 ...DEFAULT_SETTINGS.restaurantProfile,
