@@ -24,7 +24,6 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
     const [loading, setLoading] = useState(!activeMenuData);
     const [error, setError] = useState<string | null>(null);
     const [activeCategory, setActiveCategory] = useState<Category>(Category.ANTIPASTI);
-    const [searchTerm, setSearchTerm] = useState('');
     const [showScrollTop, setShowScrollTop] = useState(false);
     const [rlsError, setRlsError] = useState(false);
 
@@ -124,15 +123,6 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
         switch (cat) { case Category.ANTIPASTI: return <Pizza size={size} />; case Category.PRIMI: return <ChefHat size={size} />; case Category.SECONDI: return <Utensils size={size} />; case Category.DOLCI: return <CakeSlice size={size} />; case Category.BEVANDE: return <Wine size={size} />; default: return <Utensils size={size} />; }
     };
 
-    const filteredItems = useMemo(() => {
-        return menuItems.filter(item => {
-            const name = item.name || '';
-            const desc = item.description || '';
-            return name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                   desc.toLowerCase().includes(searchTerm.toLowerCase());
-        });
-    }, [menuItems, searchTerm]);
-
     const exitMenuMode = () => {
         const url = new URL(window.location.href);
         url.searchParams.delete('menu');
@@ -192,95 +182,81 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
             id="digital-menu-container"
             className={`${isPreview ? 'h-full overflow-y-auto relative rounded-[2.5rem] bg-slate-50 scrollbar-hide' : 'min-h-screen bg-slate-50 pb-24'}`}
         >
-            {/* HERO HEADER */}
-            <div className={`bg-slate-900 text-white relative overflow-hidden shadow-2xl z-10 ${isPreview ? 'rounded-b-[2rem]' : 'rounded-b-[2.5rem]'}`}>
-                <div className="absolute top-0 left-0 w-full h-full opacity-30 bg-[url('https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80')] bg-cover bg-center"></div>
-                <div className="absolute inset-0 bg-gradient-to-b from-slate-900/60 to-slate-900"></div>
-                
-                <div className={`relative z-10 px-6 text-center ${isPreview ? 'pt-8 pb-6' : 'pt-12 pb-10'}`}>
-                    <div className={`inline-block p-3 rounded-3xl bg-orange-500 shadow-xl shadow-orange-500/30 mb-3 transform -rotate-3 animate-slide-up`}>
-                        <ChefHat size={isPreview ? 24 : 40} className="text-white" />
+            {/* THIN HEADER */}
+            <div className={`bg-slate-900 text-white relative shadow-md z-20 ${isPreview ? 'rounded-b-2xl pt-8 pb-3' : 'pt-4 pb-4 sticky top-0'}`}>
+                <div className="px-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 rounded-xl bg-orange-500 shadow-lg shadow-orange-500/20">
+                            <ChefHat size={isPreview ? 18 : 22} className="text-white" />
+                        </div>
+                        <h1 className={`${isPreview ? 'text-lg' : 'text-xl'} font-bold tracking-tight leading-none truncate max-w-[200px]`}>{restaurantName}</h1>
                     </div>
-                    <h1 className={`${isPreview ? 'text-2xl' : 'text-4xl'} font-black mb-2 tracking-tight leading-none`}>{restaurantName}</h1>
-                    <div className="flex justify-center gap-4 text-slate-300 text-xs mb-4 font-medium">
-                         <span className="flex items-center gap-1"><Star size={12} className="text-yellow-400 fill-yellow-400"/> Benvenuti</span>
-                         <span className="flex items-center gap-1"><MapPin size={12}/> Menu</span>
-                    </div>
-                    
-                    {/* Search Bar */}
-                    <div className="relative max-w-sm mx-auto group">
-                        <input 
-                            type="text" 
-                            placeholder="Cerca piatto..." 
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className={`w-full bg-white/10 backdrop-blur-md border border-white/20 rounded-2xl pl-10 pr-4 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:bg-slate-900/90 transition-all shadow-lg ${isPreview ? 'py-2 text-xs' : 'py-4 text-base'}`}
-                        />
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-orange-500 transition-colors" size={isPreview ? 14 : 20} />
+                    {/* Optional Status Indicator or Mini Icon */}
+                    <div className="flex items-center gap-1.5 bg-slate-800 px-2 py-1 rounded-full border border-slate-700">
+                        <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
+                        <span className="text-[10px] font-bold text-slate-300 uppercase">Open</span>
                     </div>
                 </div>
             </div>
 
-            {/* CATEGORY NAV (STICKY) */}
-            <div className={`sticky top-0 z-40 bg-slate-50/95 backdrop-blur-md shadow-sm border-b border-slate-200/50 ${isPreview ? 'py-2' : 'py-4'}`}>
+            {/* CATEGORY NAV (STICKY BELOW HEADER) */}
+            <div className={`sticky z-10 bg-slate-50/95 backdrop-blur-md shadow-sm border-b border-slate-200/50 ${isPreview ? 'top-0 py-2' : 'top-[60px] py-3'}`}>
                 <div className="flex overflow-x-auto gap-2 px-4 no-scrollbar snap-x">
                     {CATEGORY_ORDER.map(cat => (
                         <button 
                             key={cat} 
                             onClick={() => scrollToCategory(cat)}
-                            className={`flex items-center gap-2 rounded-2xl whitespace-nowrap font-bold transition-all snap-center shadow-sm border ${isPreview ? 'px-3 py-2 text-xs' : 'px-5 py-3 text-sm'} ${activeCategory === cat ? 'bg-slate-900 text-white border-slate-900 shadow-slate-900/20 scale-105' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-100'}`}
+                            className={`flex items-center gap-2 rounded-xl whitespace-nowrap font-bold transition-all snap-center shadow-sm border ${isPreview ? 'px-3 py-1.5 text-[10px]' : 'px-4 py-2 text-xs'} ${activeCategory === cat ? 'bg-slate-900 text-white border-slate-900 shadow-slate-900/20 scale-105' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-100'}`}
                         >
-                            {getCategoryIcon(cat, isPreview ? 14 : 18)} {cat}
+                            {getCategoryIcon(cat, isPreview ? 12 : 14)} {cat}
                         </button>
                     ))}
                 </div>
             </div>
 
             {/* MENU CONTENT */}
-            <div className={`px-4 max-w-2xl mx-auto ${isPreview ? 'py-4 space-y-6' : 'py-8 space-y-12'}`}>
+            <div className={`px-4 max-w-2xl mx-auto ${isPreview ? 'py-4 space-y-6' : 'py-6 space-y-10'}`}>
                 {CATEGORY_ORDER.map(cat => {
-                    const items = filteredItems.filter(i => i.category === cat);
+                    // Filter items directly here since search is removed
+                    const items = menuItems.filter(i => i.category === cat);
                     if (items.length === 0) return null;
 
                     return (
-                        <div key={cat} id={`cat-${cat}`} className="scroll-mt-32">
-                            <div className={`flex items-center gap-3 mb-4 ${isPreview ? 'mt-2' : 'mt-0'}`}>
-                                <div className="p-1.5 bg-orange-100 rounded-lg text-orange-600">{getCategoryIcon(cat, isPreview ? 16 : 24)}</div>
-                                <h2 className={`${isPreview ? 'text-lg' : 'text-2xl'} font-black text-slate-800 uppercase tracking-tight`}>{cat}</h2>
+                        <div key={cat} id={`cat-${cat}`} className="scroll-mt-36">
+                            <div className={`flex items-center gap-2 mb-3 ${isPreview ? 'mt-2' : 'mt-0'}`}>
+                                <h2 className={`${isPreview ? 'text-base' : 'text-lg'} font-black text-slate-800 uppercase tracking-tight`}>{cat}</h2>
+                                <div className="h-px bg-slate-200 flex-1 ml-2"></div>
                             </div>
 
-                            <div className={`grid ${isPreview ? 'gap-3' : 'gap-6'}`}>
+                            <div className={`grid ${isPreview ? 'gap-3' : 'gap-4'}`}>
                                 {items.map(item => (
-                                    <div key={item.id} className={`bg-white rounded-[1.5rem] shadow-sm border border-slate-100 flex flex-col relative overflow-hidden group ${isPreview ? 'p-4 gap-2' : 'p-6 gap-4 hover:scale-[1.01] transition-transform shadow-xl shadow-slate-200/50'}`}>
+                                    <div key={item.id} className={`bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col relative overflow-hidden group ${isPreview ? 'p-3 gap-1.5' : 'p-5 gap-3'}`}>
                                         <div className="flex justify-between items-start gap-3">
-                                            <h3 className={`${isPreview ? 'text-sm' : 'text-xl'} font-bold text-slate-900 leading-tight w-[70%]`}>{item.name}</h3>
-                                            <div className="bg-slate-900 text-white px-3 py-1 rounded-lg font-black text-sm shadow-lg whitespace-nowrap">
+                                            <h3 className={`${isPreview ? 'text-sm' : 'text-base'} font-bold text-slate-900 leading-tight w-[75%]`}>{item.name}</h3>
+                                            <div className="font-bold text-orange-600 text-sm whitespace-nowrap">
                                                 € {item.price.toFixed(2)}
                                             </div>
                                         </div>
                                         
                                         <div className="flex gap-2">
-                                            <p className={`text-slate-500 leading-relaxed flex-1 ${isPreview ? 'text-xs' : 'text-sm'}`}>
+                                            <p className={`text-slate-500 leading-snug flex-1 ${isPreview ? 'text-[10px]' : 'text-xs'}`}>
                                                 {item.description || <span className="italic opacity-50">Nessuna descrizione.</span>}
                                             </p>
                                         </div>
 
                                         {/* Allergens */}
                                         {item.allergens && item.allergens.length > 0 && (
-                                            <div className="flex flex-wrap gap-1.5 pt-3 border-t border-slate-50 mt-1">
+                                            <div className="flex flex-wrap gap-1.5 pt-2 border-t border-slate-50 mt-1">
                                                 {item.allergens.map(alg => {
                                                     const Icon = ALLERGENS_ICONS[alg] || Info;
                                                     return (
-                                                        <span key={alg} className={`inline-flex items-center gap-1 font-bold uppercase text-slate-500 bg-slate-100 rounded-md ${isPreview ? 'text-[8px] px-2 py-1' : 'text-[10px] px-3 py-1.5'}`}>
-                                                            <Icon size={isPreview ? 10 : 14} className="text-orange-500"/> {alg}
+                                                        <span key={alg} className={`inline-flex items-center gap-1 font-bold uppercase text-slate-500 bg-slate-100 rounded-md ${isPreview ? 'text-[8px] px-1.5 py-0.5' : 'text-[9px] px-2 py-1'}`}>
+                                                            <Icon size={isPreview ? 8 : 10} className="text-orange-500"/> {alg}
                                                         </span>
                                                     )
                                                 })}
                                             </div>
                                         )}
-                                        
-                                        {/* Decorative gradient blob */}
-                                        <div className="absolute -bottom-10 -right-10 w-24 h-24 bg-gradient-to-br from-orange-100 to-transparent rounded-full opacity-50 pointer-events-none"></div>
                                     </div>
                                 ))}
                             </div>
@@ -288,23 +264,23 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
                     );
                 })}
 
-                {filteredItems.length === 0 && (
+                {menuItems.length === 0 && (
                     <div className="text-center py-10 text-slate-400">
                         <Search size={40} className="mx-auto mb-4 opacity-20"/>
-                        <p className="font-bold text-sm">Nessun piatto trovato</p>
+                        <p className="font-bold text-sm">Menu vuoto</p>
                     </div>
                 )}
             </div>
 
             {/* FOOTER */}
-            <div className={`text-center bg-white rounded-t-[2rem] shadow-[0_-10px_40px_rgba(0,0,0,0.05)] border-t border-slate-100 ${isPreview ? 'py-8 mt-4' : 'py-12 mt-12'}`}>
-                 <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-4">Condividi la tua esperienza</p>
-                 <div className="flex justify-center gap-4 mb-6">
-                     <button className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-pink-600 shadow-sm border border-slate-100"><Instagram size={18}/></button>
-                     <button className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-blue-600 shadow-sm border border-slate-100"><Facebook size={18}/></button>
+            <div className={`text-center bg-white rounded-t-[2rem] shadow-[0_-10px_40px_rgba(0,0,0,0.05)] border-t border-slate-100 ${isPreview ? 'py-6 mt-4' : 'py-8 mt-8'}`}>
+                 <p className="text-slate-400 text-[9px] font-bold uppercase tracking-widest mb-3">Seguici</p>
+                 <div className="flex justify-center gap-3 mb-4">
+                     <button className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-pink-600 shadow-sm border border-slate-100"><Instagram size={16}/></button>
+                     <button className="w-8 h-8 bg-slate-50 rounded-lg flex items-center justify-center text-blue-600 shadow-sm border border-slate-100"><Facebook size={16}/></button>
                  </div>
-                 <div className="flex items-center justify-center gap-2 text-slate-300 font-bold text-xs">
-                     <ChefHat size={14}/> Powered by RistoSync
+                 <div className="flex items-center justify-center gap-1.5 text-slate-300 font-bold text-[10px]">
+                     <ChefHat size={12}/> Powered by RistoSync
                  </div>
             </div>
 
@@ -321,9 +297,9 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
                     {showScrollTop && (
                         <button 
                             onClick={() => window.scrollTo({top: 0, behavior: 'smooth'})}
-                            className="fixed bottom-6 right-6 p-4 bg-orange-500 text-white rounded-full shadow-2xl shadow-orange-500/30 z-50 animate-bounce hover:bg-orange-600 transition-colors"
+                            className="fixed bottom-6 right-6 p-3 bg-orange-500 text-white rounded-full shadow-2xl shadow-orange-500/30 z-50 animate-bounce hover:bg-orange-600 transition-colors"
                         >
-                            <ArrowUp size={24}/>
+                            <ArrowUp size={20}/>
                         </button>
                     )}
                 </>
