@@ -4,7 +4,7 @@ import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import DigitalMenu from './components/DigitalMenu';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft, CheckCircle, LayoutGrid, SlidersHorizontal, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft, CheckCircle, LayoutGrid, SlidersHorizontal, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { MenuItem, Category, Department, AppSettings, OrderStatus, Order, RestaurantProfile } from './types';
@@ -50,7 +50,7 @@ export default function App() {
   const [isBanned, setIsBanned] = useState(false);
   const [accountDeleted, setAccountDeleted] = useState(false);
   
-  const [role, setRole] = useState<'kitchen' | 'waiter' | null>(null);
+  const [role, setRole] = useState<'kitchen' | 'pizzeria' | 'waiter' | null>(null);
   const [showLogin, setShowLogin] = useState(false);
   const [waiterNameInput, setWaiterNameInput] = useState('');
   
@@ -379,6 +379,18 @@ export default function App() {
       }
   };
 
+  const getCategoryIcon = (cat: Category) => {
+    switch (cat) {
+        case Category.ANTIPASTI: return <Pizza size={18} />;
+        case Category.PIZZE: return <Pizza size={18} />;
+        case Category.PRIMI: return <ChefHat size={18} />;
+        case Category.SECONDI: return <Utensils size={18} />;
+        case Category.DOLCI: return <CakeSlice size={18} />;
+        case Category.BEVANDE: return <Wine size={18} />;
+        default: return <Utensils size={18} />;
+    }
+  };
+
   if (publicMenuId) {
       return <DigitalMenu restaurantId={publicMenuId} />;
   }
@@ -402,7 +414,8 @@ export default function App() {
   
   if (isSuperAdmin && !role && adminViewMode === 'dashboard') return <SuperAdminDashboard onEnterApp={() => setAdminViewMode('app')} />;
 
-  if (role === 'kitchen') return <KitchenDisplay onExit={handleExitApp} />;
+  if (role === 'kitchen') return <KitchenDisplay onExit={handleExitApp} department="Cucina" />;
+  if (role === 'pizzeria') return <KitchenDisplay onExit={handleExitApp} department="Pizzeria" />;
   if (role === 'waiter') return <WaiterPad onExit={handleExitApp} />;
 
   return (
@@ -445,24 +458,34 @@ export default function App() {
                 </div>
 
                 {/* ROLE SELECTION BUTTONS */}
-                <div className="flex flex-col md:flex-row gap-8 items-center">
-                    <button onClick={() => setRole('kitchen')} className="group relative w-64 h-80 bg-slate-800 rounded-3xl border border-slate-700 hover:border-orange-500 transition-all duration-500 flex flex-col items-center justify-center gap-6 shadow-2xl hover:shadow-orange-500/20 active:scale-95">
-                        <div className="w-24 h-24 bg-slate-900 rounded-full flex items-center justify-center group-hover:bg-orange-500 transition-colors duration-500 border border-slate-700 group-hover:border-orange-400">
-                            <ChefHat size={48} className="text-slate-500 group-hover:text-white transition-colors duration-500" />
+                <div className="flex flex-col lg:flex-row gap-6 items-center">
+                    <button onClick={() => setRole('kitchen')} className="group relative w-64 h-72 bg-slate-800 rounded-3xl border border-slate-700 hover:border-orange-500 transition-all duration-500 flex flex-col items-center justify-center gap-6 shadow-2xl hover:shadow-orange-500/20 active:scale-95">
+                        <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center group-hover:bg-orange-500 transition-colors duration-500 border border-slate-700 group-hover:border-orange-400">
+                            <ChefHat size={40} className="text-slate-500 group-hover:text-white transition-colors duration-500" />
                         </div>
                         <div className="text-center">
-                            <h2 className="text-2xl font-black text-white mb-2">CUCINA</h2>
-                            <p className="text-slate-500 text-sm font-medium group-hover:text-orange-400 transition-colors">Display Ordini</p>
+                            <h2 className="text-xl font-black text-white mb-1">CUCINA</h2>
+                            <p className="text-slate-500 text-xs font-medium group-hover:text-orange-400 transition-colors">Display Chef</p>
                         </div>
                     </button>
 
-                    <button onClick={handleWaiterClick} className="group relative w-64 h-80 bg-slate-800 rounded-3xl border border-slate-700 hover:border-blue-500 transition-all duration-500 flex flex-col items-center justify-center gap-6 shadow-2xl hover:shadow-blue-500/20 active:scale-95">
-                        <div className="w-24 h-24 bg-slate-900 rounded-full flex items-center justify-center group-hover:bg-blue-500 transition-colors duration-500 border border-slate-700 group-hover:border-blue-400">
-                            <UtensilsCrossed size={48} className="text-slate-500 group-hover:text-white transition-colors duration-500" />
+                    <button onClick={() => setRole('pizzeria')} className="group relative w-64 h-72 bg-slate-800 rounded-3xl border border-slate-700 hover:border-red-500 transition-all duration-500 flex flex-col items-center justify-center gap-6 shadow-2xl hover:shadow-red-500/20 active:scale-95">
+                        <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center group-hover:bg-red-500 transition-colors duration-500 border border-slate-700 group-hover:border-red-400">
+                            <Pizza size={40} className="text-slate-500 group-hover:text-white transition-colors duration-500" />
                         </div>
                         <div className="text-center">
-                            <h2 className="text-2xl font-black text-white mb-2">SALA</h2>
-                            <p className="text-slate-500 text-sm font-medium group-hover:text-blue-400 transition-colors">Prendi Ordini</p>
+                            <h2 className="text-xl font-black text-white mb-1">PIZZERIA</h2>
+                            <p className="text-slate-500 text-xs font-medium group-hover:text-red-400 transition-colors">Display Forno</p>
+                        </div>
+                    </button>
+
+                    <button onClick={handleWaiterClick} className="group relative w-64 h-72 bg-slate-800 rounded-3xl border border-slate-700 hover:border-blue-500 transition-all duration-500 flex flex-col items-center justify-center gap-6 shadow-2xl hover:shadow-blue-500/20 active:scale-95">
+                        <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center group-hover:bg-blue-500 transition-colors duration-500 border border-slate-700 group-hover:border-blue-400">
+                            <UtensilsCrossed size={40} className="text-slate-500 group-hover:text-white transition-colors duration-500" />
+                        </div>
+                        <div className="text-center">
+                            <h2 className="text-xl font-black text-white mb-1">SALA</h2>
+                            <p className="text-slate-500 text-xs font-medium group-hover:text-blue-400 transition-colors">Pad Camerieri</p>
                         </div>
                     </button>
                 </div>
@@ -689,27 +712,42 @@ export default function App() {
                                     <div><h3 className="text-xl font-bold text-white">Gestione Menu</h3><p className="text-slate-400 text-sm">Aggiungi, modifica o rimuovi piatti.</p></div>
                                     <button onClick={() => { setIsEditingItem(true); setEditingItem({}); }} className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-orange-600/20"><Plus size={18}/> Nuovo Piatto</button>
                                 </div>
-                                <div className="space-y-3">
-                                    {menuItems.map(item => (
-                                        <div key={item.id} className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex justify-between items-center hover:border-slate-700 transition-colors group">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-10 h-10 bg-slate-800 rounded-lg flex items-center justify-center text-slate-500 font-bold">{item.price}€</div>
-                                                <div>
-                                                    <h4 className="font-bold text-white text-lg">{item.name}</h4>
-                                                    <div className="flex items-center gap-2 text-xs">
-                                                        <span className="text-orange-400 uppercase font-bold">{item.category}</span>
-                                                        <span className="text-slate-500">•</span>
-                                                        <span className="text-slate-500">{item.description || 'Nessuna descrizione'}</span>
-                                                    </div>
+                                
+                                {/* REFACTORED MENU LIST GROUPED BY CATEGORY */}
+                                <div className="space-y-8">
+                                    {ADMIN_CATEGORY_ORDER.map(category => {
+                                        const items = menuItems.filter(i => i.category === category);
+                                        if (items.length === 0) return null;
+
+                                        return (
+                                            <div key={category} className="mb-8">
+                                                <h4 className="text-slate-400 font-bold text-xs uppercase tracking-widest mb-3 flex items-center gap-2 border-b border-slate-800 pb-2">
+                                                    {getCategoryIcon(category)} {category}
+                                                </h4>
+                                                <div className="space-y-3">
+                                                    {items.map(item => (
+                                                        <div key={item.id} className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex justify-between items-center hover:border-slate-700 transition-colors group">
+                                                            <div className="flex items-center gap-4">
+                                                                <div className="text-orange-500 font-black text-lg min-w-[3.5rem] text-center">€ {item.price.toFixed(2)}</div>
+                                                                <div>
+                                                                    <h4 className="font-bold text-white text-lg">{item.name}</h4>
+                                                                    <div className="flex items-center gap-2 text-xs">
+                                                                        <span className="text-slate-500">{item.description || 'Nessuna descrizione'}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <button onClick={() => { setEditingItem(item); setIsEditingItem(true); }} className="p-2 bg-slate-800 text-blue-400 rounded-lg hover:bg-blue-600 hover:text-white"><Edit2 size={16}/></button>
+                                                                <button onClick={() => setItemToDelete(item)} className="p-2 bg-slate-800 text-red-400 rounded-lg hover:bg-red-600 hover:text-white"><Trash2 size={16}/></button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             </div>
-                                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={() => { setEditingItem(item); setIsEditingItem(true); }} className="p-2 bg-slate-800 text-blue-400 rounded-lg hover:bg-blue-600 hover:text-white"><Edit2 size={16}/></button>
-                                                <button onClick={() => setItemToDelete(item)} className="p-2 bg-slate-800 text-red-400 rounded-lg hover:bg-red-600 hover:text-white"><Trash2 size={16}/></button>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        )
+                                    })}
                                 </div>
+
                                 <div className="mt-12 pt-12 border-t border-slate-800">
                                     <div className="flex justify-between items-center mb-6"><div><h3 className="text-xl font-bold text-white">Destinazioni Ordini</h3><p className="text-slate-400 text-sm">Dove vengono stampate/inviate le comande?</p></div>{hasUnsavedDestinations && <button onClick={saveDestinationsToCloud} className="bg-green-600 text-white px-4 py-2 rounded-xl font-bold shadow-lg animate-pulse">Salva Modifiche</button>}</div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

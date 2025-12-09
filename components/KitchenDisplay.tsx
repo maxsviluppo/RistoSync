@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
-import { Order, OrderStatus, Category, AppSettings } from '../types';
+import { Order, OrderStatus, Category, AppSettings, Department } from '../types';
 import { getOrders, updateOrderStatus, toggleOrderItemCompletion, getAppSettings } from '../services/storageService';
-import { Clock, CheckCircle, ChefHat, Bell, User, LogOut, Square, CheckSquare, AlertOctagon, Timer, PlusCircle, History, Calendar, ChevronLeft, ChevronRight, DollarSign, UtensilsCrossed, Receipt } from 'lucide-react';
+import { Clock, CheckCircle, ChefHat, Bell, User, LogOut, Square, CheckSquare, AlertOctagon, Timer, PlusCircle, History, Calendar, ChevronLeft, ChevronRight, DollarSign, UtensilsCrossed, Receipt, Pizza } from 'lucide-react';
 
 const CATEGORY_PRIORITY: Record<Category, number> = {
     [Category.ANTIPASTI]: 1,
@@ -117,9 +117,10 @@ const OrderTimer: React.FC<{ timestamp: number; status: OrderStatus; onCritical:
 
 interface KitchenDisplayProps {
     onExit: () => void;
+    department?: Department; // 'Cucina' | 'Pizzeria'
 }
 
-const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
+const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'Cucina' }) => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [viewMode, setViewMode] = useState<'active' | 'history'>('active');
   const [appSettings, setAppSettings] = useState<AppSettings>(getAppSettings());
@@ -130,6 +131,10 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
 
   const previousOrdersRef = useRef<Order[]>([]);
   const isFirstLoad = useRef(true);
+
+  const isPizzeria = department === 'Pizzeria';
+  const themeColor = isPizzeria ? 'red' : 'orange';
+  const ThemeIcon = isPizzeria ? Pizza : ChefHat;
 
   const showNotification = (msg: string, type: 'info' | 'success' | 'alert') => {
       setNotification({ msg, type });
@@ -150,22 +155,24 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
         const prevOrderIds = prevOrders.map(o => o.id);
         const addedOrders = sorted.filter(o => !prevOrderIds.includes(o.id));
         
-        // NOTIFY ONLY FOR KITCHEN ITEMS
-        const hasKitchenItems = addedOrders.some(order => 
+        // NOTIFY ONLY FOR ITEMS BELONGING TO THIS DEPARTMENT
+        const hasRelevantItems = addedOrders.some(order => 
             order.items.some(item => {
                 const dest = appSettings.categoryDestinations[item.menuItem.category];
-                return dest !== 'Sala'; 
+                return dest === department; 
             })
         );
 
-        if (hasKitchenItems) {
+        if (hasRelevantItems) {
             playNotificationSound('new');
-            showNotification(`Nuovo Ordine: Tavolo ${addedOrders[0].tableNumber}`, 'info');
+            showNotification(`Nuovo Ordine ${isPizzeria ? 'Pizzeria' : 'Cucina'}: Tavolo ${addedOrders[0].tableNumber}`, 'info');
         }
 
+        // Check if an order became READY (handled similarly for both, usually controlled by Chef/Pizzaiolo finishing items)
         sorted.forEach(newOrder => {
             const oldOrder = prevOrders.find(o => o.id === newOrder.id);
             if (oldOrder && oldOrder.status !== OrderStatus.READY && newOrder.status === OrderStatus.READY) {
+                // Optionally filter this notification too, but order status is global
                 playNotificationSound('ready');
                 showNotification(`Tavolo ${newOrder.tableNumber} è PRONTO!`, 'success');
             }
@@ -192,7 +199,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
       window.removeEventListener('local-storage-update', handleLocalUpdate);
       window.removeEventListener('local-settings-update', handleSettingsUpdate);
     };
-  }, [appSettings]); 
+  }, [appSettings, department]); 
 
   const advanceStatus = (orderId: string, currentStatus: OrderStatus) => {
     let nextStatus = currentStatus;
@@ -212,7 +219,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
   const getStatusColor = (status: OrderStatus) => {
     switch (status) {
       case OrderStatus.PENDING: return 'bg-yellow-100 border-yellow-400 text-yellow-800';
-      case OrderStatus.COOKING: return 'bg-orange-100 border-orange-400 text-orange-800';
+      case OrderStatus.COOKING: return `bg-${themeColor}-100 border-${themeColor}-400 text-${themeColor}-800`;
       case OrderStatus.READY: return 'bg-green-100 border-green-400 text-green-800';
       case OrderStatus.DELIVERED: return 'bg-slate-700 border-slate-500 text-slate-300 opacity-80';
       default: return 'bg-gray-100 border-gray-400';
@@ -220,6 +227,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
   };
 
   // --- ANALYTICS CALCULATIONS ---
+  // Analytics should probably filter by department too? Yes, usually.
   const filteredHistoryOrders = useMemo(() => {
       return orders.filter(o => {
           if (o.status !== OrderStatus.DELIVERED) return false;
@@ -227,19 +235,22 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
           return orderDate.getDate() === selectedDate.getDate() &&
                  orderDate.getMonth() === selectedDate.getMonth() &&
                  orderDate.getFullYear() === selectedDate.getFullYear();
-      }).sort((a, b) => (b.createdAt || b.timestamp) - (a.createdAt || a.timestamp)); // Newest first
+      }).sort((a, b) => (b.createdAt || b.timestamp) - (a.createdAt || a.timestamp)); 
   }, [orders, selectedDate]);
 
   const stats = useMemo(() => {
       let totalRevenue = 0;
       let totalItems = 0;
       filteredHistoryOrders.forEach(order => {
-          const orderTotal = order.items.reduce((acc, i) => acc + (i.menuItem.price * i.quantity), 0);
+          // Filter items specific to this department for accurate stats
+          const relevantItems = order.items.filter(i => appSettings.categoryDestinations[i.menuItem.category] === department);
+          
+          const orderTotal = relevantItems.reduce((acc, i) => acc + (i.menuItem.price * i.quantity), 0);
           totalRevenue += orderTotal;
-          order.items.forEach(i => totalItems += i.quantity);
+          relevantItems.forEach(i => totalItems += i.quantity);
       });
       return { totalRevenue, totalItems };
-  }, [filteredHistoryOrders]);
+  }, [filteredHistoryOrders, department, appSettings]);
 
   const changeDate = (days: number) => {
       const newDate = new Date(selectedDate);
@@ -280,18 +291,23 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
       {/* HEADER */}
       <div className="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
         <div className="flex items-center gap-3">
-          <div className="w-14 h-14 bg-orange-500 rounded-full flex items-center justify-center"><ChefHat className="w-8 h-8 text-white" /></div>
-          <div><h1 className="text-3xl font-bold">Risto<span className="text-orange-500">Sync</span></h1><p className="text-slate-400 text-xs uppercase font-semibold">Kitchen Dashboard</p></div>
+          <div className={`w-14 h-14 rounded-full flex items-center justify-center ${isPizzeria ? 'bg-red-600' : 'bg-orange-500'}`}>
+              <ThemeIcon className="w-8 h-8 text-white" />
+          </div>
+          <div>
+              <h1 className="text-3xl font-bold">Risto<span className={`${isPizzeria ? 'text-red-500' : 'text-orange-500'}`}>Sync</span></h1>
+              <p className="text-slate-400 text-xs uppercase font-semibold">{isPizzeria ? 'Pizzeria' : 'Kitchen'} Dashboard</p>
+          </div>
           <button onClick={() => loadOrders()} className="ml-4 p-2 rounded-full bg-slate-800 text-slate-500 hover:text-white"><History size={16} /></button>
           
           {/* TABS */}
           <div className="ml-4 flex bg-slate-800 rounded-lg p-1 border border-slate-700">
              <button onClick={() => setViewMode('active')} className={`px-6 py-2 rounded-md font-bold text-sm uppercase transition-all ${viewMode === 'active' ? 'bg-slate-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Attivi</button>
-             <button onClick={() => setViewMode('history')} className={`px-6 py-2 rounded-md font-bold text-sm uppercase transition-all ${viewMode === 'history' ? 'bg-slate-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Storico Scontrini</button>
+             <button onClick={() => setViewMode('history')} className={`px-6 py-2 rounded-md font-bold text-sm uppercase transition-all ${viewMode === 'history' ? 'bg-slate-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Storico</button>
           </div>
         </div>
         <div className="flex gap-4 items-center">
-            <div className="bg-slate-800 px-4 py-2 rounded-lg border border-slate-700"><span className="text-2xl font-mono text-orange-400 font-bold">{new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}</span></div>
+            <div className="bg-slate-800 px-4 py-2 rounded-lg border border-slate-700"><span className={`text-2xl font-mono font-bold ${isPizzeria ? 'text-red-400' : 'text-orange-400'}`}>{new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}</span></div>
             <button onClick={onExit} className="bg-slate-800 text-slate-400 hover:text-white p-2.5 rounded-lg"><LogOut size={20} /></button>
         </div>
       </div>
@@ -309,13 +325,12 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
                let borderColor = getStatusColor(order.status).replace('text', 'border').replace('bg-','border-');
                if (isCritical) borderColor = 'border-red-600 animate-pulse shadow-[0_0_20px_rgba(220,38,38,0.4)]';
 
-               // FILTER: Determine visible items (KITCHEN only for Active View)
+               // FILTER: Determine visible items (Only items for THIS department)
                const visibleItems = order.items
                   .map((item, originalIndex) => ({ item, originalIndex }))
                   .filter(({ item }) => {
-                      // In Active Mode, show only items destined for Kitchen
                       const dest = appSettings.categoryDestinations[item.menuItem.category];
-                      return dest !== 'Sala'; 
+                      return dest === department; 
                   })
                   .sort((a, b) => (CATEGORY_PRIORITY[a.item.menuItem.category] || 99) - (CATEGORY_PRIORITY[b.item.menuItem.category] || 99));
 
@@ -359,7 +374,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
                                   <span className={`font-black text-2xl w-10 h-10 flex items-center justify-center rounded-lg shadow-inner ${item.completed ? 'bg-green-900/30 text-green-400' : 'bg-slate-700 text-white'}`}>{item.quantity}</span>
                                   <div className="flex-1 min-w-0">
                                       <div className="flex items-center gap-2">
-                                          <p className="text-[10px] text-orange-500 font-bold uppercase tracking-wider mb-0.5">{item.menuItem.category}</p>
+                                          <p className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${isPizzeria ? 'text-red-500' : 'text-orange-500'}`}>{item.menuItem.category}</p>
                                       </div>
                                       <p className={`font-black text-3xl leading-none tracking-tight break-words ${item.completed ? 'text-slate-600 line-through' : 'bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent'}`}>{item.menuItem.name}</p>
                                       {item.notes && <p className="text-red-300 text-sm font-bold mt-2 bg-red-900/20 inline-block px-3 py-1 rounded border border-red-900/30 shadow-sm">⚠️ {item.notes}</p>}
@@ -371,7 +386,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
                     </ul>
                   </div>
 
-                  <button onClick={() => advanceStatus(order.id, order.status)} className={`w-full py-5 text-center font-black text-lg uppercase tracking-wider transition-all flex items-center justify-center gap-2 hover:brightness-110 ${order.status === OrderStatus.READY ? 'bg-green-600 text-white' : 'bg-orange-500 text-white'}`}>
+                  <button onClick={() => advanceStatus(order.id, order.status)} className={`w-full py-5 text-center font-black text-lg uppercase tracking-wider transition-all flex items-center justify-center gap-2 hover:brightness-110 ${order.status === OrderStatus.READY ? 'bg-green-600 text-white' : `bg-${themeColor}-500 text-white`}`}>
                       {order.status === OrderStatus.READY ? <><CheckCircle /> SERVI AL TAVOLO</> : <>AVANZA STATO {order.status === OrderStatus.PENDING && '→ PREPARAZIONE'} {order.status === OrderStatus.COOKING && '→ PRONTO'}</>}
                   </button>
                 </div>
@@ -384,17 +399,17 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
               <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-6">
                   <div className="flex items-center bg-slate-800 rounded-xl p-1 border border-slate-700">
                       <button onClick={() => changeDate(-1)} className="p-3 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white"><ChevronLeft/></button>
-                      <div className="px-6 font-bold text-white flex items-center gap-2 uppercase tracking-wide"><Calendar size={18} className="text-orange-500"/> {formatDate(selectedDate)}</div>
+                      <div className="px-6 font-bold text-white flex items-center gap-2 uppercase tracking-wide"><Calendar size={18} className={`${isPizzeria ? 'text-red-500' : 'text-orange-500'}`}/> {formatDate(selectedDate)}</div>
                       <button onClick={() => changeDate(1)} className="p-3 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white"><ChevronRight/></button>
                   </div>
                   <div className="flex gap-4">
                       <div className="bg-slate-800 border border-slate-700 p-4 rounded-2xl flex items-center gap-3">
                           <div className="p-3 bg-green-900/20 rounded-xl text-green-500"><DollarSign/></div>
-                          <div><p className="text-slate-400 text-xs font-bold uppercase">Incasso</p><p className="text-2xl font-black text-white">€ {stats.totalRevenue.toFixed(2)}</p></div>
+                          <div><p className="text-slate-400 text-xs font-bold uppercase">Incasso {isPizzeria ? 'Pizzeria' : 'Cucina'}</p><p className="text-2xl font-black text-white">€ {stats.totalRevenue.toFixed(2)}</p></div>
                       </div>
                       <div className="bg-slate-800 border border-slate-700 p-4 rounded-2xl flex items-center gap-3">
                           <div className="p-3 bg-blue-900/20 rounded-xl text-blue-500"><UtensilsCrossed/></div>
-                          <div><p className="text-slate-400 text-xs font-bold uppercase">Piatti</p><p className="text-2xl font-black text-white">{stats.totalItems}</p></div>
+                          <div><p className="text-slate-400 text-xs font-bold uppercase">Piatti {isPizzeria ? 'Pizzeria' : 'Cucina'}</p><p className="text-2xl font-black text-white">{stats.totalItems}</p></div>
                       </div>
                   </div>
               </div>
@@ -402,7 +417,10 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
               {/* RECEIPTS GRID */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 overflow-y-auto pb-10">
                   {filteredHistoryOrders.map(order => {
-                      const total = order.items.reduce((acc, i) => acc + (i.menuItem.price * i.quantity), 0);
+                      const items = order.items.filter(i => appSettings.categoryDestinations[i.menuItem.category] === department);
+                      if (items.length === 0) return null;
+
+                      const total = items.reduce((acc, i) => acc + (i.menuItem.price * i.quantity), 0);
                       const cleanTable = order.tableNumber.replace('_HISTORY', '');
                       
                       return (
@@ -410,6 +428,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
                               {/* Receipt Header */}
                               <div className="p-4 pb-2 text-center border-b border-dashed border-slate-400 mx-2">
                                   <h3 className="font-bold text-lg uppercase mb-1">RistoSync</h3>
+                                  <p className="text-xs font-bold uppercase">{department}</p>
                                   <p className="text-xs">Tavolo: {cleanTable}</p>
                                   <p className="text-xs">{formatDate(new Date(order.createdAt || order.timestamp))} - {formatTime(order.timestamp)}</p>
                                   <p className="text-[10px] mt-1 uppercase">Staff: {order.waiterName || '?'}</p>
@@ -417,7 +436,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
                               
                               {/* Items */}
                               <div className="p-4 space-y-2">
-                                  {order.items.map((item, idx) => (
+                                  {items.map((item, idx) => (
                                       <div key={idx} className="flex justify-between items-start">
                                           <div className="flex gap-2">
                                               <span className="font-bold">{item.quantity}x</span>
@@ -440,11 +459,11 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit }) => {
                           </div>
                       );
                   })}
-                  {filteredHistoryOrders.length === 0 && (
+                  {filteredHistoryOrders.every(o => o.items.filter(i => appSettings.categoryDestinations[i.menuItem.category] === department).length === 0) && (
                       <div className="col-span-full flex flex-col items-center justify-center py-20 text-slate-600">
                           <Receipt size={64} className="opacity-20 mb-4"/>
                           <p className="font-bold text-lg">Nessuno scontrino presente</p>
-                          <p className="text-sm">Non ci sono comande chiuse in questa data.</p>
+                          <p className="text-sm">Non ci sono comande chiuse per {department} in questa data.</p>
                       </div>
                   )}
               </div>
