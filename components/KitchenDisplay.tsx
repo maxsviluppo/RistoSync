@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Order, OrderStatus, Category, AppSettings, Department } from '../types';
 import { getOrders, updateOrderStatus, toggleOrderItemCompletion, getAppSettings } from '../services/storageService';
-import { Clock, CheckCircle, ChefHat, Bell, User, LogOut, Square, CheckSquare, AlertOctagon, Timer, PlusCircle, History, Calendar, ChevronLeft, ChevronRight, DollarSign, UtensilsCrossed, Receipt, Pizza } from 'lucide-react';
+import { Clock, CheckCircle, ChefHat, Bell, User, LogOut, Square, CheckSquare, AlertOctagon, Timer, PlusCircle, History, Calendar, ChevronLeft, ChevronRight, DollarSign, UtensilsCrossed, Receipt, Pizza, ArrowRightLeft, Utensils, CakeSlice, Wine } from 'lucide-react';
 
 const CATEGORY_PRIORITY: Record<Category, number> = {
     [Category.ANTIPASTI]: 1,
@@ -325,6 +325,16 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
                let borderColor = getStatusColor(order.status).replace('text', 'border').replace('bg-','border-');
                if (isCritical) borderColor = 'border-red-600 animate-pulse shadow-[0_0_20px_rgba(220,38,38,0.4)]';
 
+               // COORDINATION LOGIC: Check for items from the OTHER department
+               const otherDeptItems = order.items.filter(i => {
+                   const dest = appSettings.categoryDestinations[i.menuItem.category];
+                   // If we are Pizzeria, we look for 'Cucina'. If Kitchen, we look for 'Pizzeria'.
+                   // Items for 'Sala' (Drinks) are ignored for coordination.
+                   const targetOther = department === 'Pizzeria' ? 'Cucina' : 'Pizzeria';
+                   return dest === targetOther;
+               });
+               const hasCoordinatedItems = otherDeptItems.length > 0;
+
                // FILTER: Determine visible items (Only items for THIS department)
                const visibleItems = order.items
                   .map((item, originalIndex) => ({ item, originalIndex }))
@@ -344,6 +354,13 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
                     <div>
                         <h2 className="text-3xl font-black bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent">Tav. {displayTableNumber}</h2>
                         <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold uppercase mt-1 ${getStatusColor(order.status)}`}>{order.status}</span>
+                        {/* COORDINATION BADGE */}
+                        {hasCoordinatedItems && (
+                           <div className="mt-2 flex items-center gap-1.5 text-[9px] font-black uppercase text-blue-200 bg-blue-900/60 px-2 py-1.5 rounded-lg border border-blue-500/40 animate-pulse w-max shadow-lg shadow-blue-900/20">
+                              <ArrowRightLeft size={12} className="text-blue-400"/>
+                              <span>SYNC: {otherDeptItems.length} {department === 'Pizzeria' ? 'Cucina' : 'Pizzeria'}</span>
+                           </div>
+                        )}
                     </div>
                     <div className="flex flex-col items-end gap-1.5">
                       {/* TIMESTAMPS */}

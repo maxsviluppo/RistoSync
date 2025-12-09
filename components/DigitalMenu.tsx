@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { supabase } from '../services/supabase';
 import { Category, MenuItem } from '../types';
-import { ChefHat, Utensils, Pizza, CakeSlice, Wine, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, Search, Star, MapPin, Instagram, Facebook, ArrowUp, AlertTriangle, LogOut, Loader, Smartphone } from 'lucide-react';
+import { ChefHat, Utensils, Pizza, CakeSlice, Wine, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, Search, Star, MapPin, Instagram, Facebook, ArrowUp, AlertTriangle, LogOut, Loader, Smartphone, UtensilsCrossed } from 'lucide-react';
 
 interface DigitalMenuProps {
     restaurantId: string;
@@ -11,6 +11,17 @@ interface DigitalMenuProps {
 }
 
 const CATEGORY_ORDER = [Category.ANTIPASTI, Category.PIZZE, Category.PRIMI, Category.SECONDI, Category.DOLCI, Category.BEVANDE];
+
+const ALLERGENS_CONFIG = [
+    { id: 'Glutine', icon: Wheat, label: 'Glutine' },
+    { id: 'Latticini', icon: Milk, label: 'Latticini' },
+    { id: 'Uova', icon: Egg, label: 'Uova' },
+    { id: 'Frutta a guscio', icon: Nut, label: 'Noci' }, 
+    { id: 'Pesce', icon: Fish, label: 'Pesce' },
+    { id: 'Soia', icon: Bean, label: 'Soia' }, 
+    { id: 'Piccante', icon: Flame, label: 'Piccante' },
+    { id: 'Vegano', icon: Leaf, label: 'Vegano' },
+];
 
 const ALLERGENS_ICONS: Record<string, any> = {
     'Glutine': Wheat, 'Latticini': Milk, 'Uova': Egg, 'Frutta a guscio': Nut,
@@ -120,7 +131,7 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
     };
 
     const getCategoryIcon = (cat: Category, size: number = 18) => {
-        switch (cat) { case Category.ANTIPASTI: return <Pizza size={size} />; case Category.PIZZE: return <Pizza size={size} />; case Category.PRIMI: return <ChefHat size={size} />; case Category.SECONDI: return <Utensils size={size} />; case Category.DOLCI: return <CakeSlice size={size} />; case Category.BEVANDE: return <Wine size={size} />; default: return <Utensils size={size} />; }
+        switch (cat) { case Category.ANTIPASTI: return <UtensilsCrossed size={size} />; case Category.PIZZE: return <Pizza size={size} />; case Category.PRIMI: return <ChefHat size={size} />; case Category.SECONDI: return <Utensils size={size} />; case Category.DOLCI: return <CakeSlice size={size} />; case Category.BEVANDE: return <Wine size={size} />; default: return <Utensils size={size} />; }
     };
 
     const exitMenuMode = () => {
