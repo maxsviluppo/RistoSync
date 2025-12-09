@@ -30,11 +30,6 @@ const ALLERGENS_CONFIG = [
     { id: 'Vegano', icon: Leaf, label: 'Vegano' },
 ];
 
-const ALLERGENS_ICONS: Record<string, any> = {
-    'Glutine': Wheat, 'Latticini': Milk, 'Uova': Egg, 'Frutta a guscio': Nut,
-    'Pesce': Fish, 'Soia': Bean, 'Piccante': Flame, 'Vegano': Leaf
-};
-
 const capitalize = (str: string) => {
     if (!str) return '';
     return str.charAt(0).toUpperCase() + str.slice(1);
