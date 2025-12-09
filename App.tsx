@@ -153,7 +153,13 @@ const App: React.FC = () => {
           
           const currentSettings = getAppSettings();
           setAppSettingsState(currentSettings); 
-          setTempDestinations(currentSettings.categoryDestinations);
+          setTempDestinations(currentSettings.categoryDestinations || {
+              [Category.ANTIPASTI]: 'Cucina',
+              [Category.PRIMI]: 'Cucina',
+              [Category.SECONDI]: 'Cucina',
+              [Category.DOLCI]: 'Cucina',
+              [Category.BEVANDE]: 'Sala'
+          });
           setHasUnsavedDestinations(false);
           setOrdersForAnalytics(getOrders()); // Load orders for analytics
 
@@ -497,9 +503,7 @@ const App: React.FC = () => {
                                 </div>
                             </div>
                         )}
-                        {/* Rest of the component ... (Menu, Analytics, etc.) */}
-                        {/* ... (Existing implementation for other tabs) ... */}
-                        
+
                         {/* ANALYTICS TAB (ADVANCED CHARTS + DELETE BUTTON) */}
                         {adminTab === 'analytics' && (
                             <div className="pb-20">
@@ -682,7 +686,7 @@ const App: React.FC = () => {
                                     
                                     <div className="flex gap-4 overflow-x-auto pb-4 no-scrollbar">
                                         {Object.values(Category).map(cat => {
-                                            const currentDest = tempDestinations[cat] || 'Cucina';
+                                            const currentDest = tempDestinations?.[cat] || 'Cucina';
                                             return (
                                                 <div key={cat} className="flex flex-col items-center min-w-[130px] p-2 shrink-0">
                                                     <span className="font-bold text-slate-300 text-xs mb-3 uppercase tracking-wide">{cat}</span>

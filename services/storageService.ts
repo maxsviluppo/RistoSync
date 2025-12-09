@@ -508,13 +508,28 @@ const DEFAULT_SETTINGS: AppSettings = {
         [Category.PRIMI]: 'Cucina',
         [Category.SECONDI]: 'Cucina',
         [Category.DOLCI]: 'Cucina',
-        [Category.BEVANDE]: 'Sala' // Changed from Bar to Sala
+        [Category.BEVANDE]: 'Sala'
     }
 };
 
 export const getAppSettings = (): AppSettings => {
     const data = localStorage.getItem(APP_SETTINGS_KEY);
-    return data ? JSON.parse(data) : DEFAULT_SETTINGS;
+    if (!data) return DEFAULT_SETTINGS;
+    
+    try {
+        const parsed = JSON.parse(data);
+        // Robustness: Merge with defaults to ensure all structure exists if user has old data
+        return {
+            ...DEFAULT_SETTINGS,
+            ...parsed,
+            categoryDestinations: {
+                ...DEFAULT_SETTINGS.categoryDestinations,
+                ...(parsed.categoryDestinations || {})
+            }
+        };
+    } catch (e) {
+        return DEFAULT_SETTINGS;
+    }
 };
 
 export const saveAppSettings = async (settings: AppSettings) => {
