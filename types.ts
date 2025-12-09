@@ -20,9 +20,12 @@ export type Department = 'Cucina' | 'Sala' | 'Pizzeria' | 'Pub';
 export interface RestaurantProfile {
   name?: string;
   address?: string;
-  vatNumber?: string; // P.IVA o C.F.
-  phoneNumber?: string;
-  email?: string;
+  billingAddress?: string; // New
+  vatNumber?: string;
+  phoneNumber?: string; // Mobile/Cell
+  landlineNumber?: string; // New
+  whatsappNumber?: string; // New
+  email?: string; // Contact Email
   website?: string;
 }
 

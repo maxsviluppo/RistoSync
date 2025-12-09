@@ -4,7 +4,7 @@ import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import DigitalMenu from './components/DigitalMenu';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft, CheckCircle, LayoutGrid, SlidersHorizontal, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft, CheckCircle, LayoutGrid, SlidersHorizontal, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { MenuItem, Category, Department, AppSettings, OrderStatus, Order, RestaurantProfile } from './types';
@@ -166,8 +166,11 @@ export default function App() {
           setProfileForm({
               name: restaurantName,
               address: currentSettings.restaurantProfile?.address || '',
+              billingAddress: currentSettings.restaurantProfile?.billingAddress || '',
               vatNumber: currentSettings.restaurantProfile?.vatNumber || '',
               phoneNumber: currentSettings.restaurantProfile?.phoneNumber || '',
+              landlineNumber: currentSettings.restaurantProfile?.landlineNumber || '',
+              whatsappNumber: currentSettings.restaurantProfile?.whatsappNumber || '',
               email: currentSettings.restaurantProfile?.email || '',
               website: currentSettings.restaurantProfile?.website || ''
           });
@@ -569,17 +572,33 @@ export default function App() {
                                             />
                                         </div>
                                     </div>
+
+                                    {/* Login Email (Read Only) */}
+                                    <div>
+                                        <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Email Login (Account)</label>
+                                        <div className="relative opacity-60">
+                                            <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
+                                            <input 
+                                                type="text" 
+                                                value={session?.user?.email || ''} 
+                                                disabled
+                                                className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-slate-300 font-mono cursor-not-allowed" 
+                                            />
+                                        </div>
+                                        <p className="text-[10px] text-slate-500 mt-1 pl-1">Questa è l'email usata per l'accesso e non può essere modificata qui.</p>
+                                    </div>
+
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
-                                            <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Indirizzo Completo</label>
+                                            <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Email Contatti (Clienti)</label>
                                             <div className="relative">
-                                                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
+                                                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
                                                 <input 
-                                                    type="text" 
-                                                    value={profileForm.address || ''} 
-                                                    onChange={e => setProfileForm({...profileForm, address: e.target.value})} 
+                                                    type="email" 
+                                                    value={profileForm.email || ''} 
+                                                    onChange={e => setProfileForm({...profileForm, email: e.target.value})} 
                                                     className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white focus:border-slate-500 outline-none" 
-                                                    placeholder="Via Roma 1, Milano"
+                                                    placeholder="info@ristorante.com"
                                                 />
                                             </div>
                                         </div>
@@ -597,34 +616,94 @@ export default function App() {
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                                    {/* Phones Section */}
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                         <div>
-                                            <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Telefono</label>
+                                            <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Cellulare</label>
                                             <div className="relative">
-                                                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
+                                                <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
                                                 <input 
                                                     type="text" 
                                                     value={profileForm.phoneNumber || ''} 
                                                     onChange={e => setProfileForm({...profileForm, phoneNumber: e.target.value})} 
                                                     className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white focus:border-slate-500 outline-none" 
-                                                    placeholder="+39 333 1234567"
+                                                    placeholder="333 1234567"
                                                 />
                                             </div>
                                         </div>
                                         <div>
-                                            <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Sito Web / Social</label>
+                                            <label className="block text-slate-400 text-xs font-bold uppercase mb-2">WhatsApp</label>
                                             <div className="relative">
-                                                <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
+                                                <MessageCircle className="absolute left-4 top-1/2 -translate-y-1/2 text-green-500" size={18}/>
                                                 <input 
                                                     type="text" 
-                                                    value={profileForm.website || ''} 
-                                                    onChange={e => setProfileForm({...profileForm, website: e.target.value})} 
+                                                    value={profileForm.whatsappNumber || ''} 
+                                                    onChange={e => setProfileForm({...profileForm, whatsappNumber: e.target.value})} 
+                                                    className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white focus:border-green-500 outline-none" 
+                                                    placeholder="333 1234567"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Fisso</label>
+                                            <div className="relative">
+                                                <PhoneCall className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
+                                                <input 
+                                                    type="text" 
+                                                    value={profileForm.landlineNumber || ''} 
+                                                    onChange={e => setProfileForm({...profileForm, landlineNumber: e.target.value})} 
                                                     className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white focus:border-slate-500 outline-none" 
-                                                    placeholder="www.ristorante.com"
+                                                    placeholder="02 1234567"
                                                 />
                                             </div>
                                         </div>
                                     </div>
+
+                                    {/* Addresses Section */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Indirizzo Sede</label>
+                                            <div className="relative">
+                                                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
+                                                <input 
+                                                    type="text" 
+                                                    value={profileForm.address || ''} 
+                                                    onChange={e => setProfileForm({...profileForm, address: e.target.value})} 
+                                                    className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white focus:border-slate-500 outline-none" 
+                                                    placeholder="Via Roma 1, Milano"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Indirizzo Fatturazione</label>
+                                            <div className="relative">
+                                                <FileText className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
+                                                <input 
+                                                    type="text" 
+                                                    value={profileForm.billingAddress || ''} 
+                                                    onChange={e => setProfileForm({...profileForm, billingAddress: e.target.value})} 
+                                                    className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white focus:border-slate-500 outline-none" 
+                                                    placeholder="Se diverso dalla sede..."
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Sito Web / Social</label>
+                                        <div className="relative">
+                                            <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
+                                            <input 
+                                                type="text" 
+                                                value={profileForm.website || ''} 
+                                                onChange={e => setProfileForm({...profileForm, website: e.target.value})} 
+                                                className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white focus:border-slate-500 outline-none" 
+                                                placeholder="www.ristorante.com"
+                                            />
+                                        </div>
+                                    </div>
+
                                     <div className="pt-4 border-t border-slate-800">
                                         <button onClick={handleSaveProfile} className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-green-600/20 active:scale-95 transition-all"><Save size={20}/> SALVA PROFILO</button>
                                     </div>

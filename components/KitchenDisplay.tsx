@@ -456,7 +456,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
                           <div key={order.id} className="bg-slate-200 text-slate-900 p-0 relative shadow-xl font-mono text-sm leading-tight receipt-edge pb-6">
                               {/* Receipt Header */}
                               <div className="p-4 pb-2 text-center border-b border-dashed border-slate-400 mx-2">
-                                  <h3 className="font-bold text-lg uppercase mb-1">RistoSync</h3>
+                                  <h3 className="font-bold text-lg uppercase mb-1">{appSettings.restaurantProfile?.name || 'RistoSync'}</h3>
                                   <p className="text-xs font-bold uppercase">{department}</p>
                                   <p className="text-xs">Tavolo: {cleanTable}</p>
                                   <p className="text-xs">{formatDate(new Date(order.createdAt || order.timestamp))} - {formatTime(order.timestamp)}</p>
