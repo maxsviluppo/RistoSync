@@ -4,9 +4,10 @@ import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import DigitalMenu from './components/DigitalMenu';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft, CheckCircle, LayoutGrid, SlidersHorizontal, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft, CheckCircle, LayoutGrid, SlidersHorizontal, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
+import { askChefAI, generateRestaurantAnalysis } from './services/geminiService';
 import { MenuItem, Category, Department, AppSettings, OrderStatus, Order, RestaurantProfile } from './types';
 
 const ADMIN_CATEGORY_ORDER = [
@@ -67,6 +68,8 @@ export default function App() {
   // Analytics State
   const [ordersForAnalytics, setOrdersForAnalytics] = useState<Order[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [aiAnalysisResult, setAiAnalysisResult] = useState<string>('');
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
 
   // Delete Confirmation State
   const [itemToDelete, setItemToDelete] = useState<MenuItem | null>(null);
@@ -382,6 +385,7 @@ export default function App() {
       const newDate = new Date(selectedDate);
       newDate.setDate(newDate.getDate() + days);
       setSelectedDate(newDate);
+      setAiAnalysisResult(''); // Clear AI result when changing date
   };
 
   const formatDate = (date: Date) => date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -391,6 +395,17 @@ export default function App() {
           await deleteHistoryByDate(selectedDate);
           setOrdersForAnalytics(getOrders());
       }
+  };
+
+  const handleRunAiAnalysis = async () => {
+      if (!getGoogleApiKey() && !process.env.API_KEY) {
+          alert("Devi prima configurare la tua API Key di Google Gemini nella sezione AI Intelligence.");
+          return;
+      }
+      setIsAnalyzing(true);
+      const result = await generateRestaurantAnalysis(stats, formatDate(selectedDate));
+      setAiAnalysisResult(result);
+      setIsAnalyzing(false);
   };
 
   const getCategoryIcon = (cat: Category) => {
@@ -909,6 +924,47 @@ export default function App() {
                                     <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h4 className="font-bold text-white mb-6 uppercase text-sm tracking-wider flex items-center gap-2"><BarChart3 size={16} className="text-orange-500"/> Ore di Punta</h4><div className="h-48 flex items-end gap-2">{stats.chartHours.map(d => (<div key={d.hour} className="flex-1 bg-slate-800 rounded-t-sm relative group hover:bg-orange-500 transition-colors" style={{ height: `${(d.count / stats.maxHourly) * 100}%` }}><div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-white text-slate-900 text-[10px] font-bold px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">{d.count}</div></div>))}</div><div className="flex justify-between mt-2 text-[10px] text-slate-500 font-mono"><span>00:00</span><span>12:00</span><span>23:00</span></div></div>
                                     <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h4 className="font-bold text-white mb-6 uppercase text-sm tracking-wider flex items-center gap-2"><Star size={16} className="text-yellow-500"/> Piatti Top</h4><div className="space-y-4">{stats.topDishes.map((d, i) => (<div key={i} className="flex items-center justify-between"><div className="flex items-center gap-3"><div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-500 border border-slate-700">{i+1}</div><span className="font-bold text-slate-300">{d.name}</span></div><div className="text-right"><span className="block font-black text-white">{d.count}x</span><span className="text-[10px] text-slate-500">€ {d.revenue.toFixed(2)}</span></div></div>))}</div></div>
                                 </div>
+                                
+                                {/* AI ANALYSIS SECTION */}
+                                <div className="mt-8 bg-gradient-to-br from-indigo-900/40 to-slate-900 rounded-3xl p-1 border border-indigo-500/30 relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/10 blur-[100px] pointer-events-none"></div>
+                                    <div className="p-6">
+                                        <div className="flex justify-between items-start mb-4">
+                                            <div>
+                                                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                                    <Sparkles className="text-indigo-400" size={20}/> 
+                                                    <span className="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">Analisi AI Avanzata</span>
+                                                </h3>
+                                                <p className="text-slate-400 text-sm mt-1">Ottieni suggerimenti strategici basati sui dati di oggi.</p>
+                                            </div>
+                                            {!aiAnalysisResult && (
+                                                <button 
+                                                    onClick={handleRunAiAnalysis} 
+                                                    disabled={isAnalyzing}
+                                                    className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-600/20 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2"
+                                                >
+                                                    {isAnalyzing ? <Loader className="animate-spin" size={18}/> : <Bot size={18}/>}
+                                                    {isAnalyzing ? 'Analisi in corso...' : 'Genera Report'}
+                                                </button>
+                                            )}
+                                        </div>
+                                        
+                                        {aiAnalysisResult && (
+                                            <div className="bg-slate-950/50 rounded-2xl p-6 border border-indigo-500/20 animate-fade-in relative">
+                                                <button onClick={() => setAiAnalysisResult('')} className="absolute top-4 right-4 text-slate-500 hover:text-white p-2 bg-slate-900 rounded-lg"><X size={16}/></button>
+                                                <div className="prose prose-invert prose-sm max-w-none">
+                                                    <p className="whitespace-pre-wrap font-medium text-slate-200 leading-relaxed">{aiAnalysisResult}</p>
+                                                </div>
+                                                <div className="mt-4 pt-4 border-t border-indigo-500/10 text-center">
+                                                    <p className="text-xs text-indigo-400/70 font-mono flex items-center justify-center gap-1">
+                                                        <Bot size={12}/> Analisi generata da Gemini AI
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
                                 <div className="mt-8 flex justify-center"><button onClick={handleDeleteDailyHistory} className="flex items-center gap-2 px-6 py-3 rounded-xl bg-red-900/20 text-red-500 font-bold border border-red-900/50 hover:bg-red-900/40 transition-colors"><Trash2 size={18}/> ELIMINA STORICO DEL GIORNO</button></div>
                              </div>
                         )}
