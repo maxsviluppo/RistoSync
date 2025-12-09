@@ -15,8 +15,18 @@ export enum Category {
 
 export type Department = 'Cucina' | 'Sala' | 'Pizzeria';
 
+export interface RestaurantProfile {
+  name?: string;
+  address?: string;
+  vatNumber?: string; // P.IVA o C.F.
+  phoneNumber?: string;
+  email?: string;
+  website?: string;
+}
+
 export interface AppSettings {
   categoryDestinations: Record<Category, Department>;
+  restaurantProfile?: RestaurantProfile;
 }
 
 export interface MenuItem {

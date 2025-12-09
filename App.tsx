@@ -4,10 +4,10 @@ import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import DigitalMenu from './components/DigitalMenu'; // New Component
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft, CheckCircle, LayoutGrid, SlidersHorizontal, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft, CheckCircle, LayoutGrid, SlidersHorizontal, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
-import { MenuItem, Category, Department, AppSettings, OrderStatus, Order } from './types';
+import { MenuItem, Category, Department, AppSettings, OrderStatus, Order, RestaurantProfile } from './types';
 
 // Ordine visualizzazione categorie nell'admin
 const ADMIN_CATEGORY_ORDER = [
@@ -60,7 +60,7 @@ const App: React.FC = () => {
 
   // Admin State
   const [showAdmin, setShowAdmin] = useState(false);
-  const [adminTab, setAdminTab] = useState<'menu' | 'notif' | 'info' | 'ai' | 'analytics' | 'share'>('menu');
+  const [adminTab, setAdminTab] = useState<'profile' | 'menu' | 'notif' | 'info' | 'ai' | 'analytics' | 'share'>('profile');
   const [adminViewMode, setAdminViewMode] = useState<'dashboard' | 'app'>('dashboard');
   
   // Menu Manager State
@@ -85,6 +85,9 @@ const App: React.FC = () => {
   const [appSettings, setAppSettingsState] = useState<AppSettings>(getAppSettings());
   const [tempDestinations, setTempDestinations] = useState<Record<Category, Department>>(getAppSettings().categoryDestinations);
   const [hasUnsavedDestinations, setHasUnsavedDestinations] = useState(false);
+  
+  // Profile Settings State
+  const [profileForm, setProfileForm] = useState<RestaurantProfile>({});
 
   const [apiKeyInput, setApiKeyInput] = useState('');
 
@@ -166,13 +169,24 @@ const App: React.FC = () => {
               [Category.DOLCI]: 'Cucina',
               [Category.BEVANDE]: 'Sala'
           });
+          
+          // Init Profile Form
+          setProfileForm({
+              name: restaurantName, // From state (source of truth for name)
+              address: currentSettings.restaurantProfile?.address || '',
+              vatNumber: currentSettings.restaurantProfile?.vatNumber || '',
+              phoneNumber: currentSettings.restaurantProfile?.phoneNumber || '',
+              email: currentSettings.restaurantProfile?.email || '',
+              website: currentSettings.restaurantProfile?.website || ''
+          });
+
           setHasUnsavedDestinations(false);
           setOrdersForAnalytics(getOrders()); // Load orders for analytics
 
           const key = getGoogleApiKey();
           if (key) setApiKeyInput(key);
       }
-  }, [showAdmin]);
+  }, [showAdmin, restaurantName]); // Added restaurantName to sync if changed externally
 
   useEffect(() => {
       const handleSettingsUpdate = () => {
@@ -182,6 +196,7 @@ const App: React.FC = () => {
           if (!hasUnsavedDestinations) {
               setTempDestinations(updated.categoryDestinations);
           }
+          // Update local profile form only if needed? Better not to override user input while typing
       };
       // Keep analytics up to date locally
       const handleOrderUpdate = () => { if(showAdmin) setOrdersForAnalytics(getOrders()); };
@@ -300,6 +315,34 @@ const App: React.FC = () => {
   const handleSaveApiKey = () => {
       saveGoogleApiKey(apiKeyInput.trim());
       alert("Chiave API salvata!");
+  };
+
+  // --- PROFILE SAVE LOGIC ---
+  const handleSaveProfile = async () => {
+      const newProfile = { ...profileForm };
+      // Update local state for App Settings
+      const newSettings = { ...appSettings, restaurantProfile: newProfile };
+      
+      // 1. Save App Settings (JSONB) locally and to Cloud
+      await saveAppSettings(newSettings);
+      setAppSettingsState(newSettings);
+
+      // 2. Update 'restaurant_name' column specifically in Supabase (System/Auth usage)
+      if (supabase && session?.user?.id && newProfile.name) {
+          const { error } = await supabase
+              .from('profiles')
+              .update({ restaurant_name: newProfile.name })
+              .eq('id', session.user.id);
+          
+          if (error) console.error("Error updating profile name:", error);
+      }
+
+      // 3. Update Local State UI
+      if (newProfile.name) {
+          setRestaurantName(newProfile.name);
+      }
+
+      alert("Profilo aggiornato con successo!");
   };
 
   // --- ANALYTICS LOGIC (ADVANCED FOR ADMIN) ---
@@ -446,18 +489,20 @@ const App: React.FC = () => {
                 <div className="flex flex-1 overflow-hidden">
                     {/* Sidebar */}
                     <div className="w-64 bg-slate-900 border-r border-slate-800 p-4 space-y-2 hidden md:block">
+                         <button onClick={() => setAdminTab('profile')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'profile' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><Store size={20}/> Profilo Ristorante</button>
                          <button onClick={() => setAdminTab('menu')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'menu' ? 'bg-orange-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><Utensils size={20}/> Menu & Destinazioni</button>
                          <button onClick={() => setAdminTab('analytics')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'analytics' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><TrendingUp size={20}/> Analisi & Storico</button>
                          <button onClick={() => setAdminTab('notif')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'notif' ? 'bg-green-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><Bell size={20}/> Notifiche</button>
                          <button onClick={() => setAdminTab('share')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'share' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><QrCode size={20}/> Menu Digitale</button>
                          <button onClick={() => setAdminTab('ai')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'ai' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><Bot size={20}/> AI Intelligence</button>
-                         <button onClick={() => setAdminTab('info')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'info' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><Info size={20}/> Legenda</button>
+                         <button onClick={() => setAdminTab('info')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'info' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><Info size={20}/> Legenda</button>
                     </div>
 
                     {/* Content */}
                     <div className="flex-1 overflow-y-auto p-6 bg-slate-950 relative">
                         {/* Mobile Tabs */}
                         <div className="flex md:hidden gap-2 mb-6 overflow-x-auto pb-2 no-scrollbar">
+                             <button onClick={() => setAdminTab('profile')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'profile' ? 'bg-slate-700 text-white' : 'bg-slate-800 text-slate-400'}`}>Profilo</button>
                              <button onClick={() => setAdminTab('menu')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'menu' ? 'bg-orange-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Menu</button>
                              <button onClick={() => setAdminTab('analytics')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'analytics' ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Analisi</button>
                              <button onClick={() => setAdminTab('notif')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'notif' ? 'bg-green-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Notifiche</button>
@@ -466,6 +511,104 @@ const App: React.FC = () => {
                              <button onClick={() => setAdminTab('info')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'info' ? 'bg-slate-700 text-white' : 'bg-slate-800 text-slate-400'}`}>Legenda</button>
                         </div>
                         
+                        {/* PROFILE TAB */}
+                        {adminTab === 'profile' && (
+                            <div className="max-w-2xl mx-auto pb-20">
+                                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                                    <Store className="text-slate-400"/> Dati Attività
+                                </h3>
+                                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 space-y-6">
+                                    {/* Nome Ristorante */}
+                                    <div>
+                                        <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Nome Ristorante (Visibile ovunque)</label>
+                                        <div className="relative">
+                                            <ChefHat className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
+                                            <input 
+                                                type="text" 
+                                                value={profileForm.name || ''} 
+                                                onChange={e => setProfileForm({...profileForm, name: e.target.value})} 
+                                                className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white font-bold text-lg focus:border-orange-500 outline-none" 
+                                                placeholder="Il Tuo Ristorante"
+                                            />
+                                        </div>
+                                        <p className="text-[10px] text-slate-500 mt-2">Questo nome apparirà nell'header dell'app e nel Menu Digitale dei clienti.</p>
+                                    </div>
+
+                                    {/* Indirizzo e P.IVA */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Indirizzo Completo</label>
+                                            <div className="relative">
+                                                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
+                                                <input 
+                                                    type="text" 
+                                                    value={profileForm.address || ''} 
+                                                    onChange={e => setProfileForm({...profileForm, address: e.target.value})} 
+                                                    className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white focus:border-slate-500 outline-none" 
+                                                    placeholder="Via Roma 1, Milano"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-slate-400 text-xs font-bold uppercase mb-2">P.IVA / Codice Fiscale</label>
+                                            <div className="relative">
+                                                <Receipt className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
+                                                <input 
+                                                    type="text" 
+                                                    value={profileForm.vatNumber || ''} 
+                                                    onChange={e => setProfileForm({...profileForm, vatNumber: e.target.value})} 
+                                                    className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white focus:border-slate-500 outline-none font-mono" 
+                                                    placeholder="IT00000000000"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Contatti */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Telefono</label>
+                                            <div className="relative">
+                                                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
+                                                <input 
+                                                    type="text" 
+                                                    value={profileForm.phoneNumber || ''} 
+                                                    onChange={e => setProfileForm({...profileForm, phoneNumber: e.target.value})} 
+                                                    className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white focus:border-slate-500 outline-none" 
+                                                    placeholder="+39 333 1234567"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Sito Web / Social</label>
+                                            <div className="relative">
+                                                <Globe className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
+                                                <input 
+                                                    type="text" 
+                                                    value={profileForm.website || ''} 
+                                                    onChange={e => setProfileForm({...profileForm, website: e.target.value})} 
+                                                    className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white focus:border-slate-500 outline-none" 
+                                                    placeholder="www.ristorante.com"
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-4 border-t border-slate-800">
+                                        <button 
+                                            onClick={handleSaveProfile}
+                                            className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-green-600/20 active:scale-95 transition-all"
+                                        >
+                                            <Save size={20}/> SALVA PROFILO
+                                        </button>
+                                        <p className="text-center text-[10px] text-slate-500 mt-3">
+                                            I dati inseriti in questa sezione sono opzionali e visibili solo all'interno dell'applicazione o nel menu pubblico.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* NOTIFICHE TAB (RESTORED) */}
                         {adminTab === 'notif' && (
                             <div className="max-w-md">
@@ -504,11 +647,11 @@ const App: React.FC = () => {
                                     
                                     <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex items-center justify-between gap-4 mb-6 max-w-md mx-auto lg:mx-0">
                                         <code className="text-xs text-blue-400 font-mono truncate flex-1">
-                                            {window.location.origin}?menu={session?.user?.id}
+                                            https://risto-sync.vercel.app/?menu={session?.user?.id}
                                         </code>
                                         <button 
                                             onClick={() => {
-                                                navigator.clipboard.writeText(`${window.location.origin}?menu=${session?.user?.id}`);
+                                                navigator.clipboard.writeText(`https://risto-sync.vercel.app/?menu=${session?.user?.id}`);
                                                 alert("Link copiato!");
                                             }}
                                             className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700 text-white"
@@ -519,8 +662,9 @@ const App: React.FC = () => {
 
                                     <div className="flex gap-4 justify-center lg:justify-start mb-8">
                                         <a 
-                                            href={`?menu=${session?.user?.id}`} 
+                                            href={`https://risto-sync.vercel.app/?menu=${session?.user?.id}`} 
                                             target="_blank" 
+                                            rel="noopener noreferrer"
                                             className="inline-flex items-center gap-2 px-6 py-3 bg-pink-600 text-white font-bold rounded-xl hover:bg-pink-500 shadow-lg shadow-pink-600/20"
                                         >
                                             <ExternalLink size={18}/> Apri Esterno

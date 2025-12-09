@@ -509,7 +509,8 @@ const DEFAULT_SETTINGS: AppSettings = {
         [Category.SECONDI]: 'Cucina',
         [Category.DOLCI]: 'Cucina',
         [Category.BEVANDE]: 'Sala'
-    }
+    },
+    restaurantProfile: {}
 };
 
 export const getAppSettings = (): AppSettings => {
@@ -525,6 +526,10 @@ export const getAppSettings = (): AppSettings => {
             categoryDestinations: {
                 ...DEFAULT_SETTINGS.categoryDestinations,
                 ...(parsed.categoryDestinations || {})
+            },
+            restaurantProfile: {
+                ...DEFAULT_SETTINGS.restaurantProfile,
+                ...(parsed.restaurantProfile || {})
             }
         };
     } catch (e) {
