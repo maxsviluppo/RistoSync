@@ -88,7 +88,11 @@ const SwipeableCartItem: React.FC<SwipeableItemProps> = ({ item, index, onEdit, 
 const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, waiter: string, restaurantName: string) => {
     const time = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
     const date = new Date().toLocaleDateString('it-IT');
+    const isMaster = dept.includes('Totale') || dept.includes('Cassa');
     
+    // Calculate total if Master
+    const total = isMaster ? items.reduce((acc, i) => acc + (i.menuItem.price * i.quantity), 0) : 0;
+
     return `
     <html>
         <head>
@@ -103,6 +107,8 @@ const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, wa
                 .name { flex: 1; font-weight: bold; font-size: 16px; }
                 .notes { display: block; font-size: 12px; margin-left: 30px; font-style: italic; margin-top: 2px; }
                 .footer { border-top: 2px dashed black; margin-top: 15px; padding-top: 10px; text-align: center; font-size: 10px; }
+                .total { margin-top: 10px; padding-top: 5px; border-top: 1px solid black; font-weight: bold; font-size: 18px; text-align: right; }
+                .price { font-size: 14px; font-weight: normal; margin-left: 10px; }
             </style>
         </head>
         <body>
@@ -117,9 +123,16 @@ const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, wa
                 <div class="item">
                     <span class="qty">${item.quantity}</span>
                     <span class="name">${item.menuItem.name}</span>
+                    ${isMaster ? `<span class="price">€ ${(item.menuItem.price * item.quantity).toFixed(2)}</span>` : ''}
                 </div>
                 ${item.notes ? `<span class="notes">Note: ${item.notes}</span>` : ''}
             `).join('')}
+            
+            ${isMaster ? `
+            <div class="total">
+                TOTALE: € ${total.toFixed(2)}
+            </div>` : ''}
+
             <div class="footer">
                 RistoSync AI - Copia di Cortesia
             </div>
@@ -321,30 +334,43 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
     // --- PRINTING LOGIC ---
     if (appSettings && appSettings.printEnabled) {
-        const deptsToPrint: Department[] = ['Cucina', 'Pizzeria', 'Pub'];
-        
-        deptsToPrint.forEach(dept => {
+        const printQueue: { items: OrderItem[], dept: string }[] = [];
+
+        // 1. Queue specific departments (Kitchen, Pizzeria, Pub)
+        const specificDepts: Department[] = ['Cucina', 'Pizzeria', 'Pub'];
+        specificDepts.forEach(dept => {
             if (appSettings.printEnabled[dept]) {
                 const itemsForDept = currentOrderItems.filter(i => appSettings.categoryDestinations[i.menuItem.category] === dept);
                 if (itemsForDept.length > 0) {
-                    // Trigger Print (This will open a new window/tab and print)
-                    const printContent = generateReceiptHtml(
-                        itemsForDept, 
-                        dept, 
-                        table, 
-                        waiterName || 'Staff', 
-                        appSettings.restaurantProfile?.name || 'Ristorante'
-                    );
-                    
-                    const printWindow = window.open('', `PRINT_${dept}_${Date.now()}`, 'height=600,width=400');
-                    if (printWindow) {
-                        printWindow.document.write(printContent);
-                        printWindow.document.close();
-                        printWindow.focus();
-                        // printWindow.print() is called inside the HTML onload
-                    }
+                    printQueue.push({ items: itemsForDept, dept });
                 }
             }
+        });
+
+        // 2. Queue Master Receipt (Cassa/Totale)
+        if (appSettings.printEnabled['Cassa']) {
+            printQueue.push({ items: currentOrderItems, dept: 'Cassa / Totale' });
+        }
+
+        // 3. Execute Print Queue Sequentially (2.5s Delay)
+        printQueue.forEach((job, index) => {
+            setTimeout(() => {
+                const printContent = generateReceiptHtml(
+                    job.items, 
+                    job.dept, 
+                    table, 
+                    waiterName || 'Staff', 
+                    appSettings.restaurantProfile?.name || 'Ristorante'
+                );
+                
+                const printWindow = window.open('', `PRINT_${job.dept}_${Date.now()}`, 'height=600,width=400');
+                if (printWindow) {
+                    printWindow.document.write(printContent);
+                    printWindow.document.close();
+                    printWindow.focus();
+                    // printWindow.print() is called inside the HTML onload
+                }
+            }, index * 2500); // 2.5s sequential delay
         });
     }
     

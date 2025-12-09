@@ -77,7 +77,7 @@ export default function App() {
   // App Settings (Destinations)
   const [appSettings, setAppSettingsState] = useState<AppSettings>(getAppSettings());
   const [tempDestinations, setTempDestinations] = useState<Record<Category, Department>>(getAppSettings().categoryDestinations);
-  const [tempPrintSettings, setTempPrintSettings] = useState<Record<Department, boolean>>(getAppSettings().printEnabled);
+  const [tempPrintSettings, setTempPrintSettings] = useState<Record<string, boolean>>(getAppSettings().printEnabled);
   const [hasUnsavedDestinations, setHasUnsavedDestinations] = useState(false);
   
   // Profile Settings State
@@ -164,7 +164,7 @@ export default function App() {
               [Category.BEVANDE]: 'Sala'
           });
           setTempPrintSettings(currentSettings.printEnabled || {
-              'Cucina': false, 'Pizzeria': false, 'Pub': false, 'Sala': false
+              'Cucina': false, 'Pizzeria': false, 'Pub': false, 'Sala': false, 'Cassa': false
           });
           
           setProfileForm({
@@ -299,8 +299,8 @@ export default function App() {
       setHasUnsavedDestinations(true);
   };
 
-  const toggleTempPrint = (dept: Department) => {
-      setTempPrintSettings(prev => ({ ...prev, [dept]: !prev[dept] }));
+  const toggleTempPrint = (key: string) => {
+      setTempPrintSettings(prev => ({ ...prev, [key]: !prev[key] }));
       setHasUnsavedDestinations(true);
   };
 
@@ -706,14 +706,15 @@ export default function App() {
                                             Attiva la stampa automatica per i reparti che hanno una stampante termica. 
                                             Il dispositivo che invia l'ordine (Tablet/PC) deve essere connesso alla stampante via driver di sistema.
                                         </p>
-                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                            {(['Cucina', 'Pizzeria', 'Pub'] as Department[]).map(dept => (
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                            {(['Cucina', 'Pizzeria', 'Pub', 'Cassa'] as string[]).map(dept => (
                                                 <div key={dept} className="flex justify-between items-center bg-slate-950 p-4 rounded-xl border border-slate-800">
                                                     <div className="flex items-center gap-3">
                                                         {dept === 'Cucina' && <ChefHat size={18} className="text-orange-500"/>}
                                                         {dept === 'Pizzeria' && <Pizza size={18} className="text-red-500"/>}
                                                         {dept === 'Pub' && <Sandwich size={18} className="text-amber-500"/>}
-                                                        <span className="font-bold text-white">{dept}</span>
+                                                        {dept === 'Cassa' && <Receipt size={18} className="text-green-500"/>}
+                                                        <span className="font-bold text-white">{dept === 'Cassa' ? 'Cassa / Totale' : dept}</span>
                                                     </div>
                                                     <button 
                                                         onClick={() => toggleTempPrint(dept)} 
@@ -908,135 +909,6 @@ export default function App() {
                                 <div className="mt-8 flex justify-center"><button onClick={handleDeleteDailyHistory} className="flex items-center gap-2 px-6 py-3 rounded-xl bg-red-900/20 text-red-500 font-bold border border-red-900/50 hover:bg-red-900/40 transition-colors"><Trash2 size={18}/> ELIMINA STORICO DEL GIORNO</button></div>
                              </div>
                         )}
-                        {/* Other tabs... */}
-                        {adminTab === 'ai' && (
-                            <div className="max-w-xl mx-auto pb-20">
-                                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                                    <Bot className="text-indigo-500"/> AI Configuration
-                                </h3>
-                                <div className="bg-slate-900 p-6 rounded-2xl border border-indigo-500/30 shadow-lg shadow-indigo-500/10">
-                                    <p className="text-slate-400 text-sm mb-4">
-                                        Inserisci la tua <strong>Google Gemini API Key</strong> per abilitare l'assistente chef intelligente.
-                                        L'AI risponderà a domande su ingredienti e allergeni.
-                                    </p>
-                                    <div className="mb-4">
-                                        <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">API Key</label>
-                                        <div className="relative">
-                                            <Key className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
-                                            <input 
-                                                type="password" 
-                                                value={apiKeyInput} 
-                                                onChange={(e) => setApiKeyInput(e.target.value)} 
-                                                className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white focus:border-indigo-500 outline-none font-mono" 
-                                                placeholder="AIzaSy..."
-                                            />
-                                        </div>
-                                    </div>
-                                    <button onClick={handleSaveApiKey} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20">
-                                        <Save size={18}/> SALVA CHIAVE
-                                    </button>
-                                    <div className="mt-6 pt-6 border-t border-slate-800 text-center">
-                                        <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-indigo-400 text-xs font-bold hover:text-white flex items-center justify-center gap-1">
-                                            Ottieni una chiave gratuita qui <ExternalLink size={12}/>
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                        {/* Info & Notif tabs */}
-                        {adminTab === 'notif' && (
-                            <div className="max-w-md">
-                                <h3 className="text-xl font-bold text-white mb-6">Impostazioni Notifiche</h3>
-                                <div className="space-y-4">
-                                    <div className="flex justify-between items-center bg-slate-900 p-4 rounded-xl border border-slate-800">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-orange-500/20 rounded-lg text-orange-500"><Bell size={20}/></div>
-                                            <div><p className="font-bold text-white">Suoni Cucina</p><p className="text-xs text-slate-400">Audio all'arrivo ordini</p></div>
-                                        </div>
-                                        <button onClick={() => toggleNotif('kitchenSound')} className={`w-12 h-6 rounded-full relative transition-colors ${notifSettings.kitchenSound ? 'bg-green-500' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${notifSettings.kitchenSound ? 'left-7' : 'left-1'}`}></div></button>
-                                    </div>
-                                    <div className="flex justify-between items-center bg-slate-900 p-4 rounded-xl border border-slate-800">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-blue-500/20 rounded-lg text-blue-500"><Smartphone size={20}/></div>
-                                            <div><p className="font-bold text-white">Suoni Sala</p><p className="text-xs text-slate-400">Audio piatti pronti</p></div>
-                                        </div>
-                                        <button onClick={() => toggleNotif('waiterSound')} className={`w-12 h-6 rounded-full relative transition-colors ${notifSettings.waiterSound ? 'bg-green-500' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${notifSettings.waiterSound ? 'left-7' : 'left-1'}`}></div></button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                        {adminTab === 'info' && (
-                            <div className="max-w-2xl mx-auto pb-20">
-                                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                                    <Info className="text-slate-400"/> Legenda Stati & Icone
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800">
-                                        <h4 className="text-slate-400 text-xs font-bold uppercase mb-4 tracking-widest">Stati Ordine</h4>
-                                        <div className="space-y-3">
-                                            <div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full bg-yellow-500 shadow-[0_0_10px_rgba(234,179,8,0.5)]"></div><span className="text-white font-bold">In Attesa</span><span className="text-slate-500 text-xs ml-auto">Appena arrivato</span></div>
-                                            <div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full bg-orange-500"></div><span className="text-white font-bold">In Preparazione</span><span className="text-slate-500 text-xs ml-auto">Preso in carico</span></div>
-                                            <div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.5)]"></div><span className="text-white font-bold">Pronto</span><span className="text-slate-500 text-xs ml-auto">Da servire</span></div>
-                                            <div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full bg-slate-500"></div><span className="text-white font-bold">Servito</span><span className="text-slate-500 text-xs ml-auto">Completato</span></div>
-                                            <div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full bg-red-600 animate-pulse"></div><span className="text-white font-bold">Ritardo Critico</span><span className="text-slate-500 text-xs ml-auto">&gt; 25 min</span></div>
-                                        </div>
-                                    </div>
-                                    <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800">
-                                        <h4 className="text-slate-400 text-xs font-bold uppercase mb-4 tracking-widest">Reparti</h4>
-                                        <div className="space-y-3">
-                                            <div className="flex items-center gap-3"><div className="p-2 bg-orange-500/20 rounded text-orange-500"><ChefHat size={16}/></div><span className="text-white font-bold">Cucina</span><span className="text-slate-500 text-xs ml-auto">Colore Arancio</span></div>
-                                            <div className="flex items-center gap-3"><div className="p-2 bg-red-500/20 rounded text-red-500"><Pizza size={16}/></div><span className="text-white font-bold">Pizzeria</span><span className="text-slate-500 text-xs ml-auto">Colore Rosso</span></div>
-                                            <div className="flex items-center gap-3"><div className="p-2 bg-amber-500/20 rounded text-amber-500"><Sandwich size={16}/></div><span className="text-white font-bold">Pub</span><span className="text-slate-500 text-xs ml-auto">Colore Ambra</span></div>
-                                            <div className="flex items-center gap-3"><div className="p-2 bg-blue-500/20 rounded text-blue-500"><Wine size={16}/></div><span className="text-white font-bold">Sala/Bar</span><span className="text-slate-500 text-xs ml-auto">Colore Blu</span></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-        )}
-
-        {/* ... Modal Editor Piatti and Delete Confirm remain unchanged but are needed ... */}
-        {isEditingItem && (
-            <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-                {/* Editor Content Preserved */}
-                <div className="bg-slate-900 border border-orange-500/30 rounded-3xl p-6 w-full max-w-lg shadow-2xl animate-slide-up relative">
-                    <button onClick={() => setIsEditingItem(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white"><X /></button>
-                    <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2"><Edit2 className="text-orange-500"/> {editingItem.id ? 'Modifica Piatto' : 'Nuovo Piatto'}</h2>
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-3 gap-4">
-                            <div className="col-span-2"><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Nome Piatto</label><input type="text" value={editingItem.name || ''} onChange={e => setEditingItem({...editingItem, name: capitalize(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-bold" autoFocus /></div>
-                            <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Prezzo</label><input type="number" value={editingItem.price || ''} onChange={e => setEditingItem({...editingItem, price: parseFloat(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-mono text-right" placeholder="0.00" /></div>
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Categoria</label>
-                            <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-700 overflow-x-auto">
-                                {ADMIN_CATEGORY_ORDER.map(cat => (
-                                    <button key={cat} onClick={() => setEditingItem({...editingItem, category: cat})} className={`flex-1 py-2 px-3 text-[10px] font-bold uppercase rounded-lg transition-all whitespace-nowrap ${editingItem.category === cat ? 'bg-orange-500 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>{cat}</button>
-                                ))}
-                            </div>
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Descrizione</label>
-                            <div className="relative">
-                                <textarea value={editingItem.description || ''} onChange={e => setEditingItem({...editingItem, description: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm h-24 resize-none pr-10" placeholder="Ingredienti..." />
-                                <button onClick={handleDictation} className={`absolute right-3 bottom-3 p-2 rounded-lg transition-colors ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>{isListening ? <MicOff size={16}/> : <Mic size={16}/>}</button>
-                            </div>
-                        </div>
-                        <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Allergeni</label>
-                            <div className="flex flex-wrap gap-2">
-                                {ALLERGENS_CONFIG.map((alg) => {
-                                    const isActive = (editingItem.allergens || []).includes(alg.id);
-                                    return (
-                                        <button key={alg.id} onClick={() => toggleAllergen(alg.id)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-bold transition-all ${isActive ? 'bg-orange-500/20 border-orange-500 text-orange-400' : 'bg-slate-950 border-slate-700 text-slate-500 hover:border-slate-500'}`}><alg.icon size={14} /> {alg.label}</button>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                        <button onClick={handleSaveMenu} className="w-full py-4 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl shadow-lg shadow-orange-600/20 mt-4 flex items-center justify-center gap-2"><Save size={20}/> SALVA PIATTO</button>
                     </div>
                 </div>
             </div>

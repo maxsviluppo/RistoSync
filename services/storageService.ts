@@ -517,7 +517,8 @@ const DEFAULT_SETTINGS: AppSettings = {
         'Cucina': false,
         'Pizzeria': false,
         'Pub': false,
-        'Sala': false
+        'Sala': false,
+        'Cassa': false // NEW: Default to false
     },
     restaurantProfile: {}
 };

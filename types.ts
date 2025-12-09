@@ -31,8 +31,8 @@ export interface RestaurantProfile {
 
 export interface AppSettings {
   categoryDestinations: Record<Category, Department>;
-  // New: Toggle printing for each department
-  printEnabled: Record<Department, boolean>;
+  // Updated: Record<string, boolean> to allow 'Cassa' key alongside departments
+  printEnabled: Record<string, boolean>;
   restaurantProfile?: RestaurantProfile;
 }
 
