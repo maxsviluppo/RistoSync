@@ -339,6 +339,39 @@ export const clearHistory = async () => {
   }
 };
 
+// NEW: Delete history only for a specific date
+export const deleteHistoryByDate = async (targetDate: Date) => {
+    const orders = getOrders();
+    
+    // Filter out orders that match the date AND are delivered
+    const ordersToKeep = orders.filter(o => {
+        if (o.status !== OrderStatus.DELIVERED) return true; // Keep active
+        const orderDate = new Date(o.createdAt || o.timestamp);
+        const isSameDay = orderDate.getDate() === targetDate.getDate() &&
+                          orderDate.getMonth() === targetDate.getMonth() &&
+                          orderDate.getFullYear() === targetDate.getFullYear();
+        return !isSameDay; // Keep if NOT same day
+    });
+
+    saveLocallyAndNotify(ordersToKeep);
+
+    if (supabase && currentUserId) {
+        // Calculate timestamps for range query to be safe (or just delete delivered orders locally identified)
+        // For simplicity and safety with filtered local list, we iterate orders that WERE deleted locally
+        // But better: use a SQL range delete.
+        
+        const startOfDay = new Date(targetDate); startOfDay.setHours(0,0,0,0);
+        const endOfDay = new Date(targetDate); endOfDay.setHours(23,59,59,999);
+        
+        await supabase.from('orders')
+            .delete()
+            .eq('user_id', currentUserId)
+            .eq('status', OrderStatus.DELIVERED)
+            .gte('created_at', startOfDay.toISOString())
+            .lte('created_at', endOfDay.toISOString());
+    }
+};
+
 export const freeTable = async (tableNumber: string) => {
     const orders = getOrders();
     // Instead of deleting, we ARCHIVE them by:
