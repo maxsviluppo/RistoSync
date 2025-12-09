@@ -91,7 +91,8 @@ const fetchFromCloud = async () => {
     // Convert DB format to App format
     const appOrders: Order[] = data.map((row: any) => ({
         id: row.id,
-        tableNumber: row.table_number,
+        table_number: row.table_number, // Handle both snake_case from DB
+        tableNumber: row.table_number,  // and camelCase for App
         status: row.status as OrderStatus,
         timestamp: parseInt(row.timestamp) || new Date(row.created_at).getTime(),
         createdAt: new Date(row.created_at).getTime(), // Map DB created_at to App createdAt
@@ -449,7 +450,8 @@ const syncMenuToCloud = async (item: MenuItem, isDelete = false) => {
             price: item.price,
             category: item.category,
             description: item.description,
-            allergens: item.allergens
+            allergens: item.allergens,
+            image: item.image // <--- Added: Persist image to Cloud
         };
         await supabase.from('menu_items').upsert(payload);
     }

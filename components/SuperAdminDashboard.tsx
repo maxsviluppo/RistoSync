@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, signOut } from '../services/supabase';
-import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe } from 'lucide-react';
+import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon } from 'lucide-react';
 
 interface SuperAdminDashboardProps {
     onEnterApp: () => void;
@@ -15,10 +15,12 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     const [copiedDemo, setCopiedDemo] = useState(false);
     const [copiedRecovery, setCopiedRecovery] = useState(false);
     const [copiedPublic, setCopiedPublic] = useState(false);
+    const [copiedImage, setCopiedImage] = useState(false);
     const [currentEmail, setCurrentEmail] = useState<string>('');
     const [showSqlModal, setShowSqlModal] = useState(false);
     const [showRecoveryModal, setShowRecoveryModal] = useState(false);
     const [showPublicModal, setShowPublicModal] = useState(false);
+    const [showImageModal, setShowImageModal] = useState(false);
     
     // Recovery State
     const [recoveryEmail, setRecoveryEmail] = useState('');
@@ -219,8 +221,15 @@ create policy "Public menu items are viewable by everyone"
 on public.menu_items for select 
 using (true);`;
     };
+
+    const getImageUpdateSQL = () => {
+        return `-- ABILITA FOTO PIATTI NEL DATABASE
+-- Aggiunge la colonna 'image' se non esiste per salvare le foto
+alter table public.menu_items 
+add column if not exists image text;`;
+    };
     
-    const copySQL = (sql: string, type: 'reset' | 'demo' | 'recovery' | 'public') => {
+    const copySQL = (sql: string, type: 'reset' | 'demo' | 'recovery' | 'public' | 'image') => {
         navigator.clipboard.writeText(sql);
         if (type === 'reset') {
             setCopiedSQL(true);
@@ -231,6 +240,9 @@ using (true);`;
         } else if (type === 'public') {
             setCopiedPublic(true);
             setTimeout(() => setCopiedPublic(false), 2000);
+        } else if (type === 'image') {
+            setCopiedImage(true);
+            setTimeout(() => setCopiedImage(false), 2000);
         } else {
             setCopiedRecovery(true);
             setTimeout(() => setCopiedRecovery(false), 2000);
@@ -321,6 +333,13 @@ create policy "Super Admin Delete" on public.profiles for delete using ( lower(a
                         <div className="flex justify-between items-start mb-4">
                             <div className="p-3 bg-orange-500/10 rounded-xl text-orange-400"><FlaskConical /></div>
                             <div className="flex gap-2">
+                                <button 
+                                    onClick={() => setShowImageModal(true)}
+                                    className="text-xs bg-indigo-600/20 hover:bg-indigo-600 hover:text-white text-indigo-400 w-8 h-8 rounded-lg flex items-center justify-center transition-colors border border-indigo-500/30"
+                                    title="Abilita Foto Database"
+                                >
+                                    <ImageIcon size={16}/>
+                                </button>
                                 <button 
                                     onClick={() => setShowPublicModal(true)}
                                     className="text-xs bg-pink-600/20 hover:bg-pink-600 hover:text-white text-pink-400 w-8 h-8 rounded-lg flex items-center justify-center transition-colors border border-pink-500/30"
@@ -601,6 +620,42 @@ create policy "Super Admin Delete" on public.profiles for delete using ( lower(a
                         
                         <div className="mt-6 flex justify-end">
                             <button onClick={() => setShowPublicModal(false)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold">Chiudi</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* IMAGE ENABLE MODAL */}
+            {showImageModal && (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+                    <div className="bg-slate-900 border border-indigo-500/30 rounded-3xl p-6 w-full max-w-2xl shadow-2xl animate-slide-up relative">
+                        <button onClick={() => setShowImageModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white"><X /></button>
+                        
+                        <div className="flex items-center gap-3 mb-4 text-indigo-400">
+                             <div className="p-2 bg-indigo-500/10 rounded-lg"><ImageIcon size={24} /></div>
+                             <h2 className="text-xl font-bold text-white">Abilita Foto nel Database</h2>
+                        </div>
+                        
+                        <p className="text-slate-400 text-sm mb-4">
+                            Se le immagini dei piatti non appaiono sugli altri dispositivi (es. telefono del cliente), è perché manca la colonna nel database. <br/>
+                            Esegui questo SQL per aggiungerla.
+                        </p>
+
+                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 relative group text-left mb-6">
+                            <pre className="text-left text-xs text-green-400 font-mono whitespace-pre-wrap overflow-x-auto h-40 custom-scroll p-2">
+{getImageUpdateSQL()}
+                            </pre>
+                            <button 
+                                onClick={() => copySQL(getImageUpdateSQL(), 'image')}
+                                className="absolute top-4 right-4 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 shadow-lg transition-all"
+                            >
+                                {copiedImage ? <Check size={16} className="text-green-500"/> : <Copy size={16}/>}
+                                {copiedImage ? 'COPIATO!' : 'COPIA SQL'}
+                            </button>
+                        </div>
+                        
+                        <div className="mt-6 flex justify-end">
+                            <button onClick={() => setShowImageModal(false)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold">Chiudi</button>
                         </div>
                     </div>
                 </div>
