@@ -4,13 +4,14 @@ import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import DigitalMenu from './components/DigitalMenu';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft, CheckCircle, LayoutGrid, SlidersHorizontal, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, ExternalLink, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, UserX, RefreshCw, Send, Printer, ArrowRightLeft, CheckCircle, LayoutGrid, SlidersHorizontal, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { MenuItem, Category, Department, AppSettings, OrderStatus, Order, RestaurantProfile } from './types';
 
 const ADMIN_CATEGORY_ORDER = [
     Category.ANTIPASTI,
+    Category.PANINI,
     Category.PIZZE,
     Category.PRIMI,
     Category.SECONDI,
@@ -50,7 +51,7 @@ export default function App() {
   const [isBanned, setIsBanned] = useState(false);
   const [accountDeleted, setAccountDeleted] = useState(false);
   
-  const [role, setRole] = useState<'kitchen' | 'pizzeria' | 'waiter' | null>(null);
+  const [role, setRole] = useState<'kitchen' | 'pizzeria' | 'pub' | 'waiter' | null>(null);
   const [showLogin, setShowLogin] = useState(false);
   const [waiterNameInput, setWaiterNameInput] = useState('');
   
@@ -159,6 +160,7 @@ export default function App() {
           setAppSettingsState(currentSettings); 
           setTempDestinations(currentSettings.categoryDestinations || {
               [Category.ANTIPASTI]: 'Cucina',
+              [Category.PANINI]: 'Pub',
               [Category.PIZZE]: 'Pizzeria',
               [Category.PRIMI]: 'Cucina',
               [Category.SECONDI]: 'Cucina',
@@ -382,6 +384,7 @@ export default function App() {
   const getCategoryIcon = (cat: Category) => {
     switch (cat) {
         case Category.ANTIPASTI: return <UtensilsCrossed size={18} />;
+        case Category.PANINI: return <Sandwich size={18} />;
         case Category.PIZZE: return <Pizza size={18} />;
         case Category.PRIMI: return <ChefHat size={18} />;
         case Category.SECONDI: return <Utensils size={18} />;
@@ -416,6 +419,7 @@ export default function App() {
 
   if (role === 'kitchen') return <KitchenDisplay onExit={handleExitApp} department="Cucina" />;
   if (role === 'pizzeria') return <KitchenDisplay onExit={handleExitApp} department="Pizzeria" />;
+  if (role === 'pub') return <KitchenDisplay onExit={handleExitApp} department="Pub" />;
   if (role === 'waiter') return <WaiterPad onExit={handleExitApp} />;
 
   return (
@@ -458,8 +462,8 @@ export default function App() {
                 </div>
 
                 {/* ROLE SELECTION BUTTONS */}
-                <div className="flex flex-col lg:flex-row gap-6 items-center">
-                    <button onClick={() => setRole('kitchen')} className="group relative w-64 h-72 bg-slate-800 rounded-3xl border border-slate-700 hover:border-orange-500 transition-all duration-500 flex flex-col items-center justify-center gap-6 shadow-2xl hover:shadow-orange-500/20 active:scale-95">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-center">
+                    <button onClick={() => setRole('kitchen')} className="group relative w-full lg:w-56 h-72 bg-slate-800 rounded-3xl border border-slate-700 hover:border-orange-500 transition-all duration-500 flex flex-col items-center justify-center gap-6 shadow-2xl hover:shadow-orange-500/20 active:scale-95">
                         <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center group-hover:bg-orange-500 transition-colors duration-500 border border-slate-700 group-hover:border-orange-400">
                             <ChefHat size={40} className="text-slate-500 group-hover:text-white transition-colors duration-500" />
                         </div>
@@ -469,7 +473,7 @@ export default function App() {
                         </div>
                     </button>
 
-                    <button onClick={() => setRole('pizzeria')} className="group relative w-64 h-72 bg-slate-800 rounded-3xl border border-slate-700 hover:border-red-500 transition-all duration-500 flex flex-col items-center justify-center gap-6 shadow-2xl hover:shadow-red-500/20 active:scale-95">
+                    <button onClick={() => setRole('pizzeria')} className="group relative w-full lg:w-56 h-72 bg-slate-800 rounded-3xl border border-slate-700 hover:border-red-500 transition-all duration-500 flex flex-col items-center justify-center gap-6 shadow-2xl hover:shadow-red-500/20 active:scale-95">
                         <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center group-hover:bg-red-500 transition-colors duration-500 border border-slate-700 group-hover:border-red-400">
                             <Pizza size={40} className="text-slate-500 group-hover:text-white transition-colors duration-500" />
                         </div>
@@ -479,7 +483,17 @@ export default function App() {
                         </div>
                     </button>
 
-                    <button onClick={handleWaiterClick} className="group relative w-64 h-72 bg-slate-800 rounded-3xl border border-slate-700 hover:border-blue-500 transition-all duration-500 flex flex-col items-center justify-center gap-6 shadow-2xl hover:shadow-blue-500/20 active:scale-95">
+                    <button onClick={() => setRole('pub')} className="group relative w-full lg:w-56 h-72 bg-slate-800 rounded-3xl border border-slate-700 hover:border-amber-500 transition-all duration-500 flex flex-col items-center justify-center gap-6 shadow-2xl hover:shadow-amber-500/20 active:scale-95">
+                        <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center group-hover:bg-amber-500 transition-colors duration-500 border border-slate-700 group-hover:border-amber-400">
+                            <Sandwich size={40} className="text-slate-500 group-hover:text-white transition-colors duration-500" />
+                        </div>
+                        <div className="text-center">
+                            <h2 className="text-xl font-black text-white mb-1">PUB</h2>
+                            <p className="text-slate-500 text-xs font-medium group-hover:text-amber-400 transition-colors">Panini & Bar</p>
+                        </div>
+                    </button>
+
+                    <button onClick={handleWaiterClick} className="group relative w-full lg:w-56 h-72 bg-slate-800 rounded-3xl border border-slate-700 hover:border-blue-500 transition-all duration-500 flex flex-col items-center justify-center gap-6 shadow-2xl hover:shadow-blue-500/20 active:scale-95">
                         <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center group-hover:bg-blue-500 transition-colors duration-500 border border-slate-700 group-hover:border-blue-400">
                             <UtensilsCrossed size={40} className="text-slate-500 group-hover:text-white transition-colors duration-500" />
                         </div>
@@ -752,7 +766,7 @@ export default function App() {
                                     <div className="flex justify-between items-center mb-6"><div><h3 className="text-xl font-bold text-white">Destinazioni Ordini</h3><p className="text-slate-400 text-sm">Dove vengono stampate/inviate le comande?</p></div>{hasUnsavedDestinations && <button onClick={saveDestinationsToCloud} className="bg-green-600 text-white px-4 py-2 rounded-xl font-bold shadow-lg animate-pulse">Salva Modifiche</button>}</div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         {ADMIN_CATEGORY_ORDER.map(cat => (
-                                            <div key={cat} className="flex items-center justify-between bg-slate-900 p-4 rounded-xl border border-slate-800"><span className="font-bold text-slate-300 uppercase flex items-center gap-2"><div className="w-2 h-2 bg-orange-500 rounded-full"></div>{cat}</span><div className="flex bg-slate-950 rounded-lg p-1 border border-slate-800"><button onClick={() => handleTempDestinationChange(cat, 'Cucina')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${tempDestinations[cat] === 'Cucina' ? 'bg-orange-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>CUCINA</button><button onClick={() => handleTempDestinationChange(cat, 'Sala')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${tempDestinations[cat] === 'Sala' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>SALA</button><button onClick={() => handleTempDestinationChange(cat, 'Pizzeria')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${tempDestinations[cat] === 'Pizzeria' ? 'bg-red-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>PIZZERIA</button></div></div>
+                                            <div key={cat} className="flex items-center justify-between bg-slate-900 p-4 rounded-xl border border-slate-800"><span className="font-bold text-slate-300 uppercase flex items-center gap-2"><div className="w-2 h-2 bg-orange-500 rounded-full"></div>{cat}</span><div className="flex bg-slate-950 rounded-lg p-1 border border-slate-800 overflow-x-auto"><button onClick={() => handleTempDestinationChange(cat, 'Cucina')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${tempDestinations[cat] === 'Cucina' ? 'bg-orange-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>CUCINA</button><button onClick={() => handleTempDestinationChange(cat, 'Sala')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${tempDestinations[cat] === 'Sala' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>SALA</button><button onClick={() => handleTempDestinationChange(cat, 'Pizzeria')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${tempDestinations[cat] === 'Pizzeria' ? 'bg-red-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>PIZZERIA</button><button onClick={() => handleTempDestinationChange(cat, 'Pub')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${tempDestinations[cat] === 'Pub' ? 'bg-amber-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>PUB</button></div></div>
                                         ))}
                                     </div>
                                 </div>
@@ -795,9 +809,9 @@ export default function App() {
                         </div>
                         <div>
                             <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Categoria</label>
-                            <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-700 overflow-hidden">
+                            <div className="flex bg-slate-950 p-1 rounded-xl border border-slate-700 overflow-x-auto">
                                 {ADMIN_CATEGORY_ORDER.map(cat => (
-                                    <button key={cat} onClick={() => setEditingItem({...editingItem, category: cat})} className={`flex-1 py-2 text-[10px] font-bold uppercase rounded-lg transition-all ${editingItem.category === cat ? 'bg-orange-500 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>{cat}</button>
+                                    <button key={cat} onClick={() => setEditingItem({...editingItem, category: cat})} className={`flex-1 py-2 px-3 text-[10px] font-bold uppercase rounded-lg transition-all whitespace-nowrap ${editingItem.category === cat ? 'bg-orange-500 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>{cat}</button>
                                 ))}
                             </div>
                         </div>

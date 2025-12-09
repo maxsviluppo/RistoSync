@@ -7,6 +7,7 @@ export enum OrderStatus {
 
 export enum Category {
   ANTIPASTI = 'Antipasti',
+  PANINI = 'Panini',
   PIZZE = 'Pizze',
   PRIMI = 'Primi',
   SECONDI = 'Secondi',
@@ -14,7 +15,7 @@ export enum Category {
   BEVANDE = 'Bevande'
 }
 
-export type Department = 'Cucina' | 'Sala' | 'Pizzeria';
+export type Department = 'Cucina' | 'Sala' | 'Pizzeria' | 'Pub';
 
 export interface RestaurantProfile {
   name?: string;

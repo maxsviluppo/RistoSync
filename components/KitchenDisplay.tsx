@@ -1,15 +1,16 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Order, OrderStatus, Category, AppSettings, Department } from '../types';
 import { getOrders, updateOrderStatus, toggleOrderItemCompletion, getAppSettings } from '../services/storageService';
-import { Clock, CheckCircle, ChefHat, Bell, User, LogOut, Square, CheckSquare, AlertOctagon, Timer, PlusCircle, History, Calendar, ChevronLeft, ChevronRight, DollarSign, UtensilsCrossed, Receipt, Pizza, ArrowRightLeft, Utensils, CakeSlice, Wine } from 'lucide-react';
+import { Clock, CheckCircle, ChefHat, Bell, User, LogOut, Square, CheckSquare, AlertOctagon, Timer, PlusCircle, History, Calendar, ChevronLeft, ChevronRight, DollarSign, UtensilsCrossed, Receipt, Pizza, ArrowRightLeft, Utensils, CakeSlice, Wine, Sandwich } from 'lucide-react';
 
 const CATEGORY_PRIORITY: Record<Category, number> = {
     [Category.ANTIPASTI]: 1,
-    [Category.PIZZE]: 2,
-    [Category.PRIMI]: 3,
-    [Category.SECONDI]: 4,
-    [Category.DOLCI]: 5,
-    [Category.BEVANDE]: 6
+    [Category.PANINI]: 2,
+    [Category.PIZZE]: 3,
+    [Category.PRIMI]: 4,
+    [Category.SECONDI]: 5,
+    [Category.DOLCI]: 6,
+    [Category.BEVANDE]: 7
 };
 
 // Configurazione Soglie Ritardo (minuti)
@@ -117,7 +118,7 @@ const OrderTimer: React.FC<{ timestamp: number; status: OrderStatus; onCritical:
 
 interface KitchenDisplayProps {
     onExit: () => void;
-    department?: Department; // 'Cucina' | 'Pizzeria'
+    department?: Department; // 'Cucina' | 'Pizzeria' | 'Pub'
 }
 
 const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'Cucina' }) => {
@@ -132,9 +133,20 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
   const previousOrdersRef = useRef<Order[]>([]);
   const isFirstLoad = useRef(true);
 
+  // --- DEPARTMENT THEME LOGIC ---
   const isPizzeria = department === 'Pizzeria';
-  const themeColor = isPizzeria ? 'red' : 'orange';
-  const ThemeIcon = isPizzeria ? Pizza : ChefHat;
+  const isPub = department === 'Pub';
+  
+  let themeColor = 'orange'; // Default Kitchen
+  let ThemeIcon = ChefHat;
+
+  if (isPizzeria) {
+      themeColor = 'red';
+      ThemeIcon = Pizza;
+  } else if (isPub) {
+      themeColor = 'amber';
+      ThemeIcon = Sandwich;
+  }
 
   const showNotification = (msg: string, type: 'info' | 'success' | 'alert') => {
       setNotification({ msg, type });
@@ -165,7 +177,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
 
         if (hasRelevantItems) {
             playNotificationSound('new');
-            showNotification(`Nuovo Ordine ${isPizzeria ? 'Pizzeria' : 'Cucina'}: Tavolo ${addedOrders[0].tableNumber}`, 'info');
+            showNotification(`Nuovo Ordine ${department}: Tavolo ${addedOrders[0].tableNumber}`, 'info');
         }
 
         // Check if an order became READY (handled similarly for both, usually controlled by Chef/Pizzaiolo finishing items)
@@ -291,12 +303,12 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
       {/* HEADER */}
       <div className="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
         <div className="flex items-center gap-3">
-          <div className={`w-14 h-14 rounded-full flex items-center justify-center ${isPizzeria ? 'bg-red-600' : 'bg-orange-500'}`}>
+          <div className={`w-14 h-14 rounded-full flex items-center justify-center ${isPizzeria ? 'bg-red-600' : isPub ? 'bg-amber-500' : 'bg-orange-500'}`}>
               <ThemeIcon className="w-8 h-8 text-white" />
           </div>
           <div>
-              <h1 className="text-3xl font-bold">Risto<span className={`${isPizzeria ? 'text-red-500' : 'text-orange-500'}`}>Sync</span></h1>
-              <p className="text-slate-400 text-xs uppercase font-semibold">{isPizzeria ? 'Pizzeria' : 'Kitchen'} Dashboard</p>
+              <h1 className="text-3xl font-bold">Risto<span className={`${isPizzeria ? 'text-red-500' : isPub ? 'text-amber-500' : 'text-orange-500'}`}>Sync</span></h1>
+              <p className="text-slate-400 text-xs uppercase font-semibold">{isPizzeria ? 'Pizzeria' : isPub ? 'Pub' : 'Kitchen'} Dashboard</p>
           </div>
           <button onClick={() => loadOrders()} className="ml-4 p-2 rounded-full bg-slate-800 text-slate-500 hover:text-white"><History size={16} /></button>
           
@@ -307,7 +319,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
           </div>
         </div>
         <div className="flex gap-4 items-center">
-            <div className="bg-slate-800 px-4 py-2 rounded-lg border border-slate-700"><span className={`text-2xl font-mono font-bold ${isPizzeria ? 'text-red-400' : 'text-orange-400'}`}>{new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}</span></div>
+            <div className="bg-slate-800 px-4 py-2 rounded-lg border border-slate-700"><span className={`text-2xl font-mono font-bold ${isPizzeria ? 'text-red-400' : isPub ? 'text-amber-400' : 'text-orange-400'}`}>{new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}</span></div>
             <button onClick={onExit} className="bg-slate-800 text-slate-400 hover:text-white p-2.5 rounded-lg"><LogOut size={20} /></button>
         </div>
       </div>
@@ -328,10 +340,10 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
                // COORDINATION LOGIC: Check for items from the OTHER department
                const otherDeptItems = order.items.filter(i => {
                    const dest = appSettings.categoryDestinations[i.menuItem.category];
-                   // If we are Pizzeria, we look for 'Cucina'. If Kitchen, we look for 'Pizzeria'.
+                   // If we are Pizzeria/Pub, we look for 'Cucina'. If Kitchen, we look for 'Pizzeria' or 'Pub'.
                    // Items for 'Sala' (Drinks) are ignored for coordination.
-                   const targetOther = department === 'Pizzeria' ? 'Cucina' : 'Pizzeria';
-                   return dest === targetOther;
+                   // NOTE: For Pub, user said no sync needed, but we keep this visual aid if applicable.
+                   return dest !== department && dest !== 'Sala';
                });
                const hasCoordinatedItems = otherDeptItems.length > 0;
 
@@ -358,7 +370,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
                         {hasCoordinatedItems && (
                            <div className="mt-2 flex items-center gap-1.5 text-[9px] font-black uppercase text-blue-200 bg-blue-900/60 px-2 py-1.5 rounded-lg border border-blue-500/40 animate-pulse w-max shadow-lg shadow-blue-900/20">
                               <ArrowRightLeft size={12} className="text-blue-400"/>
-                              <span>SYNC: {otherDeptItems.length} {department === 'Pizzeria' ? 'Cucina' : 'Pizzeria'}</span>
+                              <span>SYNC: {otherDeptItems.length} ALTRI</span>
                            </div>
                         )}
                     </div>
@@ -391,7 +403,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
                                   <span className={`font-black text-2xl w-10 h-10 flex items-center justify-center rounded-lg shadow-inner ${item.completed ? 'bg-green-900/30 text-green-400' : 'bg-slate-700 text-white'}`}>{item.quantity}</span>
                                   <div className="flex-1 min-w-0">
                                       <div className="flex items-center gap-2">
-                                          <p className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${isPizzeria ? 'text-red-500' : 'text-orange-500'}`}>{item.menuItem.category}</p>
+                                          <p className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${isPizzeria ? 'text-red-500' : isPub ? 'text-amber-500' : 'text-orange-500'}`}>{item.menuItem.category}</p>
                                       </div>
                                       <p className={`font-black text-3xl leading-none tracking-tight break-words ${item.completed ? 'text-slate-600 line-through' : 'bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent'}`}>{item.menuItem.name}</p>
                                       {item.notes && <p className="text-red-300 text-sm font-bold mt-2 bg-red-900/20 inline-block px-3 py-1 rounded border border-red-900/30 shadow-sm">⚠️ {item.notes}</p>}
@@ -416,17 +428,17 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
               <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-6">
                   <div className="flex items-center bg-slate-800 rounded-xl p-1 border border-slate-700">
                       <button onClick={() => changeDate(-1)} className="p-3 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white"><ChevronLeft/></button>
-                      <div className="px-6 font-bold text-white flex items-center gap-2 uppercase tracking-wide"><Calendar size={18} className={`${isPizzeria ? 'text-red-500' : 'text-orange-500'}`}/> {formatDate(selectedDate)}</div>
+                      <div className="px-6 font-bold text-white flex items-center gap-2 uppercase tracking-wide"><Calendar size={18} className={`${isPizzeria ? 'text-red-500' : isPub ? 'text-amber-500' : 'text-orange-500'}`}/> {formatDate(selectedDate)}</div>
                       <button onClick={() => changeDate(1)} className="p-3 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white"><ChevronRight/></button>
                   </div>
                   <div className="flex gap-4">
                       <div className="bg-slate-800 border border-slate-700 p-4 rounded-2xl flex items-center gap-3">
                           <div className="p-3 bg-green-900/20 rounded-xl text-green-500"><DollarSign/></div>
-                          <div><p className="text-slate-400 text-xs font-bold uppercase">Incasso {isPizzeria ? 'Pizzeria' : 'Cucina'}</p><p className="text-2xl font-black text-white">€ {stats.totalRevenue.toFixed(2)}</p></div>
+                          <div><p className="text-slate-400 text-xs font-bold uppercase">Incasso {department}</p><p className="text-2xl font-black text-white">€ {stats.totalRevenue.toFixed(2)}</p></div>
                       </div>
                       <div className="bg-slate-800 border border-slate-700 p-4 rounded-2xl flex items-center gap-3">
                           <div className="p-3 bg-blue-900/20 rounded-xl text-blue-500"><UtensilsCrossed/></div>
-                          <div><p className="text-slate-400 text-xs font-bold uppercase">Piatti {isPizzeria ? 'Pizzeria' : 'Cucina'}</p><p className="text-2xl font-black text-white">{stats.totalItems}</p></div>
+                          <div><p className="text-slate-400 text-xs font-bold uppercase">Piatti {department}</p><p className="text-2xl font-black text-white">{stats.totalItems}</p></div>
                       </div>
                   </div>
               </div>
