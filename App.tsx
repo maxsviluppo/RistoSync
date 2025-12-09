@@ -926,42 +926,83 @@ export default function App() {
                                 </div>
                                 
                                 {/* AI ANALYSIS SECTION */}
-                                <div className="mt-8 bg-gradient-to-br from-indigo-900/40 to-slate-900 rounded-3xl p-1 border border-indigo-500/30 relative overflow-hidden">
-                                    <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-600/10 blur-[100px] pointer-events-none"></div>
-                                    <div className="p-6">
-                                        <div className="flex justify-between items-start mb-4">
-                                            <div>
-                                                <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                                                    <Sparkles className="text-indigo-400" size={20}/> 
-                                                    <span className="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">Analisi AI Avanzata</span>
-                                                </h3>
-                                                <p className="text-slate-400 text-sm mt-1">Ottieni suggerimenti strategici basati sui dati di oggi.</p>
+                                <div className="mt-8 relative group">
+                                    {/* Animated Border Gradient */}
+                                    <div className="absolute -inset-0.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-[2rem] opacity-30 blur group-hover:opacity-50 transition duration-1000"></div>
+                                    
+                                    <div className="relative bg-slate-900 rounded-[1.8rem] p-1 h-full">
+                                        {/* Inner Content Container */}
+                                        <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-[1.6rem] p-6 h-full relative overflow-hidden">
+                                            
+                                            {/* Background Decorations */}
+                                            <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/10 blur-[80px] rounded-full pointer-events-none"></div>
+                                            <div className="absolute bottom-0 left-0 w-40 h-40 bg-purple-500/10 blur-[60px] rounded-full pointer-events-none"></div>
+
+                                            <div className="relative z-10">
+                                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                                                    <div>
+                                                        <h3 className="text-2xl font-black text-white flex items-center gap-3">
+                                                            <div className="p-2 bg-indigo-500/20 rounded-xl text-indigo-400">
+                                                                <Sparkles size={24} className="animate-pulse"/>
+                                                            </div>
+                                                            <span className="bg-gradient-to-r from-indigo-200 via-white to-purple-200 bg-clip-text text-transparent">
+                                                                AI Business Insight
+                                                            </span>
+                                                        </h3>
+                                                        <p className="text-slate-400 font-medium text-sm mt-2 ml-1">
+                                                            Analisi strategica e suggerimenti operativi basati sui dati in tempo reale.
+                                                        </p>
+                                                    </div>
+                                                    
+                                                    {!aiAnalysisResult && (
+                                                        <button 
+                                                            onClick={handleRunAiAnalysis} 
+                                                            disabled={isAnalyzing}
+                                                            className="group relative px-8 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-bold shadow-xl shadow-indigo-600/20 transition-all active:scale-95 disabled:opacity-50 overflow-hidden"
+                                                        >
+                                                            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
+                                                            <div className="flex items-center gap-3 relative z-10">
+                                                                {isAnalyzing ? <Loader className="animate-spin" size={20}/> : <Bot size={20}/>}
+                                                                <span>{isAnalyzing ? 'Elaborazione in corso...' : 'Genera Analisi'}</span>
+                                                            </div>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                
+                                                {aiAnalysisResult && (
+                                                    <div className="animate-slide-up">
+                                                        <div className="bg-slate-950/80 backdrop-blur-sm rounded-2xl p-8 border border-indigo-500/20 shadow-inner relative">
+                                                            <button onClick={() => setAiAnalysisResult('')} className="absolute top-4 right-4 text-slate-500 hover:text-white p-2 hover:bg-slate-800 rounded-xl transition-colors"><X size={20}/></button>
+                                                            
+                                                            <div className="flex items-start gap-4">
+                                                                <div className="hidden sm:block p-3 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg mt-1">
+                                                                    <Bot size={24} className="text-white"/>
+                                                                </div>
+                                                                <div className="flex-1">
+                                                                    <h4 className="text-indigo-300 font-bold text-xs uppercase tracking-widest mb-4 flex items-center gap-2">
+                                                                        <div className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse"></div>
+                                                                        Report Generato
+                                                                    </h4>
+                                                                    <div className="prose prose-invert max-w-none">
+                                                                        <p className="whitespace-pre-wrap text-slate-200 text-base leading-7 font-medium font-sans">
+                                                                            {aiAnalysisResult}
+                                                                        </p>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="mt-6 pt-4 border-t border-white/5 flex justify-between items-center text-xs text-slate-500">
+                                                                <span className="font-mono">RistoSync Intelligence v1.0</span>
+                                                                <span className="flex items-center gap-1"><Sparkles size={10} className="text-indigo-400"/> Powered by Gemini 2.5</span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-center mt-4">
+                                                             <button onClick={() => setAiAnalysisResult('')} className="text-indigo-400 hover:text-indigo-300 text-sm font-bold">Genera nuova analisi</button>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
-                                            {!aiAnalysisResult && (
-                                                <button 
-                                                    onClick={handleRunAiAnalysis} 
-                                                    disabled={isAnalyzing}
-                                                    className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold shadow-lg shadow-indigo-600/20 transition-all active:scale-95 disabled:opacity-50 flex items-center gap-2"
-                                                >
-                                                    {isAnalyzing ? <Loader className="animate-spin" size={18}/> : <Bot size={18}/>}
-                                                    {isAnalyzing ? 'Analisi in corso...' : 'Genera Report'}
-                                                </button>
-                                            )}
                                         </div>
-                                        
-                                        {aiAnalysisResult && (
-                                            <div className="bg-slate-950/50 rounded-2xl p-6 border border-indigo-500/20 animate-fade-in relative">
-                                                <button onClick={() => setAiAnalysisResult('')} className="absolute top-4 right-4 text-slate-500 hover:text-white p-2 bg-slate-900 rounded-lg"><X size={16}/></button>
-                                                <div className="prose prose-invert prose-sm max-w-none">
-                                                    <p className="whitespace-pre-wrap font-medium text-slate-200 leading-relaxed">{aiAnalysisResult}</p>
-                                                </div>
-                                                <div className="mt-4 pt-4 border-t border-indigo-500/10 text-center">
-                                                    <p className="text-xs text-indigo-400/70 font-mono flex items-center justify-center gap-1">
-                                                        <Bot size={12}/> Analisi generata da Gemini AI
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        )}
                                     </div>
                                 </div>
 
