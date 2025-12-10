@@ -145,6 +145,7 @@ export default function App() {
 
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [ibanCopied, setIbanCopied] = useState(false);
+  const [adminEmailCopied, setAdminEmailCopied] = useState(false);
 
   const isSuperAdmin = session?.user?.email === SUPER_ADMIN_EMAIL;
 
@@ -324,6 +325,30 @@ export default function App() {
   const handleSaveProfile = async () => { const newProfile = { ...profileForm }; const newSettings: AppSettings = { ...appSettings, restaurantProfile: newProfile }; await saveAppSettings(newSettings); setAppSettingsState(newSettings); if (supabase && session?.user?.id && newProfile.name) { const { error } = await supabase.from('profiles').update({ restaurant_name: newProfile.name }).eq('id', session.user.id); if (error) console.error("Name update error:", error); } if (newProfile.name) { setRestaurantName(newProfile.name); } alert("Profilo aggiornato con successo!"); };
   const handleSocialChange = (network: string, value: string) => { setProfileForm(prev => ({ ...prev, socials: { ...prev.socials, [network]: value } })); };
   const handleCopyIban = () => { navigator.clipboard.writeText("IT73W0623074792000057589384"); setIbanCopied(true); setTimeout(() => setIbanCopied(false), 2000); };
+  const handleCopyAdminEmail = () => { navigator.clipboard.writeText(SUPER_ADMIN_EMAIL); setAdminEmailCopied(true); setTimeout(() => setAdminEmailCopied(false), 2000); };
+
+  // Dynamic Mailto Generator
+  const getPaymentMailto = () => {
+      const subject = encodeURIComponent(`Conferma Pagamento - ${profileForm.name || 'Ristorante'}`);
+      const body = encodeURIComponent(`Salve,
+
+Ho effettuato il pagamento per il rinnovo dell'abbonamento RistoSync.
+
+DATI RISTORANTE:
+Nome: ${profileForm.name || ''}
+Ragione Sociale: ${profileForm.businessName || ''}
+P.IVA: ${profileForm.vatNumber || ''}
+
+DETTAGLI BONIFICO:
+Importo: € ${profileForm.subscriptionCost || '29.90'}
+Causale: ${profileForm.businessName || profileForm.name || 'Ristorante'} - Mese/Anno
+
+In allegato la distinta del pagamento.
+Attendo conferma attivazione.
+
+Cordiali saluti.`);
+      return `mailto:${SUPER_ADMIN_EMAIL}?subject=${subject}&body=${body}`;
+  };
 
   const filteredHistoryOrders = useMemo(() => {
       return ordersForAnalytics.filter(o => {
@@ -485,7 +510,7 @@ export default function App() {
                                         <p className="text-[10px] text-slate-500 mt-3">Link sicuro PayPal.Me</p>
                                     </div>
                                 </div>
-                                <div className="bg-slate-900 rounded-3xl border border-slate-800 p-6"><h4 className="font-bold text-white mb-6 flex items-center gap-2"><Banknote size={20} className="text-green-500"/> Coordinate Bancarie (Bonifico)</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm"><div><p className="text-slate-500 mb-1">Intestatario</p><p className="text-white font-bold text-lg mb-4">Massimo Castro</p><p className="text-slate-500 mb-1">IBAN</p><div className="flex items-center gap-2 bg-slate-950 p-3 rounded-lg border border-slate-800"><p className="text-white font-mono select-all cursor-text text-xs md:text-sm flex-1">IT73W0623074792000057589384</p><button onClick={handleCopyIban} className="p-2 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors relative" title="Copia IBAN">{ibanCopied ? <Check size={16} className="text-green-500"/> : <Copy size={16}/>}</button></div></div><div><p className="text-slate-500 mb-1">Causale</p><p className="text-white font-bold mb-4">{profileForm.businessName || restaurantName} - Mese/Anno</p><div className="bg-blue-900/20 border border-blue-500/30 p-4 rounded-xl"><p className="text-blue-300 text-xs font-bold mb-1 flex items-center gap-2"><Info size={14}/> IMPORTANTE</p><p className="text-slate-400 text-xs leading-relaxed">Dopo il pagamento, invia la distinta a <strong>castro.massimo@yahoo.com</strong> o su WhatsApp al <strong>347 812 7440</strong> per l'attivazione immediata.</p></div></div></div></div>
+                                <div className="bg-slate-900 rounded-3xl border border-slate-800 p-6"><h4 className="font-bold text-white mb-6 flex items-center gap-2"><Banknote size={20} className="text-green-500"/> Coordinate Bancarie (Bonifico)</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm"><div><p className="text-slate-500 mb-1">Intestatario</p><p className="text-white font-bold text-lg mb-4">Massimo Castro</p><p className="text-slate-500 mb-1">IBAN</p><div className="flex items-center gap-2 bg-slate-950 p-3 rounded-lg border border-slate-800"><p className="text-white font-mono select-all cursor-text text-xs md:text-sm flex-1">IT73W0623074792000057589384</p><button onClick={handleCopyIban} className="p-2 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors relative" title="Copia IBAN">{ibanCopied ? <Check size={16} className="text-green-500"/> : <Copy size={16}/>}</button></div></div><div><p className="text-slate-500 mb-1">Causale</p><p className="text-white font-bold mb-4">{profileForm.businessName || restaurantName} - Mese/Anno</p><div className="bg-blue-900/20 border border-blue-500/30 p-5 rounded-2xl shadow-inner"><div className="flex items-start gap-3 mb-4"><Info size={20} className="text-blue-400 shrink-0 mt-0.5" /><div><p className="text-blue-300 text-xs font-black uppercase tracking-wider mb-1">CONFERMA PAGAMENTO</p><p className="text-slate-400 text-xs leading-relaxed">Dopo il bonifico, invia la distinta a <strong>{SUPER_ADMIN_EMAIL}</strong> per l'attivazione immediata.</p></div></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><a href={getPaymentMailto()} className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-xl font-bold text-xs transition-all shadow-lg shadow-blue-600/20"><Send size={14} /> INVIA EMAIL CON DATI</a><button onClick={handleCopyAdminEmail} className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white py-2.5 rounded-xl font-bold text-xs transition-all border border-slate-700">{adminEmailCopied ? <Check size={14} className="text-green-500"/> : <Copy size={14} />} {adminEmailCopied ? 'EMAIL COPIATA' : 'COPIA INDIRIZZO EMAIL'}</button></div></div></div></div></div>
                             </div>
                         )}
                         {/* PROFILE TAB (EXPANDED) */}
