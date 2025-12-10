@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, signOut } from '../services/supabase';
-import { ShieldCheck, Users, Database, LogOut, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon, FileText, MapPin, CreditCard, Mail, MessageCircle, Share2, PhoneCall, Facebook, Instagram, Store, Compass, Wrench, Calendar, DollarSign, Briefcase, Sparkles } from 'lucide-react';
+import { ShieldCheck, Users, Database, LogOut, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon, FileText, MapPin, CreditCard, Mail, MessageCircle, Share2, PhoneCall, Facebook, Instagram, Store, Compass, Wrench, Calendar, DollarSign, Briefcase, Sparkles, Clock, AlertOctagon } from 'lucide-react';
 
 interface SuperAdminDashboardProps {
     onEnterApp: () => void;
@@ -14,23 +14,20 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     const [copiedSQL, setCopiedSQL] = useState(false);
     const [copiedDemo, setCopiedDemo] = useState(false);
     const [copiedRecovery, setCopiedRecovery] = useState(false);
-    const [copiedPublic, setCopiedPublic] = useState(false);
-    const [copiedImage, setCopiedImage] = useState(false);
     const [copiedFix, setCopiedFix] = useState(false);
     const [currentEmail, setCurrentEmail] = useState<string>('');
     const [showSqlModal, setShowSqlModal] = useState(false);
-    const [showRecoveryModal, setShowRecoveryModal] = useState(false);
-    const [showPublicModal, setShowPublicModal] = useState(false);
-    const [showImageModal, setShowImageModal] = useState(false);
     const [showFixModal, setShowFixModal] = useState(false);
     
+    // Edit State
     const [viewingProfile, setViewingProfile] = useState<any | null>(null);
     const [isEditingRegistry, setIsEditingRegistry] = useState(false);
     const [registryForm, setRegistryForm] = useState<any>({});
     const [subDate, setSubDate] = useState(''); 
-    const [subCost, setSubCost] = useState(''); // New: Cost State
-    const [subPlan, setSubPlan] = useState(''); // New: Plan Type State
+    const [subCost, setSubCost] = useState(''); 
+    const [subPlan, setSubPlan] = useState(''); 
 
+    // Inline Name Edit
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editName, setEditName] = useState('');
     
@@ -63,6 +60,8 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
             businessName: profileData.businessName || '', 
             responsiblePerson: profileData.responsiblePerson || '',
             vatNumber: profileData.vatNumber || '',
+            sdiCode: profileData.sdiCode || '', // Added
+            pecEmail: profileData.pecEmail || '', // Added
             phoneNumber: profileData.phoneNumber || '',
             landlineNumber: profileData.landlineNumber || '',
             whatsappNumber: profileData.whatsappNumber || '',
@@ -70,7 +69,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
             address: profileData.address || '',
             billingAddress: profileData.billingAddress || '',
             website: profileData.website || '',
-            socials: profileData.socials || {}
+            socials: profileData.socials || { instagram: '', facebook: '', google: '', tripadvisor: '' }
         });
 
         setSubDate(profileData.subscriptionEndDate || '');
@@ -81,10 +80,17 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     const handleRegistryChange = (field: string, value: string) => {
         setRegistryForm((prev: any) => ({ ...prev, [field]: value }));
     };
+    
+    const handleSocialChange = (network: string, value: string) => {
+        setRegistryForm((prev: any) => ({ 
+            ...prev, 
+            socials: { ...prev.socials, [network]: value } 
+        }));
+    };
 
     const activateFreeTrial = () => {
         const today = new Date();
-        today.setDate(today.getDate() + 15);
+        today.setDate(today.getDate() + 15); // 15 Giorni
         setSubDate(today.toISOString());
         setSubPlan('Trial');
     };
@@ -105,10 +111,12 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
             }
         };
 
+        // Aggiorna stato locale
         const updatedProfile = { ...viewingProfile, settings: updatedSettings };
         setViewingProfile(updatedProfile);
         setProfiles(prev => prev.map(p => p.id === viewingProfile.id ? updatedProfile : p));
 
+        // Aggiorna DB
         const { error } = await supabase
             .from('profiles')
             .update({ settings: updatedSettings })
@@ -119,27 +127,33 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
             fetchProfiles();
         } else {
             setIsEditingRegistry(false);
-            alert("Dati aggiornati con successo!");
+            // alert("Dati aggiornati con successo!");
         }
     };
 
-    // ... (Other functions like toggleStatus, deleteProfile, etc. kept same) ...
     const toggleStatus = async (id: string, currentStatus: string, email: string) => { if (id.startsWith('demo-')) { alert("Questa è una riga simulata."); return; } if (email === SUPER_ADMIN_EMAIL) { alert("Non puoi sospendere l'account Super Admin."); return; } if (!supabase) return; const newStatus = currentStatus === 'active' ? 'suspended' : 'active'; const { error } = await supabase.from('profiles').update({ subscription_status: newStatus }).eq('id', id); if (!error) fetchProfiles(); else alert("Errore modifica stato: " + error.message); };
     const deleteProfile = async (id: string, name: string, email: string) => { if (email === SUPER_ADMIN_EMAIL) { alert("OPERAZIONE NEGATA."); return; } if (id.startsWith('demo-')) { setProfiles(prev => prev.filter(p => p.id !== id)); return; } if (!confirm(`⚠️ ATTENZIONE: ELIMINAZIONE RISTORANTE\n\nStai per cancellare definitivamente:\nNome: "${name}"\nEmail: ${email}\n\nSei assolutamente sicuro di voler ELIMINARE?`)) { return; } if (!supabase) return; const { error } = await supabase.from('profiles').delete().eq('id', id); if (!error) { fetchProfiles(); } else { console.error(error); alert("ERRORE CANCELLAZIONE: " + error.message); } };
     const startEdit = (profile: any) => { if (profile.id.startsWith('demo-')) return; setEditingId(profile.id); setEditName(profile.restaurant_name || ''); };
     const cancelEdit = () => { setEditingId(null); setEditName(''); };
     const saveEdit = async () => { if (!supabase || !editingId) return; const { error } = await supabase.from('profiles').update({ restaurant_name: editName }).eq('id', editingId); if (!error) { setEditingId(null); fetchProfiles(); } else { alert("Errore salvataggio: " + error.message); } };
-    const simulateDemoRow = () => { const fakeId = `demo-${Date.now()}`; const fakeProfile = { id: fakeId, restaurant_name: 'Ristorante Demo (Simulato)', email: 'demo@ristosync.com', subscription_status: 'active', created_at: new Date().toISOString(), settings: { restaurantProfile: { address: "Via Roma 1, Milano", vatNumber: "IT12345678901", phoneNumber: "3339998877" } } }; setProfiles(prev => [fakeProfile, ...prev]); };
     const addMonths = (dateStr: string, months: number) => { const d = dateStr ? new Date(dateStr) : new Date(); d.setMonth(d.getMonth() + months); return d.toISOString().split('T')[0]; };
+    
+    // Status Logic
     const getStatusColor = (profile: any) => { if (profile.subscription_status === 'banned') return 'bg-red-500/20 text-red-400 border-red-500/30'; if (profile.subscription_status === 'suspended') return 'bg-orange-500/20 text-orange-400 border-orange-500/30'; const expiry = profile.settings?.restaurantProfile?.subscriptionEndDate; if (expiry && new Date(expiry) < new Date()) return 'bg-red-500/20 text-red-400 border-red-500/30 animate-pulse'; return 'bg-green-500/20 text-green-400 border-green-500/30'; };
-    const copySQL = (sql: string, type: 'reset' | 'demo' | 'recovery' | 'public' | 'image' | 'fix') => { navigator.clipboard.writeText(sql); if (type === 'reset') { setCopiedSQL(true); setTimeout(() => setCopiedSQL(false), 2000); } else if (type === 'demo') { setCopiedDemo(true); setTimeout(() => setCopiedDemo(false), 2000); } else if (type === 'public') { setCopiedPublic(true); setTimeout(() => setCopiedPublic(false), 2000); } else if (type === 'image') { setCopiedImage(true); setTimeout(() => setCopiedImage(false), 2000); } else if (type === 'fix') { setCopiedFix(true); setTimeout(() => setCopiedFix(false), 2000); } else { setCopiedRecovery(true); setTimeout(() => setCopiedRecovery(false), 2000); } };
+    const copySQL = (sql: string, type: 'reset' | 'demo' | 'recovery' | 'fix') => { navigator.clipboard.writeText(sql); if (type === 'demo') { setCopiedDemo(true); setTimeout(() => setCopiedDemo(false), 2000); } else if (type === 'fix') { setCopiedFix(true); setTimeout(() => setCopiedFix(false), 2000); } else { setCopiedRecovery(true); setTimeout(() => setCopiedRecovery(false), 2000); } };
     const getDemoUserSQL = () => `create extension if not exists pgcrypto; insert into auth.users (id, instance_id, email, encrypted_password, email_confirmed_at, aud, role, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token) values ('d0d0d0d0-d0d0-d0d0-d0d0-d0d0d0d0d0d0', '00000000-0000-0000-0000-000000000000', 'demo@ristosync.com', crypt('password123', gen_salt('bf')), now(), 'authenticated', 'authenticated', '{"provider":"email","providers":["email"]}', '{"restaurant_name":"Ristorante Demo"}', now(), now(), '', '') on conflict (id) do nothing; insert into public.profiles (id, email, restaurant_name, subscription_status) values ('d0d0d0d0-d0d0-d0d0-d0d0-d0d0d0d0d0d0', 'demo@ristosync.com', 'Ristorante Demo', 'active') on conflict (id) do update set restaurant_name = 'Ristorante Demo';`;
-    const getFixStructureSQL = () => `-- 1. AGGIUNGI COLONNA SETTINGS (Se manca)\nalter table public.profiles add column if not exists settings jsonb default '{}'::jsonb;\n\n-- 2. FORZA AGGIORNAMENTO CACHE API\nNOTIFY pgrst, 'reload schema';\n\n-- 3. ABILITA PERMESSI SUPER ADMIN\ndrop policy if exists "Super Admin Update All" on public.profiles;\ncreate policy "Super Admin Update All" on public.profiles for update\nusing (auth.jwt() ->> 'email' = '${SUPER_ADMIN_EMAIL}');\n\n-- 4. GARANTISCI CHE GLI UTENTI POSSANO MODIFICARE SE STESSI\ndrop policy if exists "User update own profile" on public.profiles;\ncreate policy "User update own profile" on public.profiles for update using (auth.uid() = id);`;
+    const getFixStructureSQL = () => `-- RIPARAZIONE STRUTTURA E PERMESSI\nalter table public.profiles add column if not exists settings jsonb default '{}'::jsonb;\nNOTIFY pgrst, 'reload schema';\ndrop policy if exists "Super Admin Update All" on public.profiles;\ncreate policy "Super Admin Update All" on public.profiles for update using (auth.jwt() ->> 'email' = '${SUPER_ADMIN_EMAIL}');\ndrop policy if exists "User update own profile" on public.profiles;\ncreate policy "User update own profile" on public.profiles for update using (auth.uid() = id);`;
     const isEmailCorrect = currentEmail.toLowerCase() === SUPER_ADMIN_EMAIL;
+
+    // Derived Status for Modal
+    const isTrial = subPlan === 'Trial';
+    const isExpired = subDate && new Date(subDate) < new Date();
+    const statusLabel = isExpired ? 'SCADUTO' : isTrial ? 'IN PROVA' : 'ATTIVO';
+    const statusColorClass = isExpired ? 'bg-red-600' : isTrial ? 'bg-blue-500' : 'bg-green-600';
 
     return (
         <div className="min-h-screen bg-slate-900 text-white font-sans p-4 md:p-8">
-            <div className="max-w-6xl mx-auto">
+            <div className="max-w-7xl mx-auto">
                 <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
                     <div className="flex items-center gap-4"><div className="p-4 bg-red-600 rounded-2xl shadow-lg shadow-red-600/20"><ShieldCheck size={32} /></div><div><h1 className="text-3xl font-black">SUPER ADMIN</h1><div className="flex items-center gap-2 text-slate-400 text-sm"><User size={14}/> {currentEmail ? (<span>Loggato come: <strong className={isEmailCorrect ? "text-green-400" : "text-red-400"}>{currentEmail}</strong></span>) : 'Verifica utente...'}</div></div></div>
                     <div className="flex gap-3"><button onClick={onEnterApp} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-600/20 transition-all"><Smartphone size={18} /> Entra come Utente</button><button onClick={signOut} className="flex items-center gap-2 text-slate-400 hover:text-white bg-slate-800 px-6 py-3 rounded-xl font-bold border border-slate-700"><LogOut size={18} /> Logout</button></div>
@@ -169,55 +183,183 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
 
             {/* EDITABLE ANAGRAFICA & SUBSCRIPTION MODAL */}
             {viewingProfile && (
-                <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-                    <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-2xl shadow-2xl animate-slide-up relative flex flex-col max-h-[90vh]">
-                        <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900 rounded-t-3xl"><div><h2 className="text-xl font-bold text-white flex items-center gap-2"><FileText className="text-indigo-500" /> Scheda & Abbonamento</h2><p className="text-slate-400 text-sm">{viewingProfile.restaurant_name}</p></div><div className="flex gap-2">{!isEditingRegistry ? (<button onClick={() => setIsEditingRegistry(true)} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl flex items-center gap-2 transition-colors text-xs"><Edit2 size={14}/> MODIFICA</button>) : (<button onClick={saveRegistryChanges} className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl flex items-center gap-2 transition-colors text-xs"><Save size={14}/> SALVA</button>)}<button onClick={() => setViewingProfile(null)} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors"><X size={20}/></button></div></div>
-                        <div className="p-6 overflow-y-auto space-y-6 bg-slate-900">
-                            
-                            {/* SUBSCRIPTION MANAGEMENT */}
-                            <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 p-3 opacity-5"><DollarSign size={80} className="text-green-500"/></div>
-                                <h3 className="text-xs font-bold text-green-500 uppercase mb-4 flex items-center gap-2"><Calendar size={14}/> Stato Abbonamento</h3>
-                                
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-                                    <div>
-                                        <label className="text-[10px] text-slate-500 uppercase block mb-1">Scadenza Attuale</label>
-                                        {isEditingRegistry ? (<input type="date" value={subDate || ''} onChange={(e) => setSubDate(e.target.value)} className="bg-slate-900 border border-slate-700 text-white p-2 rounded-lg w-full font-bold focus:border-green-500 outline-none"/>) : (<div className="flex items-center gap-2"><p className={`text-xl font-mono font-bold ${subDate && new Date(subDate) < new Date() ? 'text-red-500 animate-pulse' : 'text-white'}`}>{subDate ? new Date(subDate).toLocaleDateString() : 'Nessuna data'}</p>{subDate && new Date(subDate) < new Date() && <span className="text-[10px] bg-red-600 text-white px-2 py-0.5 rounded font-bold uppercase">SCADUTO</span>}</div>)}
-                                        <p className="text-[10px] text-slate-500 mt-1">Imposta una data futura per riattivare il servizio.</p>
+                <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+                    <div className="bg-slate-900 border border-slate-700 rounded-[2rem] w-full max-w-5xl shadow-2xl animate-slide-up relative flex flex-col max-h-[95vh]">
+                        {/* HEADER MODAL */}
+                        <div className="p-6 border-b border-slate-800 flex justify-between items-start bg-slate-950 rounded-t-[2rem]">
+                            <div className="flex items-start gap-4">
+                                <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg ${statusColorClass} text-white`}>
+                                    <Store size={28} />
+                                </div>
+                                <div>
+                                    <div className="flex items-center gap-3">
+                                        <h2 className="text-2xl font-black text-white">{viewingProfile.restaurant_name}</h2>
+                                        <div className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider text-white shadow-sm ${statusColorClass}`}>{statusLabel}</div>
                                     </div>
-                                    
-                                    <div>
-                                        <label className="text-[10px] text-slate-500 uppercase block mb-1">Costo Mensile (€)</label>
-                                        {isEditingRegistry ? (
-                                            <input type="text" value={subCost} onChange={(e) => setSubCost(e.target.value)} className="bg-slate-900 border border-slate-700 text-white p-2 rounded-lg w-full font-bold focus:border-green-500 outline-none text-right" placeholder="29.90"/>
-                                        ) : (
-                                            <p className="text-xl font-mono font-bold text-white text-right">€ {subCost || '29.90'}</p>
-                                        )}
-                                        <p className="text-[10px] text-slate-500 mt-1 text-right">Visibile al cliente nella dashboard.</p>
+                                    <div className="flex items-center gap-4 text-sm text-slate-400 mt-1">
+                                        <div className="flex items-center gap-1"><Mail size={12}/> {viewingProfile.email}</div>
+                                        <div className="flex items-center gap-1 font-mono text-xs opacity-50"><Database size={10}/> {viewingProfile.id}</div>
                                     </div>
-
-                                    {isEditingRegistry && (
-                                        <div className="col-span-full border-t border-slate-800 pt-3">
-                                            <div className="flex flex-wrap gap-2 justify-end">
-                                                <button onClick={activateFreeTrial} className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg border border-blue-500/50 flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"><Sparkles size={14}/> Attiva 15gg Gratis</button>
-                                                <button onClick={() => setSubDate(addMonths(subDate, 1))} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg border border-slate-700 flex items-center justify-center gap-2">+1 Mese</button>
-                                                <button onClick={() => setSubDate(addMonths(subDate, 12))} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg border border-slate-700 flex items-center justify-center gap-2">+1 Anno</button>
-                                            </div>
-                                        </div>
-                                    )}
                                 </div>
                             </div>
-
-                            {/* Account Info (Read Only) */}
-                            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800"><h3 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2"><User size={14}/> Account ID (Non modificabile)</h3><div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] text-slate-500 uppercase block mb-1">ID Tenant</label><p className="text-xs font-mono text-slate-300 break-all">{viewingProfile.id}</p></div><div><label className="text-[10px] text-slate-500 uppercase block mb-1">Email Login</label><p className="text-xs font-mono text-slate-300 break-all">{viewingProfile.email}</p></div></div></div>
-
-                            {/* EDIT FORM */}
-                            <div className="space-y-4">
-                                <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-700"><h4 className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-2"><Briefcase size={14}/> Dati Aziendali</h4><div className="grid grid-cols-1 gap-3"><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Ragione Sociale</label>{isEditingRegistry ? (<input type="text" value={registryForm.businessName} onChange={e => handleRegistryChange('businessName', e.target.value)} className="w-full bg-slate-950 border border-slate-600 rounded px-2 py-1 text-white" placeholder="Es. Rossi S.r.l." />) : ( <p className="text-white font-bold">{viewingProfile.settings?.restaurantProfile?.businessName || '-'}</p> )}</div><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Responsabile</label>{isEditingRegistry ? (<input type="text" value={registryForm.responsiblePerson} onChange={e => handleRegistryChange('responsiblePerson', e.target.value)} className="w-full bg-slate-950 border border-slate-600 rounded px-2 py-1 text-white" placeholder="Nome Cognome" />) : ( <p className="text-white font-bold">{viewingProfile.settings?.restaurantProfile?.responsiblePerson || '-'}</p> )}</div></div></div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div className="bg-slate-800 p-3 rounded-xl border border-slate-700"><div className="flex items-center gap-2 mb-2 text-slate-400 text-xs font-bold uppercase"><CreditCard size={14}/> P.IVA / C.F.</div>{isEditingRegistry ? (<input type="text" value={registryForm.vatNumber} onChange={e => handleRegistryChange('vatNumber', e.target.value)} className="w-full bg-slate-950 border border-slate-600 rounded px-2 py-1 text-white font-mono" placeholder="IT..." />) : ( <p className="text-white font-mono font-bold text-lg">{viewingProfile.settings?.restaurantProfile?.vatNumber || '-'}</p> )}</div><div className="bg-slate-800 p-3 rounded-xl border border-slate-700"><div className="flex items-center gap-2 mb-2 text-slate-400 text-xs font-bold uppercase"><Smartphone size={14}/> Cellulare</div>{isEditingRegistry ? (<input type="text" value={registryForm.phoneNumber} onChange={e => handleRegistryChange('phoneNumber', e.target.value)} className="w-full bg-slate-950 border border-slate-600 rounded px-2 py-1 text-white" placeholder="333..." />) : ( <p className="text-white font-bold">{viewingProfile.settings?.restaurantProfile?.phoneNumber || '-'}</p> )}</div></div>
+                            <div className="flex gap-2">
+                                {!isEditingRegistry ? (
+                                    <button onClick={() => setIsEditingRegistry(true)} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-indigo-600/20 hover:scale-105 active:scale-95 text-xs uppercase tracking-wide"><Edit2 size={16}/> Modifica Dati</button>
+                                ) : (
+                                    <button onClick={saveRegistryChanges} className="px-5 py-2.5 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-green-600/20 hover:scale-105 active:scale-95 text-xs uppercase tracking-wide animate-pulse"><Save size={16}/> Salva Tutto</button>
+                                )}
+                                <button onClick={() => setViewingProfile(null)} className="p-2.5 bg-slate-800 rounded-xl text-slate-400 hover:text-white hover:bg-slate-700 transition-colors"><X size={20}/></button>
                             </div>
                         </div>
-                        <div className="p-4 bg-slate-900 border-t border-slate-800 rounded-b-3xl flex justify-end gap-3">{isEditingRegistry && <button onClick={() => setIsEditingRegistry(false)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-colors">Annulla</button>}<button onClick={isEditingRegistry ? saveRegistryChanges : () => setViewingProfile(null)} className={`px-6 py-2 font-bold rounded-xl transition-colors ${isEditingRegistry ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-slate-800 hover:bg-slate-700 text-white'}`}>{isEditingRegistry ? 'Salva Modifiche' : 'Chiudi'}</button></div>
+
+                        <div className="flex-1 overflow-y-auto p-6 bg-slate-900 custom-scroll">
+                            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                
+                                {/* COLONNA SINISTRA - ABBONAMENTO (CRITICO) */}
+                                <div className="space-y-6">
+                                    <div className={`p-6 rounded-3xl border relative overflow-hidden ${isExpired ? 'bg-red-900/10 border-red-500/30' : isTrial ? 'bg-blue-900/10 border-blue-500/30' : 'bg-green-900/10 border-green-500/30'}`}>
+                                        <div className="absolute top-0 right-0 p-4 opacity-10"><Calendar size={120} className={isExpired ? 'text-red-500' : isTrial ? 'text-blue-500' : 'text-green-500'}/></div>
+                                        
+                                        <h3 className={`text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2 ${isExpired ? 'text-red-400' : isTrial ? 'text-blue-400' : 'text-green-400'}`}><CreditCard size={14}/> Stato Abbonamento</h3>
+                                        
+                                        <div className="space-y-4 relative z-10">
+                                            <div>
+                                                <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Scadenza</label>
+                                                {isEditingRegistry ? (
+                                                    <input type="date" value={subDate ? subDate.split('T')[0] : ''} onChange={(e) => setSubDate(e.target.value)} className="bg-slate-950 border border-slate-700 text-white p-3 rounded-xl w-full font-bold focus:border-indigo-500 outline-none shadow-inner"/>
+                                                ) : (
+                                                    <p className={`text-3xl font-black font-mono tracking-tight ${isExpired ? 'text-red-500' : 'text-white'}`}>{subDate ? new Date(subDate).toLocaleDateString() : 'N/A'}</p>
+                                                )}
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Piano</label>
+                                                    {isEditingRegistry ? (
+                                                        <select value={subPlan} onChange={(e) => setSubPlan(e.target.value)} className="bg-slate-950 border border-slate-700 text-white p-2 rounded-lg w-full text-xs font-bold outline-none">
+                                                            <option value="Pro">Pro</option>
+                                                            <option value="Trial">Trial (Prova)</option>
+                                                            <option value="Enterprise">Enterprise</option>
+                                                        </select>
+                                                    ) : (
+                                                        <div className="bg-slate-950 px-3 py-2 rounded-lg border border-slate-800 text-white font-bold text-sm">{subPlan || 'Pro'}</div>
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Costo (€)</label>
+                                                    {isEditingRegistry ? (
+                                                        <input type="text" value={subCost} onChange={(e) => setSubCost(e.target.value)} className="bg-slate-950 border border-slate-700 text-white p-2 rounded-lg w-full text-xs font-bold text-right outline-none"/>
+                                                    ) : (
+                                                        <div className="bg-slate-950 px-3 py-2 rounded-lg border border-slate-800 text-white font-bold text-sm text-right">€ {subCost || '29.90'}</div>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* AZIONI RAPIDE */}
+                                            {isEditingRegistry && (
+                                                <div className="pt-4 border-t border-white/5 flex flex-col gap-2">
+                                                    <button onClick={activateFreeTrial} className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 active:scale-95 transition-all">
+                                                        <Sparkles size={14} className="animate-pulse text-yellow-300"/> ATTIVA 15 GIORNI GRATIS
+                                                    </button>
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <button onClick={() => setSubDate(addMonths(subDate, 1))} className="py-2 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-bold rounded-lg border border-slate-700">+1 Mese</button>
+                                                        <button onClick={() => setSubDate(addMonths(subDate, 12))} className="py-2 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-bold rounded-lg border border-slate-700">+1 Anno</button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    
+                                    {/* INFO UTILI */}
+                                    <div className="bg-slate-950 p-5 rounded-2xl border border-slate-800">
+                                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2"><Clock size={14}/> Ultimo Accesso</h4>
+                                        <p className="text-sm text-slate-400">Non disponibile</p>
+                                    </div>
+                                </div>
+
+                                {/* COLONNA DESTRA - DATI ANAGRAFICI (LARGA) */}
+                                <div className="lg:col-span-2 space-y-6">
+                                    
+                                    {/* SEZIONE FISCALE */}
+                                    <div className="bg-slate-950/50 p-6 rounded-3xl border border-slate-800">
+                                        <h4 className="text-sm font-black text-white uppercase mb-5 flex items-center gap-2 border-b border-slate-800 pb-3"><Briefcase className="text-orange-500" size={18}/> Dati Fiscali & Aziendali</h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                            <div className="md:col-span-2">
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Ragione Sociale</label>
+                                                {isEditingRegistry ? <input type="text" value={registryForm.businessName} onChange={e => handleRegistryChange('businessName', e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold" /> : <p className="text-lg text-white font-bold">{viewingProfile.settings?.restaurantProfile?.businessName || '-'}</p>}
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">P.IVA / C.F.</label>
+                                                {isEditingRegistry ? <input type="text" value={registryForm.vatNumber} onChange={e => handleRegistryChange('vatNumber', e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono" /> : <p className="text-white font-mono bg-slate-900 px-3 py-2 rounded-lg border border-slate-800 w-max">{viewingProfile.settings?.restaurantProfile?.vatNumber || '-'}</p>}
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Responsabile Legale</label>
+                                                {isEditingRegistry ? <input type="text" value={registryForm.responsiblePerson} onChange={e => handleRegistryChange('responsiblePerson', e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white" /> : <p className="text-white">{viewingProfile.settings?.restaurantProfile?.responsiblePerson || '-'}</p>}
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Codice SDI</label>
+                                                {isEditingRegistry ? <input type="text" value={registryForm.sdiCode} onChange={e => handleRegistryChange('sdiCode', e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono uppercase" placeholder="XXXXXXX" /> : <p className="text-white font-mono">{viewingProfile.settings?.restaurantProfile?.sdiCode || '-'}</p>}
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Email PEC</label>
+                                                {isEditingRegistry ? <input type="text" value={registryForm.pecEmail} onChange={e => handleRegistryChange('pecEmail', e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono" /> : <p className="text-white font-mono">{viewingProfile.settings?.restaurantProfile?.pecEmail || '-'}</p>}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* SEZIONE CONTATTI E SEDE */}
+                                    <div className="bg-slate-950/50 p-6 rounded-3xl border border-slate-800">
+                                        <h4 className="text-sm font-black text-white uppercase mb-5 flex items-center gap-2 border-b border-slate-800 pb-3"><MapPin className="text-blue-500" size={18}/> Contatti & Sede</h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                            <div className="md:col-span-2">
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Indirizzo Sede Operativa</label>
+                                                {isEditingRegistry ? <input type="text" value={registryForm.address} onChange={e => handleRegistryChange('address', e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white" /> : <p className="text-white">{viewingProfile.settings?.restaurantProfile?.address || '-'}</p>}
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Cellulare</label>
+                                                {isEditingRegistry ? <input type="text" value={registryForm.phoneNumber} onChange={e => handleRegistryChange('phoneNumber', e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white" /> : <p className="text-white">{viewingProfile.settings?.restaurantProfile?.phoneNumber || '-'}</p>}
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Email Pubblica</label>
+                                                {isEditingRegistry ? <input type="text" value={registryForm.email} onChange={e => handleRegistryChange('email', e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white" /> : <p className="text-white">{viewingProfile.settings?.restaurantProfile?.email || '-'}</p>}
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Sito Web</label>
+                                                {isEditingRegistry ? <input type="text" value={registryForm.website} onChange={e => handleRegistryChange('website', e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-blue-400" /> : <a href={viewingProfile.settings?.restaurantProfile?.website} target="_blank" className="text-blue-400 hover:underline truncate block">{viewingProfile.settings?.restaurantProfile?.website || '-'}</a>}
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Fisso</label>
+                                                {isEditingRegistry ? <input type="text" value={registryForm.landlineNumber} onChange={e => handleRegistryChange('landlineNumber', e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-white" /> : <p className="text-white">{viewingProfile.settings?.restaurantProfile?.landlineNumber || '-'}</p>}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* SEZIONE SOCIAL */}
+                                    <div className="bg-slate-950/50 p-6 rounded-3xl border border-slate-800">
+                                        <h4 className="text-sm font-black text-white uppercase mb-5 flex items-center gap-2 border-b border-slate-800 pb-3"><Share2 className="text-pink-500" size={18}/> Social Media</h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="flex items-center gap-3 bg-slate-900 p-2 rounded-xl border border-slate-800">
+                                                <Instagram className="text-pink-500"/>
+                                                {isEditingRegistry ? <input type="text" value={registryForm.socials?.instagram || ''} onChange={e => handleSocialChange('instagram', e.target.value)} className="bg-transparent outline-none text-white text-xs w-full placeholder-slate-600" placeholder="Username/Link"/> : <span className="text-xs text-slate-300 truncate">{viewingProfile.settings?.restaurantProfile?.socials?.instagram || '-'}</span>}
+                                            </div>
+                                            <div className="flex items-center gap-3 bg-slate-900 p-2 rounded-xl border border-slate-800">
+                                                <Facebook className="text-blue-600"/>
+                                                {isEditingRegistry ? <input type="text" value={registryForm.socials?.facebook || ''} onChange={e => handleSocialChange('facebook', e.target.value)} className="bg-transparent outline-none text-white text-xs w-full placeholder-slate-600" placeholder="Link"/> : <span className="text-xs text-slate-300 truncate">{viewingProfile.settings?.restaurantProfile?.socials?.facebook || '-'}</span>}
+                                            </div>
+                                            <div className="flex items-center gap-3 bg-slate-900 p-2 rounded-xl border border-slate-800">
+                                                <Store className="text-blue-400"/>
+                                                {isEditingRegistry ? <input type="text" value={registryForm.socials?.google || ''} onChange={e => handleSocialChange('google', e.target.value)} className="bg-transparent outline-none text-white text-xs w-full placeholder-slate-600" placeholder="Google Business"/> : <span className="text-xs text-slate-300 truncate">{viewingProfile.settings?.restaurantProfile?.socials?.google || '-'}</span>}
+                                            </div>
+                                            <div className="flex items-center gap-3 bg-slate-900 p-2 rounded-xl border border-slate-800">
+                                                <Compass className="text-green-500"/>
+                                                {isEditingRegistry ? <input type="text" value={registryForm.socials?.tripadvisor || ''} onChange={e => handleSocialChange('tripadvisor', e.target.value)} className="bg-transparent outline-none text-white text-xs w-full placeholder-slate-600" placeholder="TripAdvisor"/> : <span className="text-xs text-slate-300 truncate">{viewingProfile.settings?.restaurantProfile?.socials?.tripadvisor || '-'}</span>}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
