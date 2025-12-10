@@ -226,7 +226,12 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
             <div className="max-w-7xl mx-auto">
                 <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
                     <div className="flex items-center gap-4"><div className="p-4 bg-red-600 rounded-2xl shadow-lg shadow-red-600/20"><ShieldCheck size={32} /></div><div><h1 className="text-3xl font-black">SUPER ADMIN</h1><div className="flex items-center gap-2 text-slate-400 text-sm"><User size={14}/> {currentEmail ? (<span>Loggato come: <strong className={isEmailCorrect ? "text-green-400" : "text-red-400"}>{currentEmail}</strong></span>) : 'Verifica utente...'}</div></div></div>
-                    <div className="flex gap-3"><button onClick={onEnterApp} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-600/20 transition-all"><Smartphone size={18} /> Entra come Utente</button><button onClick={signOut} className="flex items-center gap-2 text-slate-400 hover:text-white bg-slate-800 px-6 py-3 rounded-xl font-bold border border-slate-700"><LogOut size={18} /> Logout</button></div>
+                    <div className="flex gap-3">
+                        <button onClick={() => setShowFixModal(true)} className="p-3 bg-red-600/20 rounded-xl text-red-400 hover:text-white hover:bg-red-600 transition-colors border border-red-500/50 shadow-lg shadow-red-900/20 active:scale-95" title="Strumenti Riparazione DB"><Wrench size={20} /></button>
+                        <button onClick={() => setShowSqlModal(true)} className="p-3 bg-slate-800 rounded-xl text-slate-400 hover:text-white hover:bg-slate-700 transition-colors border border-slate-700 active:scale-95" title="Genera Demo User"><Database size={20} /></button>
+                        <button onClick={onEnterApp} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-600/20 transition-all"><Smartphone size={18} /> Entra come Utente</button>
+                        <button onClick={signOut} className="flex items-center gap-2 text-slate-400 hover:text-white bg-slate-800 px-6 py-3 rounded-xl font-bold border border-slate-700"><LogOut size={18} /> Logout</button>
+                    </div>
                 </div>
 
                 {/* GLOBAL CONFIGURATION CARD */}
