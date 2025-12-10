@@ -1,9 +1,10 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Order, OrderStatus, Category, AppSettings, Department, OrderItem } from '../types';
 import { getOrders, updateOrderStatus, toggleOrderItemCompletion, getAppSettings } from '../services/storageService';
-import { Clock, CheckCircle, ChefHat, Bell, User, LogOut, Square, CheckSquare, AlertOctagon, Timer, PlusCircle, History, Calendar, ChevronLeft, ChevronRight, DollarSign, UtensilsCrossed, Receipt, Pizza, ArrowRightLeft, Utensils, CakeSlice, Wine, Sandwich } from 'lucide-react';
+import { Clock, CheckCircle, ChefHat, Bell, User, LogOut, Square, CheckSquare, AlertOctagon, Timer, PlusCircle, History, Calendar, ChevronLeft, ChevronRight, DollarSign, UtensilsCrossed, Receipt, Pizza, ArrowRightLeft, Utensils, CakeSlice, Wine, Sandwich, ListPlus } from 'lucide-react';
 
 const CATEGORY_PRIORITY: Record<Category, number> = {
+    [Category.MENU_COMPLETO]: 0,
     [Category.ANTIPASTI]: 1,
     [Category.PANINI]: 2,
     [Category.PIZZE]: 3,
@@ -230,6 +231,14 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
       ThemeIcon = Sandwich;
   }
 
+  // --- HELPER: CHECK ITEM DESTINATION (Crucial for Menu Completo Routing) ---
+  const getItemDestination = (item: OrderItem): Department => {
+      // 1. If item has specific override (Menu Completo logic), use it.
+      if (item.menuItem.specificDepartment) return item.menuItem.specificDepartment;
+      // 2. Otherwise use category mapping from settings
+      return appSettings.categoryDestinations[item.menuItem.category];
+  };
+
   const showNotification = (msg: string, type: 'info' | 'success' | 'alert') => {
       setNotification({ msg, type });
       setTimeout(() => setNotification(null), 5000);
@@ -254,8 +263,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
         // 1. FILTER FOR RELEVANT ITEMS
         const relevantNewOrders = addedOrders.filter(order => 
             order.items.some(item => {
-                const dest = appSettings.categoryDestinations[item.menuItem.category];
-                return dest === department; 
+                return getItemDestination(item) === department;
             })
         );
 
@@ -268,7 +276,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
             // If Admin enabled auto-print for this department, we print HERE, on the receiving terminal.
             // This prevents popup blockers on the waiter's device.
             if (appSettings.printEnabled && appSettings.printEnabled[department]) {
-                const itemsForDept = newOrder.items.filter(i => appSettings.categoryDestinations[i.menuItem.category] === department);
+                const itemsForDept = newOrder.items.filter(i => getItemDestination(i) === department);
                 
                 if (itemsForDept.length > 0) {
                     const printContent = generateReceiptHtml(
@@ -373,7 +381,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
       let totalItems = 0;
       filteredHistoryOrders.forEach(order => {
           // Filter items specific to this department for accurate stats
-          const relevantItems = order.items.filter(i => appSettings.categoryDestinations[i.menuItem.category] === department);
+          const relevantItems = order.items.filter(i => getItemDestination(i) === department);
           
           const orderTotal = relevantItems.reduce((acc, i) => acc + (i.menuItem.price * i.quantity), 0);
           totalRevenue += orderTotal;
@@ -465,7 +473,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
 
                // COORDINATION LOGIC: Check for items from the OTHER department
                const otherDeptItems = order.items.filter(i => {
-                   const dest = appSettings.categoryDestinations[i.menuItem.category];
+                   const dest = getItemDestination(i);
                    // If we are Pizzeria/Pub, we look for 'Cucina'. If Kitchen, we look for 'Pizzeria' or 'Pub'.
                    // Items for 'Sala' (Drinks) are ignored for coordination.
                    // NOTE: For Pub, user said no sync needed, but we keep this visual aid if applicable.
@@ -477,8 +485,8 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
                const visibleItems = order.items
                   .map((item, originalIndex) => ({ item, originalIndex }))
                   .filter(({ item }) => {
-                      const dest = appSettings.categoryDestinations[item.menuItem.category];
-                      return dest === department; 
+                      // USE UPDATED HELPER FOR SPECIFIC ROUTING
+                      return getItemDestination(item) === department; 
                   })
                   .sort((a, b) => (CATEGORY_PRIORITY[a.item.menuItem.category] || 99) - (CATEGORY_PRIORITY[b.item.menuItem.category] || 99));
 
@@ -529,9 +537,14 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
                                   <span className={`font-black text-2xl w-10 h-10 flex items-center justify-center rounded-lg shadow-inner ${item.completed ? 'bg-green-900/30 text-green-400' : 'bg-slate-700 text-white'}`}>{item.quantity}</span>
                                   <div className="flex-1 min-w-0">
                                       <div className="flex items-center gap-2">
-                                          <p className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${isPizzeria ? 'text-red-500' : isPub ? 'text-amber-500' : 'text-orange-500'}`}>{item.menuItem.category}</p>
+                                          {item.menuItem.category === Category.MENU_COMPLETO ? (
+                                              <p className="text-[10px] font-bold uppercase tracking-wider mb-0.5 text-pink-500 flex items-center gap-1"><ListPlus size={10}/> MENU COMBO</p>
+                                          ) : (
+                                              <p className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${isPizzeria ? 'text-red-500' : isPub ? 'text-amber-500' : 'text-orange-500'}`}>{item.menuItem.category}</p>
+                                          )}
                                       </div>
                                       <p className={`font-black text-3xl leading-none tracking-tight break-words ${item.completed ? 'text-slate-600 line-through' : 'bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent'}`}>{item.menuItem.name}</p>
+                                      {item.menuItem.ingredients && <p className="text-[10px] text-slate-500 mt-1 italic">{item.menuItem.ingredients}</p>}
                                       {item.notes && <p className="text-red-300 text-sm font-bold mt-2 bg-red-900/20 inline-block px-3 py-1 rounded border border-red-900/30 shadow-sm">⚠️ {item.notes}</p>}
                                   </div>
                               </div>
@@ -572,7 +585,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
               {/* RECEIPTS GRID */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 overflow-y-auto pb-10">
                   {filteredHistoryOrders.map(order => {
-                      const items = order.items.filter(i => appSettings.categoryDestinations[i.menuItem.category] === department);
+                      const items = order.items.filter(i => getItemDestination(i) === department);
                       if (items.length === 0) return null;
 
                       const total = items.reduce((acc, i) => acc + (i.menuItem.price * i.quantity), 0);
@@ -614,7 +627,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
                           </div>
                       );
                   })}
-                  {filteredHistoryOrders.every(o => o.items.filter(i => appSettings.categoryDestinations[i.menuItem.category] === department).length === 0) && (
+                  {filteredHistoryOrders.every(o => o.items.filter(i => getItemDestination(i) === department).length === 0) && (
                       <div className="col-span-full flex flex-col items-center justify-center py-20 text-slate-600">
                           <Receipt size={64} className="opacity-20 mb-4"/>
                           <p className="font-bold text-lg">Nessuno scontrino presente</p>

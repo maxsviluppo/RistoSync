@@ -533,6 +533,7 @@ export const saveGoogleApiKey = async (apiKey: string) => {
 // --- APP SETTINGS (DESTINATIONS) ---
 const DEFAULT_SETTINGS: AppSettings = {
     categoryDestinations: {
+        [Category.MENU_COMPLETO]: 'Cucina', // Default for Combo
         [Category.ANTIPASTI]: 'Cucina',
         [Category.PANINI]: 'Pub', 
         [Category.PIZZE]: 'Pizzeria', 

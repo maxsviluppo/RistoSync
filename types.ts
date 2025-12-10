@@ -1,3 +1,4 @@
+
 export enum OrderStatus {
   PENDING = 'In Attesa',
   COOKING = 'In Preparazione',
@@ -6,6 +7,7 @@ export enum OrderStatus {
 }
 
 export enum Category {
+  MENU_COMPLETO = 'Menu Completo', // New Combo Category
   ANTIPASTI = 'Antipasti',
   PANINI = 'Panini',
   PIZZE = 'Pizze',
@@ -79,8 +81,14 @@ export interface MenuItem {
   price: number;
   category: Category;
   description?: string; // Used for AI context
+  ingredients?: string; // New: Specific ingredients field
   allergens?: string[]; // Array of allergen names (e.g., 'Glutine', 'Latte')
   image?: string; // Base64 encoded image
+  
+  // Combo / Menu Completo specific fields
+  isCombo?: boolean;
+  comboItems?: string[]; // Array of IDs of other dishes included
+  specificDepartment?: Department; // Overrides category destination (e.g. Pizza Menu goes to Pizzeria, Burger Menu to Pub)
 }
 
 export interface OrderItem {
