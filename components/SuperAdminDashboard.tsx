@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, signOut } from '../services/supabase';
-import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon } from 'lucide-react';
+import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon, FileText, MapPin, Phone, CreditCard, Mail, MessageCircle } from 'lucide-react';
 
 interface SuperAdminDashboardProps {
     onEnterApp: () => void;
@@ -22,6 +22,9 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     const [showPublicModal, setShowPublicModal] = useState(false);
     const [showImageModal, setShowImageModal] = useState(false);
     
+    // Registry / Profile View State
+    const [viewingProfile, setViewingProfile] = useState<any | null>(null);
+
     // Recovery State
     const [recoveryEmail, setRecoveryEmail] = useState('');
 
@@ -158,7 +161,14 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
             restaurant_name: 'Ristorante Demo (Simulato)',
             email: 'demo@ristosync.com',
             subscription_status: 'active',
-            created_at: new Date().toISOString()
+            created_at: new Date().toISOString(),
+            settings: {
+                restaurantProfile: {
+                    address: "Via Roma 1, Milano",
+                    vatNumber: "IT12345678901",
+                    phoneNumber: "3339998877"
+                }
+            }
         };
         setProfiles(prev => [fakeProfile, ...prev]);
     };
@@ -486,6 +496,15 @@ on conflict (id) do nothing;
                                             </td>
                                             <td className="p-6 text-right">
                                                 <div className="flex justify-end gap-2">
+                                                    {/* NEW ANAGRAFICA BUTTON */}
+                                                    <button 
+                                                        onClick={() => setViewingProfile(p)}
+                                                        className="inline-flex items-center justify-center p-2 rounded-lg bg-indigo-500/10 text-indigo-400 hover:bg-indigo-600 hover:text-white border border-indigo-500/20 transition-colors"
+                                                        title="Vedi Anagrafica"
+                                                    >
+                                                        <FileText size={14} />
+                                                    </button>
+
                                                     {!isSuperAdminProfile && (
                                                         <button 
                                                             onClick={() => toggleStatus(p.id, p.subscription_status, p.email)}
@@ -549,6 +568,98 @@ on conflict (id) do nothing;
                     </div>
                 </div>
             </div>
+
+            {/* VIEW ANAGRAFICA/REGISTRY MODAL */}
+            {viewingProfile && (
+                <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+                    <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-lg shadow-2xl animate-slide-up relative flex flex-col max-h-[90vh]">
+                        <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+                            <div>
+                                <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                                    <FileText className="text-indigo-500" /> Anagrafica Ristorante
+                                </h2>
+                                <p className="text-slate-400 text-sm">{viewingProfile.restaurant_name}</p>
+                            </div>
+                            <button onClick={() => setViewingProfile(null)} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors"><X size={20}/></button>
+                        </div>
+                        
+                        <div className="p-6 overflow-y-auto space-y-6">
+                            {/* Account Info */}
+                            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                                <h3 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2"><User size={14}/> Dati Account</h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-[10px] text-slate-500 uppercase block mb-1">ID Tenant</label>
+                                        <p className="text-xs font-mono text-slate-300 break-all">{viewingProfile.id}</p>
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] text-slate-500 uppercase block mb-1">Email Login</label>
+                                        <p className="text-xs font-mono text-slate-300 break-all">{viewingProfile.email}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Business Profile */}
+                            {viewingProfile.settings?.restaurantProfile ? (
+                                <div className="space-y-4">
+                                    {/* Ragione Sociale / P.IVA */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+                                            <div className="flex items-center gap-2 mb-1 text-slate-400 text-xs font-bold uppercase"><CreditCard size={14}/> P.IVA / C.F.</div>
+                                            <p className="text-white font-mono font-bold text-lg">{viewingProfile.settings.restaurantProfile.vatNumber || '-'}</p>
+                                        </div>
+                                        <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+                                            <div className="flex items-center gap-2 mb-1 text-slate-400 text-xs font-bold uppercase"><Phone size={14}/> Telefono</div>
+                                            <p className="text-white font-bold">{viewingProfile.settings.restaurantProfile.phoneNumber || '-'}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Indirizzi */}
+                                    <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                                        <div className="flex items-center gap-2 mb-3 text-slate-400 text-xs font-bold uppercase"><MapPin size={14}/> Sede Legale & Operativa</div>
+                                        <p className="text-white font-medium mb-2">{viewingProfile.settings.restaurantProfile.address || 'Nessun indirizzo specificato'}</p>
+                                        {viewingProfile.settings.restaurantProfile.billingAddress && (
+                                            <div className="mt-3 pt-3 border-t border-slate-700">
+                                                <span className="text-[10px] text-slate-500 uppercase block mb-1">Fatturazione</span>
+                                                <p className="text-slate-300 text-sm">{viewingProfile.settings.restaurantProfile.billingAddress}</p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Contatti Extra */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                         <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+                                            <div className="flex items-center gap-2 mb-1 text-green-500 text-xs font-bold uppercase"><MessageCircle size={14}/> WhatsApp</div>
+                                            <p className="text-white font-mono">{viewingProfile.settings.restaurantProfile.whatsappNumber || '-'}</p>
+                                        </div>
+                                        <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+                                            <div className="flex items-center gap-2 mb-1 text-blue-400 text-xs font-bold uppercase"><Mail size={14}/> Email Pubblica</div>
+                                            <p className="text-white text-xs truncate" title={viewingProfile.settings.restaurantProfile.email}>{viewingProfile.settings.restaurantProfile.email || '-'}</p>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Website */}
+                                    {viewingProfile.settings.restaurantProfile.website && (
+                                         <div className="bg-slate-800 p-3 rounded-xl border border-slate-700 flex items-center justify-between">
+                                            <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase"><Globe size={14}/> Sito Web</div>
+                                            <a href={viewingProfile.settings.restaurantProfile.website} target="_blank" rel="noreferrer" className="text-blue-400 text-sm hover:underline truncate max-w-[200px]">{viewingProfile.settings.restaurantProfile.website}</a>
+                                        </div>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="text-center py-10 bg-slate-950 rounded-xl border border-slate-800 border-dashed">
+                                    <AlertTriangle size={32} className="text-slate-600 mx-auto mb-3"/>
+                                    <p className="text-slate-500 font-bold">Nessun dato anagrafico inserito.</p>
+                                    <p className="text-slate-600 text-xs mt-1">L'utente non ha ancora compilato la sezione Profilo.</p>
+                                </div>
+                            )}
+                        </div>
+                        <div className="p-4 bg-slate-950 border-t border-slate-800 rounded-b-3xl flex justify-end">
+                            <button onClick={() => setViewingProfile(null)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-colors">Chiudi</button>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* DEMO SQL MODAL */}
             {showSqlModal && (
