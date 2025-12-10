@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, signOut } from '../services/supabase';
-import { ShieldCheck, Users, Database, LogOut, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon, FileText, MapPin, CreditCard, Mail, MessageCircle, Share2, PhoneCall, Facebook, Instagram, Store, Compass, Wrench, Calendar, DollarSign, Briefcase } from 'lucide-react';
+import { ShieldCheck, Users, Database, LogOut, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon, FileText, MapPin, CreditCard, Mail, MessageCircle, Share2, PhoneCall, Facebook, Instagram, Store, Compass, Wrench, Calendar, DollarSign, Briefcase, Sparkles } from 'lucide-react';
 
 interface SuperAdminDashboardProps {
     onEnterApp: () => void;
@@ -29,6 +29,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     const [registryForm, setRegistryForm] = useState<any>({});
     const [subDate, setSubDate] = useState(''); 
     const [subCost, setSubCost] = useState(''); // New: Cost State
+    const [subPlan, setSubPlan] = useState(''); // New: Plan Type State
 
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editName, setEditName] = useState('');
@@ -74,10 +75,18 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
 
         setSubDate(profileData.subscriptionEndDate || '');
         setSubCost(profileData.subscriptionCost || '29.90');
+        setSubPlan(profileData.planType || 'Pro');
     };
 
     const handleRegistryChange = (field: string, value: string) => {
         setRegistryForm((prev: any) => ({ ...prev, [field]: value }));
+    };
+
+    const activateFreeTrial = () => {
+        const today = new Date();
+        today.setDate(today.getDate() + 15);
+        setSubDate(today.toISOString());
+        setSubPlan('Trial');
     };
 
     const saveRegistryChanges = async () => {
@@ -90,7 +99,8 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
             restaurantProfile: {
                 ...registryForm,
                 subscriptionEndDate: subDate,
-                subscriptionCost: subCost, // Save Cost
+                subscriptionCost: subCost,
+                planType: subPlan,
                 name: viewingProfile.restaurant_name 
             }
         };
@@ -186,7 +196,15 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
                                         <p className="text-[10px] text-slate-500 mt-1 text-right">Visibile al cliente nella dashboard.</p>
                                     </div>
 
-                                    {isEditingRegistry && (<div className="col-span-full flex gap-2 justify-end border-t border-slate-800 pt-3"><button onClick={() => setSubDate(addMonths(subDate, 1))} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg border border-slate-700 flex items-center justify-center gap-2">+1 Mese</button><button onClick={() => setSubDate(addMonths(subDate, 12))} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg border border-slate-700 flex items-center justify-center gap-2">+1 Anno</button></div>)}
+                                    {isEditingRegistry && (
+                                        <div className="col-span-full border-t border-slate-800 pt-3">
+                                            <div className="flex flex-wrap gap-2 justify-end">
+                                                <button onClick={activateFreeTrial} className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg border border-blue-500/50 flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20"><Sparkles size={14}/> Attiva 15gg Gratis</button>
+                                                <button onClick={() => setSubDate(addMonths(subDate, 1))} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg border border-slate-700 flex items-center justify-center gap-2">+1 Mese</button>
+                                                <button onClick={() => setSubDate(addMonths(subDate, 12))} className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-lg border border-slate-700 flex items-center justify-center gap-2">+1 Anno</button>
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
