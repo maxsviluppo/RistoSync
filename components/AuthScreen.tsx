@@ -53,16 +53,27 @@ const AuthScreen: React.FC = () => {
                 // GESTIONE PROFILO (Soft Check)
                 if (data.user) {
                      try {
+                         // CALCOLO 15 GIORNI DI PROVA GRATUITA
+                         const trialEndDate = new Date();
+                         trialEndDate.setDate(trialEndDate.getDate() + 15);
+
                          // Tentativo manuale di sicurezza (se il trigger non parte)
                          await supabase.from('profiles').insert({
                              id: data.user.id,
                              email: email,
                              restaurant_name: restaurantName,
-                             subscription_status: 'active'
+                             subscription_status: 'active',
+                             settings: {
+                                 restaurantProfile: {
+                                     planType: 'Trial',
+                                     subscriptionEndDate: trialEndDate.toISOString(),
+                                     subscriptionCost: '29.90' // Default cost after trial
+                                 }
+                             }
                          });
                      } catch (e) {
                          // Ignoriamo errori di duplicati
-                         console.log("Insert profile skipped/failed");
+                         console.log("Insert profile skipped/failed or trigger handled it");
                      }
                      await new Promise(r => setTimeout(r, 500));
                 }
@@ -197,7 +208,7 @@ const AuthScreen: React.FC = () => {
                                 disabled={loading}
                                 className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-orange-500/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
                             >
-                                {loading ? <Loader className="animate-spin" /> : (isLogin ? 'Entra' : 'Crea Account')} {!loading && <ArrowRight size={20} />}
+                                {loading ? <Loader className="animate-spin" /> : (isLogin ? 'Entra' : 'Prova Gratis 15 Giorni')} {!loading && <ArrowRight size={20} />}
                             </button>
                         </form>
                     )}
