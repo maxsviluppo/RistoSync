@@ -163,7 +163,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
   // --- HELPER: CHECK ITEM RELEVANCE (UPDATED FOR COMBO SPLIT) ---
   const getSubItemsForCombo = (item: OrderItem): MenuItem[] => {
       if (item.menuItem.category !== Category.MENU_COMPLETO || !item.menuItem.comboItems) return [];
-      // Resolve IDs to full items
+      // Resolve IDs to full items using allMenuItems reference
       return allMenuItems.filter(m => item.menuItem.comboItems?.includes(m.id));
   };
 
@@ -175,7 +175,6 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
       }
       
       // 2. If Combo Item -> Check if ANY sub-item belongs to this department
-      // (We ignore the Combo parent's own specificDepartment in favor of children logic for split view)
       const subItems = getSubItemsForCombo(item);
       return subItems.some(sub => {
           const dest = sub.specificDepartment || appSettings.categoryDestinations[sub.category];
@@ -284,7 +283,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
           totalRevenue += orderTotal; relevantItems.forEach(i => totalItems += i.quantity);
       });
       return { totalRevenue, totalItems };
-  }, [filteredHistoryOrders, department, appSettings, allMenuItems]); // Added allMenuItems dep
+  }, [filteredHistoryOrders, department, appSettings, allMenuItems]); 
 
   const changeDate = (days: number) => { const newDate = new Date(selectedDate); newDate.setDate(newDate.getDate() + days); setSelectedDate(newDate); };
   const displayedOrders = orders.filter(o => viewMode === 'active' && o.status !== OrderStatus.DELIVERED);
@@ -378,20 +377,25 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
                                               {isCombo ? (<p className="text-[10px] font-bold uppercase tracking-wider mb-0.5 text-pink-500 flex items-center gap-1"><ListPlus size={10}/> MENU COMBO</p>) : (<p className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${isPizzeria ? 'text-red-500' : isPub ? 'text-amber-500' : 'text-orange-500'}`}>{item.menuItem.category}</p>)}
                                           </div>
                                           
-                                          {/* MAIN NAME DISPLAY */}
-                                          <p className={`font-black text-3xl leading-none tracking-tight break-words ${item.completed ? 'text-slate-600 line-through' : 'bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent'}`}>
-                                              {item.menuItem.name}
-                                          </p>
-
-                                          {/* COMBO SUB-ITEMS (Specific to Dept) */}
-                                          {isCombo && subItems.length > 0 && (
-                                              <div className="mt-1 bg-slate-900/50 p-2 rounded-lg border border-slate-700/50">
-                                                  <ul className="list-disc list-inside">
-                                                      {subItems.map((sub, idx) => (
-                                                          <li key={idx} className="text-lg font-bold text-orange-400">{sub.name}</li>
-                                                      ))}
-                                                  </ul>
+                                          {/* VISUAL HIERARCHY FOR COMBO */}
+                                          {isCombo && subItems.length > 0 ? (
+                                              <div className="flex flex-col gap-1">
+                                                  {/* The specific item to prepare is highlighted */}
+                                                  {subItems.map((sub, idx) => (
+                                                      <p key={idx} className={`font-black text-3xl leading-none tracking-tight break-words ${item.completed ? 'text-slate-600 line-through' : 'text-orange-400'}`}>
+                                                          {sub.name}
+                                                      </p>
+                                                  ))}
+                                                  {/* The parent combo name is shown smaller for context */}
+                                                  <p className="text-xs text-slate-500 font-bold uppercase">
+                                                      (da {item.menuItem.name})
+                                                  </p>
                                               </div>
+                                          ) : (
+                                              /* STANDARD ITEM */
+                                              <p className={`font-black text-3xl leading-none tracking-tight break-words ${item.completed ? 'text-slate-600 line-through' : 'bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent'}`}>
+                                                  {item.menuItem.name}
+                                              </p>
                                           )}
 
                                           {item.menuItem.ingredients && !isCombo && <p className="text-[10px] text-slate-500 mt-1 italic">{item.menuItem.ingredients}</p>}

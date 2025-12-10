@@ -109,7 +109,23 @@ const fetchFromCloudMenu = async () => {
     if (!supabase || !currentUserId) return;
     const { data, error } = await supabase.from('menu_items').select('*');
     if (!error && data) {
-         localStorage.setItem(MENU_KEY, JSON.stringify(data));
+         // Map DB snake_case columns back to camelCase for App
+         const appMenuItems: MenuItem[] = data.map((row: any) => ({
+             id: row.id,
+             name: row.name,
+             price: row.price,
+             category: row.category,
+             description: row.description,
+             ingredients: row.ingredients, // Ensure simple fields map
+             allergens: row.allergens,
+             image: row.image,
+             // COMBO MAPPING FIX
+             isCombo: row.category === Category.MENU_COMPLETO, 
+             comboItems: row.combo_items || [], // Map snake_case from DB
+             specificDepartment: row.specific_department // Map snake_case from DB
+         }));
+
+         localStorage.setItem(MENU_KEY, JSON.stringify(appMenuItems));
          window.dispatchEvent(new Event('local-menu-update'));
     }
 };
@@ -470,6 +486,7 @@ const syncMenuToCloud = async (item: MenuItem, isDelete = false) => {
     if (isDelete) {
         await supabase.from('menu_items').delete().eq('id', item.id);
     } else {
+         // MAP CAMELCASE TO SNAKE_CASE FOR DB
          const payload = {
             id: item.id,
             user_id: currentUserId,
@@ -477,8 +494,12 @@ const syncMenuToCloud = async (item: MenuItem, isDelete = false) => {
             price: item.price,
             category: item.category,
             description: item.description,
+            ingredients: item.ingredients,
             allergens: item.allergens,
-            image: item.image // <--- Added: Persist image to Cloud
+            image: item.image,
+            // CRITICAL: SAVE COMBO FIELDS
+            combo_items: item.comboItems, 
+            specific_department: item.specificDepartment
         };
         await supabase.from('menu_items').upsert(payload);
     }
