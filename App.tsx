@@ -225,18 +225,19 @@ export default function App() {
               'Cucina': false, 'Pizzeria': false, 'Pub': false, 'Sala': false, 'Cassa': false
           });
           
-          // CRITICAL: Ensure we read correctly even if empty initially
+          // PRE-FILL LOGIC: Prioritize existing settings, fallback to current restaurantName if name is missing
+          const existingProfile = currentSettings.restaurantProfile || {};
           setProfileForm({
-              name: restaurantName,
-              address: currentSettings.restaurantProfile?.address || '',
-              billingAddress: currentSettings.restaurantProfile?.billingAddress || '',
-              vatNumber: currentSettings.restaurantProfile?.vatNumber || '',
-              phoneNumber: currentSettings.restaurantProfile?.phoneNumber || '',
-              landlineNumber: currentSettings.restaurantProfile?.landlineNumber || '',
-              whatsappNumber: currentSettings.restaurantProfile?.whatsappNumber || '',
-              email: currentSettings.restaurantProfile?.email || '',
-              website: currentSettings.restaurantProfile?.website || '',
-              socials: currentSettings.restaurantProfile?.socials || {}
+              name: existingProfile.name || restaurantName, // Use existing name if available, else current global name
+              address: existingProfile.address || '',
+              billingAddress: existingProfile.billingAddress || '',
+              vatNumber: existingProfile.vatNumber || '',
+              phoneNumber: existingProfile.phoneNumber || '',
+              landlineNumber: existingProfile.landlineNumber || '',
+              whatsappNumber: existingProfile.whatsappNumber || '',
+              email: existingProfile.email || '',
+              website: existingProfile.website || '',
+              socials: existingProfile.socials || {}
           });
 
           setHasUnsavedDestinations(false);
@@ -245,7 +246,7 @@ export default function App() {
           const key = getGoogleApiKey();
           if (key) setApiKeyInput(key);
       }
-  }, [showAdmin]); // Removed restaurantName dependency to avoid loop resets
+  }, [showAdmin]); // Removed restaurantName from dependency array to prevent reset loops
 
   useEffect(() => {
       const handleSettingsUpdate = () => {
@@ -467,6 +468,7 @@ export default function App() {
       };
       
       // 2. Save locally and sync
+      // IMPORTANT: If "settings" column is missing in DB, saveAppSettings will log error but app continues
       await saveAppSettings(newSettings);
       
       // 3. Update local state immediately
@@ -641,6 +643,7 @@ export default function App() {
 
   return (
       <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4 font-sans relative overflow-hidden">
+        {/* ... Rest of the app code remains unchanged ... */}
         
         <style>{`
             @keyframes float-hat { 0%, 100% { transform: translateY(0) rotate(-15deg); } 50% { transform: translateY(-12px) rotate(-5deg); } }
@@ -1455,7 +1458,7 @@ export default function App() {
             </div>
         )}
 
-        {/* ... Modal Editor Piatti and Delete Confirm ... */}
+        {/* ... Rest of app modal code ... */}
         {isEditingItem && (
             <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
                 {/* Editor Content Preserved */}
@@ -1614,18 +1617,4 @@ export default function App() {
         )}
 
         {itemToDelete && (
-            <div className="absolute inset-0 z-[70] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-                <div className="bg-slate-900 border border-red-500/30 rounded-3xl p-6 w-full max-w-sm shadow-2xl text-center">
-                    <Trash2 size={48} className="text-red-500 mx-auto mb-4"/>
-                    <h3 className="text-xl font-bold text-white mb-2">Eliminare {itemToDelete.name}?</h3>
-                    <p className="text-slate-400 text-sm mb-6">Questa azione non può essere annullata.</p>
-                    <div className="flex gap-3">
-                        <button onClick={() => setItemToDelete(null)} className="flex-1 py-3 bg-slate-800 text-white rounded-xl font-bold">Annulla</button>
-                        <button onClick={confirmDeleteMenu} className="flex-1 py-3 bg-red-600 text-white rounded-xl font-bold shadow-lg shadow-red-600/20">Elimina</button>
-                    </div>
-                </div>
-            </div>
-        )}
-      </div>
-  );
-}
+            <div className="absolute inset-0 z-[

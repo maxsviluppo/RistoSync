@@ -16,13 +16,13 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     const [copiedRecovery, setCopiedRecovery] = useState(false);
     const [copiedPublic, setCopiedPublic] = useState(false);
     const [copiedImage, setCopiedImage] = useState(false);
-    const [copiedFix, setCopiedFix] = useState(false); // New State
+    const [copiedFix, setCopiedFix] = useState(false);
     const [currentEmail, setCurrentEmail] = useState<string>('');
     const [showSqlModal, setShowSqlModal] = useState(false);
     const [showRecoveryModal, setShowRecoveryModal] = useState(false);
     const [showPublicModal, setShowPublicModal] = useState(false);
     const [showImageModal, setShowImageModal] = useState(false);
-    const [showFixModal, setShowFixModal] = useState(false); // New Modal State
+    const [showFixModal, setShowFixModal] = useState(false);
     
     // Registry / Profile View & Edit State
     const [viewingProfile, setViewingProfile] = useState<any | null>(null);
@@ -59,7 +59,6 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     const openRegistry = (profile: any) => {
         setViewingProfile(profile);
         setIsEditingRegistry(false);
-        // Pre-fill form data immediately to be ready for edit
         const profileData = profile.settings?.restaurantProfile || {};
         setRegistryForm({
             vatNumber: profileData.vatNumber || '',
@@ -91,34 +90,28 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     const saveRegistryChanges = async () => {
         if (!supabase || !viewingProfile) return;
 
-        // 1. Prepare Deep Merge
-        // We must preserve existing settings (like printers, destinations)
-        // and only update the restaurantProfile section.
         const currentSettings = viewingProfile.settings || {};
         
         const updatedSettings = {
             ...currentSettings,
             restaurantProfile: {
                 ...registryForm,
-                // Ensure name is synced if needed, though name is usually top-level
                 name: viewingProfile.restaurant_name 
             }
         };
 
-        // 2. Optimistic Update (Local)
         const updatedProfile = { ...viewingProfile, settings: updatedSettings };
         setViewingProfile(updatedProfile);
         setProfiles(prev => prev.map(p => p.id === viewingProfile.id ? updatedProfile : p));
 
-        // 3. Database Update
         const { error } = await supabase
             .from('profiles')
             .update({ settings: updatedSettings })
             .eq('id', viewingProfile.id);
 
         if (error) {
-            alert("ERRORE SALVATAGGIO: " + error.message + "\n\nProbabile causa: Mancano i permessi 'Super Admin'.\nClicca su 'FIX DATABASE' nella dashboard e esegui lo script.");
-            fetchProfiles(); // Revert on error
+            alert("ERRORE SALVATAGGIO: " + error.message + "\n\nCausa: Manca la colonna 'settings' o i permessi.\n\nSOLUZIONE: Chiudi questo popup, clicca sul tasto rosso 'Chiave Inglese' (Fix Database) e esegui quel codice SQL su Supabase.");
+            fetchProfiles();
         } else {
             setIsEditingRegistry(false);
             alert("Dati aggiornati con successo!");
@@ -243,21 +236,21 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     
     const getImageUpdateSQL = () => `alter table public.menu_items add column if not exists image text;`;
 
-    // NEW: Fix Structure SQL
+    // NEW: Fix Structure SQL - ROBUST VERSION
     const getFixStructureSQL = () => `-- 1. AGGIUNGI COLONNA SETTINGS (Se manca)
-alter table public.profiles add column if not exists settings jsonb;
+alter table public.profiles add column if not exists settings jsonb default '{}'::jsonb;
 
--- 2. ABILITA PERMESSI SUPER ADMIN (Per modificare i clienti)
+-- 2. FORZA AGGIORNAMENTO CACHE API (Cruciale per errore 'column not found')
+NOTIFY pgrst, 'reload schema';
+
+-- 3. ABILITA PERMESSI SUPER ADMIN (Per modificare i clienti)
 drop policy if exists "Super Admin Update All" on public.profiles;
 create policy "Super Admin Update All" on public.profiles for update
 using (auth.jwt() ->> 'email' = '${SUPER_ADMIN_EMAIL}');
 
--- 3. GARANTISCI CHE GLI UTENTI POSSANO MODIFICARE SE STESSI
+-- 4. GARANTISCI CHE GLI UTENTI POSSANO MODIFICARE SE STESSI
 drop policy if exists "User update own profile" on public.profiles;
-create policy "User update own profile" on public.profiles for update using (auth.uid() = id);
-
--- 4. AGGIORNA CACHE SCHEMAS
-notify pgrst, 'reload schema';`;
+create policy "User update own profile" on public.profiles for update using (auth.uid() = id);`;
     
     const copySQL = (sql: string, type: 'reset' | 'demo' | 'recovery' | 'public' | 'image' | 'fix') => {
         navigator.clipboard.writeText(sql);
@@ -572,41 +565,6 @@ insert into public.profiles (id, email, restaurant_name, subscription_status) se
                 </div>
             )}
 
-            {/* DEMO SQL MODAL */}
-            {showSqlModal && (
-                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-                    <div className="bg-slate-900 border border-orange-500/30 rounded-3xl p-6 w-full max-w-2xl shadow-2xl animate-slide-up relative">
-                        <button onClick={() => setShowSqlModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white"><X /></button>
-                        
-                        <div className="flex items-center gap-3 mb-4 text-orange-400">
-                             <div className="p-2 bg-orange-500/10 rounded-lg"><Terminal size={24} /></div>
-                             <h2 className="text-xl font-bold text-white">Genera Utente Demo Reale</h2>
-                        </div>
-                        
-                        <p className="text-slate-400 text-sm mb-4">
-                            Per creare un vero "Ristorante Demo" nel database (accessibile con login), esegui questo script nell'<strong>SQL Editor di Supabase</strong>.
-                        </p>
-                        
-                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 relative group text-left mb-6">
-                            <pre className="text-left text-xs text-green-400 font-mono whitespace-pre-wrap overflow-x-auto h-64 custom-scroll p-2">
-{getDemoUserSQL()}
-                            </pre>
-                            <button 
-                                onClick={() => copySQL(getDemoUserSQL(), 'demo')}
-                                className="absolute top-4 right-4 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 shadow-lg transition-all"
-                            >
-                                {copiedDemo ? <Check size={16} className="text-green-500"/> : <Copy size={16}/>}
-                                {copiedDemo ? 'COPIATO!' : 'COPIA SQL'}
-                            </button>
-                        </div>
-                        
-                        <div className="mt-6 flex justify-end">
-                            <button onClick={() => setShowSqlModal(false)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold">Chiudi</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {/* FIX STRUCTURE MODAL */}
             {showFixModal && (
                 <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
@@ -639,52 +597,6 @@ insert into public.profiles (id, email, restaurant_name, subscription_status) se
                         
                         <div className="mt-6 flex justify-end">
                             <button onClick={() => setShowFixModal(false)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold">Chiudi</button>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* RECOVERY SQL MODAL */}
-            {showRecoveryModal && (
-                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-                    <div className="bg-slate-900 border border-blue-500/30 rounded-3xl p-6 w-full max-w-2xl shadow-2xl animate-slide-up relative">
-                        <button onClick={() => setShowRecoveryModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white"><X /></button>
-                        
-                        <div className="flex items-center gap-3 mb-4 text-blue-400">
-                             <div className="p-2 bg-blue-500/10 rounded-lg"><LifeBuoy size={24} /></div>
-                             <h2 className="text-xl font-bold text-white">SOS Recovery</h2>
-                        </div>
-                        
-                        <p className="text-slate-400 text-sm mb-4">
-                            Hai eliminato per sbaglio un utente dalla lista, ma esiste ancora in Auth? <br/>
-                            Inserisci la sua email qui sotto per generare il codice di ripristino.
-                        </p>
-
-                        <input 
-                            type="email" 
-                            placeholder="Email utente da recuperare (es. castromassimo@gmail.com)"
-                            value={recoveryEmail}
-                            onChange={(e) => setRecoveryEmail(e.target.value)}
-                            className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white mb-4 focus:border-blue-500 outline-none"
-                        />
-                        
-                        {recoveryEmail && (
-                            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 relative group text-left mb-6">
-                                <pre className="text-left text-xs text-green-400 font-mono whitespace-pre-wrap overflow-x-auto h-40 custom-scroll p-2">
-{getRecoverySQL(recoveryEmail)}
-                                </pre>
-                                <button 
-                                    onClick={() => copySQL(getRecoverySQL(recoveryEmail), 'recovery')}
-                                    className="absolute top-4 right-4 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 shadow-lg transition-all"
-                                >
-                                    {copiedRecovery ? <Check size={16} className="text-green-500"/> : <Copy size={16}/>}
-                                    {copiedRecovery ? 'COPIATO!' : 'COPIA SQL'}
-                                </button>
-                            </div>
-                        )}
-                        
-                        <div className="mt-6 flex justify-end">
-                            <button onClick={() => setShowRecoveryModal(false)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold">Chiudi</button>
                         </div>
                     </div>
                 </div>
