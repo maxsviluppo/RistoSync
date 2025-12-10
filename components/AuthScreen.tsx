@@ -52,8 +52,6 @@ const AuthScreen: React.FC = () => {
                 
                 // GESTIONE PROFILO (Soft Check)
                 if (data.user) {
-                     // Tentiamo di creare/verificare il profilo, ma NON blocchiamo l'utente se fallisce subito.
-                     // Il trigger SQL lavora in background.
                      try {
                          // Tentativo manuale di sicurezza (se il trigger non parte)
                          await supabase.from('profiles').insert({
@@ -63,17 +61,15 @@ const AuthScreen: React.FC = () => {
                              subscription_status: 'active'
                          });
                      } catch (e) {
-                         // Ignoriamo errori di duplicati (il trigger ha già fatto il suo lavoro)
-                         console.log("Insert profile skipped/failed (likely already exists via trigger)");
+                         // Ignoriamo errori di duplicati
+                         console.log("Insert profile skipped/failed");
                      }
-                     
-                     // Attendiamo un istante per dare tempo al DB
                      await new Promise(r => setTimeout(r, 500));
                 }
             }
-            // La pagina si ricaricherà o aggiornerà lo stato grazie al listener in App.tsx
         } catch (err: any) {
             let msg = err.message || "Si è verificato un errore.";
+            console.error("Auth Error:", err);
             
             // Traduzione errori comuni Supabase
             if (msg.includes("security purposes")) {
@@ -84,8 +80,8 @@ const AuthScreen: React.FC = () => {
                 msg = "Utente già registrato. Prova ad accedere.";
             } else if (msg.includes("Rate limit exceeded")) {
                 msg = "Troppe richieste. Rallenta un attimo.";
-            } else if (msg.includes("Database error querying schema")) {
-                msg = "Errore Database: Tabelle non trovate. Hai eseguito lo script SQL iniziale?";
+            } else if (msg.includes("Database error querying schema") || msg.includes('relation "public.profiles" does not exist') || err.code === '42P01') {
+                msg = "CRITICO: Tabelle Database mancanti. Esegui lo script 'Reset SQL' nella Dashboard Admin di Supabase.";
             }
 
             setError(msg);
@@ -134,14 +130,14 @@ const AuthScreen: React.FC = () => {
                     )}
 
                     {!confirmationPending && error && (
-                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl text-sm mb-6 font-bold flex flex-col gap-2 justify-center">
+                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl text-sm mb-6 font-bold flex flex-col gap-2 justify-center animate-pulse">
                            <div className="flex items-center justify-center gap-3">
-                               <AlertTriangle size={18} className="shrink-0"/>
+                               <AlertTriangle size={24} className="shrink-0"/>
                                <span>{error}</span>
                            </div>
-                           {error.includes("Script SQL") && (
-                               <div className="text-xs text-center text-slate-400 mt-2 border-t border-red-500/20 pt-2">
-                                   Se sei l'admin, vai nella Dashboard Supabase &gt; SQL Editor ed esegui lo script di configurazione.
+                           {(error.includes("Script") || error.includes("Tabelle")) && (
+                               <div className="text-xs text-center text-slate-300 mt-2 border-t border-red-500/20 pt-2 font-mono bg-black/20 p-2 rounded">
+                                   SQL Editor &gt; New Query &gt; Incolla Script Creazione Tabelle
                                </div>
                            )}
                         </div>
