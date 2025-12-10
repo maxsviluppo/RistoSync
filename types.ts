@@ -28,6 +28,14 @@ export interface SocialLinks {
   linkedin?: string;
 }
 
+export interface AgentInfo {
+  name?: string;
+  commissionType?: 'Monthly' | 'Annual' | 'Percentage' | 'OneOff';
+  commissionValue?: string;
+  lastPaymentDate?: string;
+  nextPaymentDate?: string;
+}
+
 export interface RestaurantProfile {
   name?: string; // Nome Visualizzato (Insegna)
   
@@ -35,6 +43,8 @@ export interface RestaurantProfile {
   businessName?: string; // Ragione Sociale
   responsiblePerson?: string; // Nome e Cognome Responsabile
   vatNumber?: string; // P.IVA / CF
+  sdiCode?: string;
+  pecEmail?: string;
   address?: string; // Sede Legale
   billingAddress?: string; // Sede Fatturazione (se diversa)
   
@@ -51,6 +61,9 @@ export interface RestaurantProfile {
   subscriptionEndDate?: string; // ISO Date String
   planType?: 'Trial' | 'Pro' | 'Enterprise';
   subscriptionCost?: string; // Custom cost set by Admin (string to allow formatting like "29.90")
+  
+  // Agent Data
+  agent?: AgentInfo;
 }
 
 export interface AppSettings {

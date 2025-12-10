@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, signOut } from '../services/supabase';
-import { ShieldCheck, Users, Database, LogOut, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon, FileText, MapPin, CreditCard, Mail, MessageCircle, Share2, PhoneCall, Facebook, Instagram, Store, Compass, Wrench, Calendar, DollarSign, Briefcase, Sparkles, Clock, AlertOctagon } from 'lucide-react';
+import { ShieldCheck, Users, Database, LogOut, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon, FileText, MapPin, CreditCard, Mail, MessageCircle, Share2, PhoneCall, Facebook, Instagram, Store, Compass, Wrench, Calendar, DollarSign, Briefcase, Sparkles, Clock, AlertOctagon, UserCheck, Banknote, CalendarCheck } from 'lucide-react';
 
 interface SuperAdminDashboardProps {
     onEnterApp: () => void;
@@ -25,7 +25,14 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     const [registryForm, setRegistryForm] = useState<any>({});
     const [subDate, setSubDate] = useState(''); 
     const [subCost, setSubCost] = useState(''); 
-    const [subPlan, setSubPlan] = useState(''); 
+    const [subPlan, setSubPlan] = useState('');
+    
+    // Agent State
+    const [agentName, setAgentName] = useState('');
+    const [agentType, setAgentType] = useState('Percentage');
+    const [agentValue, setAgentValue] = useState('');
+    const [agentLastPay, setAgentLastPay] = useState('');
+    const [agentNextPay, setAgentNextPay] = useState('');
 
     // Inline Name Edit
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -60,8 +67,8 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
             businessName: profileData.businessName || '', 
             responsiblePerson: profileData.responsiblePerson || '',
             vatNumber: profileData.vatNumber || '',
-            sdiCode: profileData.sdiCode || '', // Added
-            pecEmail: profileData.pecEmail || '', // Added
+            sdiCode: profileData.sdiCode || '', 
+            pecEmail: profileData.pecEmail || '', 
             phoneNumber: profileData.phoneNumber || '',
             landlineNumber: profileData.landlineNumber || '',
             whatsappNumber: profileData.whatsappNumber || '',
@@ -75,6 +82,14 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
         setSubDate(profileData.subscriptionEndDate || '');
         setSubCost(profileData.subscriptionCost || '29.90');
         setSubPlan(profileData.planType || 'Pro');
+
+        // Load Agent Data
+        const agent = profileData.agent || {};
+        setAgentName(agent.name || '');
+        setAgentType(agent.commissionType || 'Percentage');
+        setAgentValue(agent.commissionValue || '');
+        setAgentLastPay(agent.lastPaymentDate || '');
+        setAgentNextPay(agent.nextPaymentDate || '');
     };
 
     const handleRegistryChange = (field: string, value: string) => {
@@ -107,7 +122,14 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
                 subscriptionEndDate: subDate,
                 subscriptionCost: subCost,
                 planType: subPlan,
-                name: viewingProfile.restaurant_name 
+                name: viewingProfile.restaurant_name,
+                agent: {
+                    name: agentName,
+                    commissionType: agentType,
+                    commissionValue: agentValue,
+                    lastPaymentDate: agentLastPay,
+                    nextPaymentDate: agentNextPay
+                }
             }
         };
 
@@ -215,8 +237,65 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
                         <div className="flex-1 overflow-y-auto p-6 bg-slate-900 custom-scroll">
                             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                                 
-                                {/* COLONNA SINISTRA - ABBONAMENTO (CRITICO) */}
+                                {/* COLONNA SINISTRA - ABBONAMENTO & AGENTE (CRITICO) */}
                                 <div className="space-y-6">
+                                    
+                                    {/* SEZIONE AGENTE */}
+                                    <div className="p-6 rounded-3xl border border-purple-500/30 bg-purple-900/10 relative overflow-hidden">
+                                        <h3 className="text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2 text-purple-400"><UserCheck size={14}/> Agente & Provvigioni</h3>
+                                        <div className="space-y-4 relative z-10">
+                                            <div>
+                                                <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Nome Agente</label>
+                                                {isEditingRegistry ? (
+                                                    <input type="text" value={agentName} onChange={(e) => setAgentName(e.target.value)} className="bg-slate-950 border border-slate-700 text-white p-2 rounded-lg w-full text-xs font-bold outline-none" placeholder="Nessun agente"/>
+                                                ) : (
+                                                    <p className="text-sm font-bold text-white">{agentName || 'Nessuno assegnato'}</p>
+                                                )}
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Tipo</label>
+                                                    {isEditingRegistry ? (
+                                                        <select value={agentType} onChange={(e) => setAgentType(e.target.value)} className="bg-slate-950 border border-slate-700 text-white p-2 rounded-lg w-full text-[10px] font-bold outline-none">
+                                                            <option value="Percentage">% su Abb.</option>
+                                                            <option value="Monthly">Fisso Mese</option>
+                                                            <option value="Annual">Fisso Anno</option>
+                                                            <option value="OneOff">Una Tantum</option>
+                                                        </select>
+                                                    ) : (
+                                                        <div className="bg-slate-950 px-2 py-2 rounded-lg border border-slate-800 text-purple-300 font-bold text-[10px]">{agentType === 'Percentage' ? '% Percentuale' : agentType}</div>
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Valore</label>
+                                                    {isEditingRegistry ? (
+                                                        <input type="text" value={agentValue} onChange={(e) => setAgentValue(e.target.value)} className="bg-slate-950 border border-slate-700 text-white p-2 rounded-lg w-full text-xs font-bold text-right outline-none" placeholder="0"/>
+                                                    ) : (
+                                                        <div className="bg-slate-950 px-2 py-2 rounded-lg border border-slate-800 text-white font-bold text-[10px] text-right">{agentValue ? (agentType === 'Percentage' ? `${agentValue}%` : `€ ${agentValue}`) : '-'}</div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3 pt-2 border-t border-purple-500/20">
+                                                <div>
+                                                    <label className="text-[9px] text-slate-500 uppercase font-bold block mb-1 flex items-center gap-1"><Banknote size={10}/> Ultimo Pag.</label>
+                                                    {isEditingRegistry ? (
+                                                        <input type="date" value={agentLastPay} onChange={(e) => setAgentLastPay(e.target.value)} className="bg-slate-950 border border-slate-700 text-white p-1 rounded-lg w-full text-[10px]"/>
+                                                    ) : (
+                                                        <p className="text-[10px] text-slate-300">{agentLastPay ? new Date(agentLastPay).toLocaleDateString() : '-'}</p>
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <label className="text-[9px] text-slate-500 uppercase font-bold block mb-1 flex items-center gap-1"><CalendarCheck size={10}/> Prossimo</label>
+                                                    {isEditingRegistry ? (
+                                                        <input type="date" value={agentNextPay} onChange={(e) => setAgentNextPay(e.target.value)} className="bg-slate-950 border border-slate-700 text-white p-1 rounded-lg w-full text-[10px]"/>
+                                                    ) : (
+                                                        <p className="text-[10px] text-slate-300">{agentNextPay ? new Date(agentNextPay).toLocaleDateString() : '-'}</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <div className={`p-6 rounded-3xl border relative overflow-hidden ${isExpired ? 'bg-red-900/10 border-red-500/30' : isTrial ? 'bg-blue-900/10 border-blue-500/30' : 'bg-green-900/10 border-green-500/30'}`}>
                                         <div className="absolute top-0 right-0 p-4 opacity-10"><Calendar size={120} className={isExpired ? 'text-red-500' : isTrial ? 'text-blue-500' : 'text-green-500'}/></div>
                                         
