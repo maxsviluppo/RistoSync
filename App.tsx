@@ -7,7 +7,7 @@ import DigitalMenu from './components/DigitalMenu';
 import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, RefreshCw, Send, Printer, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, FileSpreadsheet, Image as ImageIcon, Upload, FileImage, ExternalLink, CreditCard, Banknote, Briefcase, Clock, Check } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate, performFactoryReset } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
-import { askChefAI, generateRestaurantAnalysis } from './services/geminiService';
+import { askChefAI, generateRestaurantAnalysis, generateDishDescription } from './services/geminiService';
 import { MenuItem, Category, Department, AppSettings, OrderStatus, Order, RestaurantProfile, OrderItem } from './types';
 
 const ADMIN_CATEGORY_ORDER = [
@@ -117,6 +117,7 @@ export default function App() {
   const [isEditingItem, setIsEditingItem] = useState(false);
   const [editingItem, setEditingItem] = useState<Partial<MenuItem>>({});
   const [isListening, setIsListening] = useState(false);
+  const [isGeneratingDesc, setIsGeneratingDesc] = useState(false); // NEW
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bulkInputRef = useRef<HTMLInputElement>(null);
   
@@ -340,6 +341,7 @@ export default function App() {
   const toggleAllergen = (allergenId: string) => { const current = editingItem.allergens || []; if (current.includes(allergenId)) setEditingItem({ ...editingItem, allergens: current.filter(a => a !== allergenId) }); else setEditingItem({ ...editingItem, allergens: [...current, allergenId] }); };
   const toggleNotif = (key: keyof NotificationSettings) => { const newSettings = { ...notifSettings, [key]: !notifSettings[key] }; setNotifSettings(newSettings); saveNotificationSettings(newSettings); };
   const handleDictation = () => { if (isListening) return; const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition; if (!SpeechRecognition) { alert("Il tuo browser non supporta la dettatura vocale."); return; } const recognition = new SpeechRecognition(); recognition.lang = 'it-IT'; recognition.continuous = false; recognition.interimResults = false; recognition.onstart = () => setIsListening(true); recognition.onresult = (event: any) => { const transcript = event.results[0][0].transcript; const currentDesc = editingItem.description || ''; const newText = currentDesc ? `${currentDesc} ${transcript}` : transcript; setEditingItem(prev => ({ ...prev, description: newText })); setIsListening(false); }; recognition.onerror = () => setIsListening(false); recognition.onend = () => setIsListening(false); recognition.start(); };
+  const handleGenerateDescription = async () => { if (!editingItem.name) { alert("Inserisci prima il nome del piatto."); return; } setIsGeneratingDesc(true); const desc = await generateDishDescription(editingItem.name); setEditingItem(prev => ({ ...prev, description: desc })); setIsGeneratingDesc(false); };
   const handleTempDestinationChange = (cat: Category, dest: Department) => { setTempDestinations(prev => ({ ...prev, [cat]: dest })); setHasUnsavedDestinations(true); };
   const toggleTempPrint = (key: string) => { setTempPrintSettings(prev => ({ ...prev, [key]: !prev[key] })); setHasUnsavedDestinations(true); };
   const saveDestinationsToCloud = async () => { const newSettings = { ...appSettings, categoryDestinations: tempDestinations, printEnabled: tempPrintSettings }; await saveAppSettings(newSettings); setAppSettingsState(newSettings); setHasUnsavedDestinations(false); alert("Configurazione salvata con successo!"); };
@@ -749,10 +751,13 @@ Cordiali saluti.`);
         {isEditingItem && (
             <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
                 {/* Editor Modal UI */}
-                <div className="bg-slate-900 border border-orange-500/30 rounded-3xl p-6 w-full max-w-lg shadow-2xl animate-slide-up relative">
-                    <button onClick={() => setIsEditingItem(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white"><X /></button>
-                    <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2"><Edit2 className="text-orange-500"/> {editingItem.id ? 'Modifica Piatto' : 'Nuovo Piatto'}</h2>
-                    <div className="space-y-4">
+                <div className="bg-slate-900 border border-orange-500/30 rounded-3xl p-6 w-full max-w-lg shadow-2xl animate-slide-up relative flex flex-col max-h-[90vh]">
+                    <div className="flex justify-between items-center mb-6 shrink-0">
+                        <h2 className="text-2xl font-bold text-white flex items-center gap-2"><Edit2 className="text-orange-500"/> {editingItem.id ? 'Modifica Piatto' : 'Nuovo Piatto'}</h2>
+                        <button onClick={() => setIsEditingItem(false)} className="text-slate-400 hover:text-white p-2 rounded-full bg-slate-800"><X /></button>
+                    </div>
+                    
+                    <div className="space-y-4 overflow-y-auto custom-scroll pr-2 flex-1">
                         {/* Form Inputs ... */}
                         <div className="grid grid-cols-3 gap-4">
                             <div className="col-span-2"><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Nome Piatto</label><input type="text" value={editingItem.name || ''} onChange={e => setEditingItem({...editingItem, name: capitalize(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-bold" autoFocus /></div>
@@ -778,16 +783,38 @@ Cordiali saluti.`);
                                 <div className="flex-1"><input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" id="dish-image-upload"/><label htmlFor="dish-image-upload" className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold uppercase rounded-lg cursor-pointer transition-colors border border-slate-700"><Upload size={14}/> Carica Foto</label><p className="text-[10px] text-slate-500 mt-1">Formati: JPG, PNG. Max 1MB consigliato.</p></div>
                             </div>
                         </div>
-                        {/* Desc & Buttons */}
+                        
+                        {/* ALLERGENS RESTORED */}
                         <div>
-                            <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Descrizione</label>
+                            <label className="text-xs font-bold text-slate-500 uppercase mb-2 block flex items-center gap-2"><AlertTriangle size={12} className="text-orange-500"/> Allergeni (Obbligatorio per Legge)</label>
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                {ALLERGENS_CONFIG.map(alg => {
+                                    const isSelected = editingItem.allergens?.includes(alg.id);
+                                    return (
+                                        <button key={alg.id} onClick={() => toggleAllergen(alg.id)} className={`flex items-center justify-center gap-2 py-2 px-1 rounded-lg border text-[10px] font-bold uppercase transition-all ${isSelected ? 'bg-orange-500/20 border-orange-500 text-orange-400' : 'bg-slate-950 border-slate-800 text-slate-500 hover:border-slate-600'}`}>
+                                            <alg.icon size={12}/> {alg.label}
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        </div>
+
+                        {/* Desc & Buttons with AI */}
+                        <div>
+                            <div className="flex justify-between items-center mb-1">
+                                <label className="text-xs font-bold text-slate-500 uppercase block">Descrizione & Ingredienti</label>
+                                <button onClick={handleGenerateDescription} disabled={isGeneratingDesc || !editingItem.name} className="flex items-center gap-1 text-[10px] font-bold bg-indigo-600 hover:bg-indigo-500 text-white px-2 py-1 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                                    {isGeneratingDesc ? <Loader size={10} className="animate-spin"/> : <Sparkles size={10}/>} ✨ Genera Descrizione
+                                </button>
+                            </div>
                             <div className="relative">
                                 <textarea value={editingItem.description || ''} onChange={e => setEditingItem({...editingItem, description: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm h-24 resize-none pr-10" placeholder="Ingredienti..." />
                                 <button onClick={handleDictation} className={`absolute right-3 bottom-3 p-2 rounded-lg transition-colors ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>{isListening ? <MicOff size={16}/> : <Mic size={16}/>}</button>
                             </div>
                         </div>
-                        <button onClick={handleSaveMenu} className="w-full py-4 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl shadow-lg shadow-orange-600/20 mt-4 flex items-center justify-center gap-2"><Save size={20}/> SALVA PIATTO</button>
                     </div>
+                    
+                    <button onClick={handleSaveMenu} className="w-full py-4 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl shadow-lg shadow-orange-600/20 mt-4 flex items-center justify-center gap-2 shrink-0"><Save size={20}/> SALVA PIATTO</button>
                 </div>
             </div>
         )}

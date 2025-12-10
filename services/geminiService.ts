@@ -82,3 +82,30 @@ export const generateRestaurantAnalysis = async (stats: any, date: string): Prom
         return "Errore durante l'analisi AI. Riprova più tardi.";
     }
 };
+
+export const generateDishDescription = async (dishName: string): Promise<string> => {
+    try {
+        const apiKey = getGoogleApiKey() || process.env.API_KEY;
+        if (!apiKey) return ""; // Fail silently or handle in UI
+
+        const ai = new GoogleGenAI({ apiKey });
+
+        const prompt = `
+            Sei uno Chef stellato che scrive il menu.
+            Scrivi una descrizione breve, invitante e appetitosa per il piatto: "${dishName}".
+            Elenca gli ingredienti principali in modo discorsivo.
+            Usa un tono elegante ma chiaro. Max 25 parole.
+            Non mettere virgolette.
+        `;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+        });
+
+        return response.text || "";
+    } catch (error) {
+        console.error("Description Gen Error:", error);
+        return "";
+    }
+};
