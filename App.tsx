@@ -4,7 +4,7 @@ import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import DigitalMenu from './components/DigitalMenu';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, RefreshCw, Send, Printer, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, FileSpreadsheet, Image as ImageIcon, Upload, FileImage, ExternalLink, CreditCard, Banknote, Briefcase, Clock, Check, ListPlus, ArrowRightLeft, Code2, Cookie, Shield, Wrench } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, RefreshCw, Send, Printer, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, FileSpreadsheet, Image as ImageIcon, Upload, FileImage, ExternalLink, CreditCard, Banknote, Briefcase, Clock, Check, ListPlus, ArrowRightLeft, Code2, Cookie, Shield, Wrench, Download } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate, performFactoryReset } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { askChefAI, generateRestaurantAnalysis, generateDishDescription, generateDishIngredients } from './services/geminiService';
@@ -415,6 +415,53 @@ export default function App() {
       else setEditingItem(prev => ({ ...prev, comboItems: [...current, itemId] }));
   };
 
+  // SHARE HELPERS (QR & Native)
+  const handleDownloadQr = async () => {
+      const restaurantId = session?.user?.id;
+      if (!restaurantId) return;
+      const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=1000x1000&data=${encodeURIComponent(`https://risto-sync.vercel.app/?menu=${restaurantId}`)}`;
+      
+      try {
+          // Fetch image as blob to force download
+          const response = await fetch(qrUrl);
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          // Clean filename
+          const safeName = (restaurantName || 'Menu').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+          link.download = `QR_${safeName}.png`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+      } catch (e) {
+          alert("Impossibile scaricare l'immagine. Riprova o usa tasto destro > Salva.");
+      }
+  };
+
+  const handleNativeShare = async () => {
+      const restaurantId = session?.user?.id;
+      if (!restaurantId) return;
+      const menuLink = `https://risto-sync.vercel.app/?menu=${restaurantId}`;
+      const shareData = {
+          title: restaurantName,
+          text: 'Guarda il nostro menu digitale aggiornato!',
+          url: menuLink
+      };
+
+      if (navigator.share) {
+          try {
+              await navigator.share(shareData);
+          } catch (err) {
+              // Ignore abort errors
+          }
+      } else {
+          navigator.clipboard.writeText(menuLink);
+          alert("Link copiato negli appunti! (Condivisione nativa non supportata su questo browser)");
+      }
+  };
+
   // Dynamic Mailto Generator
   const getPaymentMailto = () => {
       const subject = encodeURIComponent(`Conferma Pagamento - ${profileForm.name || 'Ristorante'}`);
@@ -604,6 +651,46 @@ Grazie.`);
                             <button onClick={() => setAdminTab('info')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'info' ? 'bg-slate-800 text-white' : 'bg-slate-800 text-slate-400'}`}>DevTools</button>
                         </div>
                         
+                        {/* SHARE TAB - RESTORED */}
+                        {adminTab === 'share' && (
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start max-w-5xl mx-auto h-full animate-fade-in">
+                                <div className="text-center lg:text-left flex flex-col items-center lg:items-start">
+                                    <div className="bg-white p-4 rounded-3xl inline-block mb-6 shadow-2xl">
+                                        <img src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`https://risto-sync.vercel.app/?menu=${session?.user?.id || 'demo'}`)}`} alt="QR Code Menu" className="w-48 h-48 bg-gray-200 rounded-xl" />
+                                    </div>
+                                    <h3 className="text-3xl font-black text-white mb-2">Il tuo Menu Digitale</h3>
+                                    <p className="text-slate-400 mb-8 max-w-sm mx-auto lg:mx-0">I clienti possono scansionare questo codice per vedere il menu completo, allergeni e foto dei piatti.</p>
+                                    
+                                    <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex items-center justify-between gap-4 mb-6 max-w-md mx-auto lg:mx-0 w-full">
+                                        <code className="text-xs text-blue-400 font-mono truncate flex-1">https://risto-sync.vercel.app/?menu={session?.user?.id || '...'}</code>
+                                        <button onClick={() => { if (session?.user?.id) { navigator.clipboard.writeText(`https://risto-sync.vercel.app/?menu=${session.user.id}`); alert("Link copiato!"); } }} className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700 text-white" title="Copia Link"><Copy size={16}/></button>
+                                    </div>
+                                    
+                                    <div className="flex flex-wrap gap-4 justify-center lg:justify-start mb-8">
+                                        <a href={`https://risto-sync.vercel.app/?menu=${session?.user?.id || ''}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-5 py-3 bg-pink-600 text-white font-bold rounded-xl hover:bg-pink-500 shadow-lg shadow-pink-600/20 transition-all text-sm">
+                                            <ExternalLink size={18}/> Apri Menu
+                                        </a>
+                                        <button onClick={handleDownloadQr} className="inline-flex items-center gap-2 px-5 py-3 bg-slate-800 text-white font-bold rounded-xl border border-slate-700 hover:bg-slate-700 transition-all text-sm">
+                                            <Download size={18}/> Scarica QR
+                                        </button>
+                                        <button onClick={handleNativeShare} className="inline-flex items-center gap-2 px-5 py-3 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-500 shadow-lg shadow-indigo-600/20 transition-all text-sm">
+                                            <Share2 size={18}/> Condividi
+                                        </button>
+                                    </div>
+                                    <p className="text-xs text-slate-500 italic max-w-xs mx-auto lg:mx-0">Suggerimento: Stampa il QR Code e posizionalo sui tavoli o all'ingresso del locale.</p>
+                                </div>
+                                <div className="flex flex-col items-center">
+                                    <p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-4">Anteprima Live</p>
+                                    <div className="border-[8px] border-slate-900 rounded-[3rem] overflow-hidden h-[600px] w-[320px] relative shadow-2xl bg-slate-950 flex flex-col">
+                                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-6 bg-slate-900 rounded-b-xl z-50"></div>
+                                        <div className="h-full w-full overflow-hidden bg-slate-50 flex-1 relative">
+                                            <DigitalMenu restaurantId={session?.user?.id || 'preview'} isPreview={true} activeMenuData={menuItems} activeRestaurantName={restaurantName} />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* SUBSCRIPTION TAB - RESTORED */}
                         {adminTab === 'subscription' && (
                             <div className="max-w-4xl mx-auto pb-20 animate-fade-in">
@@ -740,11 +827,6 @@ Grazie.`);
                                     <div className="pt-4 border-t border-slate-800"><button onClick={handleSaveProfile} className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-green-600/20 active:scale-95 transition-all"><Save size={20}/> SALVA PROFILO</button></div>
                                 </div>
                             </div>
-                        )}
-
-                        {/* SHARE TAB - RESTORED */}
-                        {adminTab === 'share' && (
-                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start max-w-5xl mx-auto h-full animate-fade-in"><div className="text-center lg:text-left flex flex-col items-center lg:items-start"><div className="bg-white p-4 rounded-3xl inline-block mb-6 shadow-2xl"><img src={`https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(`https://risto-sync.vercel.app/?menu=${session?.user?.id || 'demo'}`)}`} alt="QR Code Menu" className="w-48 h-48 bg-gray-200 rounded-xl" /></div><h3 className="text-3xl font-black text-white mb-2">Il tuo Menu Digitale</h3><p className="text-slate-400 mb-8 max-w-sm mx-auto lg:mx-0">I clienti possono scansionare questo codice per vedere il menu completo, allergeni e foto dei piatti.</p><div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex items-center justify-between gap-4 mb-6 max-w-md mx-auto lg:mx-0 w-full"><code className="text-xs text-blue-400 font-mono truncate flex-1">https://risto-sync.vercel.app/?menu={session?.user?.id || '...'}</code><button onClick={() => { if (session?.user?.id) { navigator.clipboard.writeText(`https://risto-sync.vercel.app/?menu=${session.user.id}`); alert("Link copiato!"); } }} className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700 text-white"><Copy size={16}/></button></div><div className="flex gap-4 justify-center lg:justify-start mb-8"><a href={`https://risto-sync.vercel.app/?menu=${session?.user?.id || ''}`} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 px-6 py-3 bg-pink-600 text-white font-bold rounded-xl hover:bg-pink-500 shadow-lg shadow-pink-600/20"><ExternalLink size={18}/> Apri Esterno</a><button className="px-6 py-3 bg-slate-800 text-white font-bold rounded-xl border border-slate-700 cursor-default">Status: Online</button></div></div><div className="flex flex-col items-center"><p className="text-slate-500 text-xs font-bold uppercase tracking-widest mb-4">Anteprima Live</p><div className="border-[8px] border-slate-900 rounded-[3rem] overflow-hidden h-[600px] w-[320px] relative shadow-2xl bg-slate-950 flex flex-col"><div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-6 bg-slate-900 rounded-b-xl z-50"></div><div className="h-full w-full overflow-hidden bg-slate-50 flex-1 relative"><DigitalMenu restaurantId={session?.user?.id || 'preview'} isPreview={true} activeMenuData={menuItems} activeRestaurantName={restaurantName} /></div></div></div></div>
                         )}
 
                         {/* MENU TAB (Updated Logic to hide MENU_COMPLETO from Department Config) */}
