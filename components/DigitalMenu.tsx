@@ -81,7 +81,7 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
                 // 2. Fetch Menu Items (Public Read)
                 // If activeMenuData provided (Preview), we skip fetching menu items
                 if (!activeMenuData) {
-                    const { data: items, error: menuError } = await supabase
+                    const { data: rawItems, error: menuError } = await supabase
                         .from('menu_items')
                         .select('*')
                         .eq('user_id', restaurantId);
@@ -90,8 +90,24 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
                         console.error("Menu fetch error:", menuError);
                     }
 
-                    if (items && items.length > 0) {
-                        setMenuItems(items);
+                    if (rawItems && rawItems.length > 0) {
+                        // MAP DATABASE (Snake_Case) TO APP (CamelCase)
+                        // Critical for Combo Items array which is 'combo_items' in DB but 'comboItems' in App
+                        const mappedItems: MenuItem[] = rawItems.map((row: any) => ({
+                            id: row.id,
+                            name: row.name,
+                            price: row.price,
+                            category: row.category,
+                            description: row.description,
+                            ingredients: row.ingredients,
+                            allergens: row.allergens,
+                            image: row.image,
+                            isCombo: row.category === Category.MENU_COMPLETO,
+                            comboItems: row.combo_items || [], // Correctly map snake_case
+                            specificDepartment: row.specific_department
+                        }));
+
+                        setMenuItems(mappedItems);
                         setRlsError(false); 
                     }
                 }
