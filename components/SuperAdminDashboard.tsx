@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, signOut } from '../services/supabase';
-import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon, FileText, MapPin, Phone, CreditCard, Mail, MessageCircle, Share2, PhoneCall, Facebook, Instagram, Music, Linkedin, Youtube, Store, Compass, UtensilsCrossed } from 'lucide-react';
+import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon, FileText, MapPin, Phone, CreditCard, Mail, MessageCircle, Share2, PhoneCall, Facebook, Instagram, Music, Linkedin, Youtube, Store, Compass, UtensilsCrossed, Wrench } from 'lucide-react';
 
 interface SuperAdminDashboardProps {
     onEnterApp: () => void;
@@ -16,11 +16,13 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     const [copiedRecovery, setCopiedRecovery] = useState(false);
     const [copiedPublic, setCopiedPublic] = useState(false);
     const [copiedImage, setCopiedImage] = useState(false);
+    const [copiedFix, setCopiedFix] = useState(false); // New State
     const [currentEmail, setCurrentEmail] = useState<string>('');
     const [showSqlModal, setShowSqlModal] = useState(false);
     const [showRecoveryModal, setShowRecoveryModal] = useState(false);
     const [showPublicModal, setShowPublicModal] = useState(false);
     const [showImageModal, setShowImageModal] = useState(false);
+    const [showFixModal, setShowFixModal] = useState(false); // New Modal State
     
     // Registry / Profile View & Edit State
     const [viewingProfile, setViewingProfile] = useState<any | null>(null);
@@ -115,7 +117,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
             .eq('id', viewingProfile.id);
 
         if (error) {
-            alert("Errore salvataggio: " + error.message);
+            alert("ERRORE SALVATAGGIO: " + error.message + "\n\nProbabile causa: Mancano i permessi 'Super Admin'.\nClicca su 'FIX DATABASE' nella dashboard e esegui lo script.");
             fetchProfiles(); // Revert on error
         } else {
             setIsEditingRegistry(false);
@@ -240,13 +242,30 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     const getPublicAccessSQL = () => `drop policy if exists "Public profiles are viewable by everyone" on public.profiles; create policy "Public profiles are viewable by everyone" on public.profiles for select using (true); drop policy if exists "Public menu items are viewable by everyone" on public.menu_items; create policy "Public menu items are viewable by everyone" on public.menu_items for select using (true);`;
     
     const getImageUpdateSQL = () => `alter table public.menu_items add column if not exists image text;`;
+
+    // NEW: Fix Structure SQL
+    const getFixStructureSQL = () => `-- 1. AGGIUNGI COLONNA SETTINGS (Se manca)
+alter table public.profiles add column if not exists settings jsonb;
+
+-- 2. ABILITA PERMESSI SUPER ADMIN (Per modificare i clienti)
+drop policy if exists "Super Admin Update All" on public.profiles;
+create policy "Super Admin Update All" on public.profiles for update
+using (auth.jwt() ->> 'email' = '${SUPER_ADMIN_EMAIL}');
+
+-- 3. GARANTISCI CHE GLI UTENTI POSSANO MODIFICARE SE STESSI
+drop policy if exists "User update own profile" on public.profiles;
+create policy "User update own profile" on public.profiles for update using (auth.uid() = id);
+
+-- 4. AGGIORNA CACHE SCHEMAS
+notify pgrst, 'reload schema';`;
     
-    const copySQL = (sql: string, type: 'reset' | 'demo' | 'recovery' | 'public' | 'image') => {
+    const copySQL = (sql: string, type: 'reset' | 'demo' | 'recovery' | 'public' | 'image' | 'fix') => {
         navigator.clipboard.writeText(sql);
         if (type === 'reset') { setCopiedSQL(true); setTimeout(() => setCopiedSQL(false), 2000); }
         else if (type === 'demo') { setCopiedDemo(true); setTimeout(() => setCopiedDemo(false), 2000); }
         else if (type === 'public') { setCopiedPublic(true); setTimeout(() => setCopiedPublic(false), 2000); }
         else if (type === 'image') { setCopiedImage(true); setTimeout(() => setCopiedImage(false), 2000); }
+        else if (type === 'fix') { setCopiedFix(true); setTimeout(() => setCopiedFix(false), 2000); }
         else { setCopiedRecovery(true); setTimeout(() => setCopiedRecovery(false), 2000); }
     };
 
@@ -310,6 +329,7 @@ insert into public.profiles (id, email, restaurant_name, subscription_status) se
                         <div className="flex justify-between items-start mb-4">
                             <div className="p-3 bg-orange-500/10 rounded-xl text-orange-400"><FlaskConical /></div>
                             <div className="flex gap-2">
+                                <button onClick={() => setShowFixModal(true)} className="text-xs bg-red-600 hover:bg-red-500 text-white w-8 h-8 rounded-lg flex items-center justify-center transition-colors shadow-lg animate-pulse" title="FIX DATABASE STRUTTURA & PERMESSI"><Wrench size={16}/></button>
                                 <button onClick={() => setShowImageModal(true)} className="text-xs bg-indigo-600/20 hover:bg-indigo-600 hover:text-white text-indigo-400 w-8 h-8 rounded-lg flex items-center justify-center transition-colors border border-indigo-500/30" title="Abilita Foto Database"><ImageIcon size={16}/></button>
                                 <button onClick={() => setShowPublicModal(true)} className="text-xs bg-pink-600/20 hover:bg-pink-600 hover:text-white text-pink-400 w-8 h-8 rounded-lg flex items-center justify-center transition-colors border border-pink-500/30" title="Abilita Menu Pubblico"><Globe size={16}/></button>
                                 <button onClick={() => setShowRecoveryModal(true)} className="text-xs bg-slate-700 hover:bg-slate-600 text-white w-8 h-8 rounded-lg flex items-center justify-center transition-colors" title="SOS Recovery Utente"><LifeBuoy size={16} className="text-blue-400"/></button>
@@ -582,6 +602,43 @@ insert into public.profiles (id, email, restaurant_name, subscription_status) se
                         
                         <div className="mt-6 flex justify-end">
                             <button onClick={() => setShowSqlModal(false)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold">Chiudi</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* FIX STRUCTURE MODAL */}
+            {showFixModal && (
+                <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+                    <div className="bg-slate-900 border border-red-500/30 rounded-3xl p-6 w-full max-w-2xl shadow-2xl animate-slide-up relative">
+                        <button onClick={() => setShowFixModal(false)} className="absolute top-4 right-4 text-slate-400 hover:text-white"><X /></button>
+                        
+                        <div className="flex items-center gap-3 mb-4 text-red-400">
+                             <div className="p-2 bg-red-500/10 rounded-lg"><Wrench size={24} /></div>
+                             <h2 className="text-xl font-bold text-white">Riparazione Database & Permessi</h2>
+                        </div>
+                        
+                        <p className="text-slate-400 text-sm mb-4">
+                            Se i dati "Anagrafica" spariscono o ottieni errori nel salvarli, esegui questo comando.
+                            <br/><strong>1. Crea la colonna 'settings'</strong> se mancante.
+                            <br/><strong>2. Abilita i permessi Super Admin</strong> per modificare i dati degli altri.
+                        </p>
+
+                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 relative group text-left mb-6">
+                            <pre className="text-left text-xs text-green-400 font-mono whitespace-pre-wrap overflow-x-auto h-48 custom-scroll p-2">
+{getFixStructureSQL()}
+                            </pre>
+                            <button 
+                                onClick={() => copySQL(getFixStructureSQL(), 'fix')}
+                                className="absolute top-4 right-4 bg-slate-800 hover:bg-slate-700 text-white px-4 py-2 rounded-lg font-bold text-xs flex items-center gap-2 shadow-lg transition-all"
+                            >
+                                {copiedFix ? <Check size={16} className="text-green-500"/> : <Copy size={16}/>}
+                                {copiedFix ? 'COPIATO!' : 'COPIA SQL'}
+                            </button>
+                        </div>
+                        
+                        <div className="mt-6 flex justify-end">
+                            <button onClick={() => setShowFixModal(false)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-bold">Chiudi</button>
                         </div>
                     </div>
                 </div>

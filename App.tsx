@@ -225,6 +225,7 @@ export default function App() {
               'Cucina': false, 'Pizzeria': false, 'Pub': false, 'Sala': false, 'Cassa': false
           });
           
+          // CRITICAL: Ensure we read correctly even if empty initially
           setProfileForm({
               name: restaurantName,
               address: currentSettings.restaurantProfile?.address || '',
@@ -244,13 +245,14 @@ export default function App() {
           const key = getGoogleApiKey();
           if (key) setApiKeyInput(key);
       }
-  }, [showAdmin, restaurantName]);
+  }, [showAdmin]); // Removed restaurantName dependency to avoid loop resets
 
   useEffect(() => {
       const handleSettingsUpdate = () => {
           const updated = getAppSettings();
           setAppSettingsState(updated);
-          if (!hasUnsavedDestinations) {
+          // Only update temp stuff if we are NOT in the middle of editing
+          if (!hasUnsavedDestinations && !showAdmin) {
               setTempDestinations(updated.categoryDestinations);
               setTempPrintSettings(updated.printEnabled);
           }
@@ -455,17 +457,35 @@ export default function App() {
   };
 
   const handleSaveProfile = async () => {
+      // 1. Merge logic: Ensure we keep existing destinations/print settings if they exist in appSettings
+      // and only update the profile part.
       const newProfile = { ...profileForm };
-      const newSettings = { ...appSettings, restaurantProfile: newProfile };
+      
+      const newSettings: AppSettings = { 
+          ...appSettings, 
+          restaurantProfile: newProfile 
+      };
+      
+      // 2. Save locally and sync
       await saveAppSettings(newSettings);
+      
+      // 3. Update local state immediately
       setAppSettingsState(newSettings);
 
+      // 4. Also update the high-level 'restaurant_name' column for dashboard visibility
       if (supabase && session?.user?.id && newProfile.name) {
-          await supabase.from('profiles').update({ restaurant_name: newProfile.name }).eq('id', session.user.id);
+          const { error } = await supabase
+            .from('profiles')
+            .update({ restaurant_name: newProfile.name })
+            .eq('id', session.user.id);
+            
+          if (error) console.error("Name update error:", error);
       }
+      
       if (newProfile.name) {
           setRestaurantName(newProfile.name);
       }
+      
       alert("Profilo aggiornato con successo!");
   };
 
