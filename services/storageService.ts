@@ -1,5 +1,4 @@
 import { Order, OrderStatus, OrderItem, MenuItem, AppSettings, Category, Department } from '../types';
-import { MENU_ITEMS as DEFAULT_MENU_ITEMS } from '../constants';
 import { supabase } from './supabase';
 
 const STORAGE_KEY = 'ristosync_orders';
@@ -42,14 +41,16 @@ export const initSupabaseSync = async () => {
             .on('postgres_changes', { 
                 event: '*', 
                 schema: 'public', 
-                table: 'orders' 
+                table: 'orders',
+                filter: `user_id=eq.${currentUserId}` // Filter by user ID
             }, (payload) => {
                 fetchFromCloud(); 
             })
             .on('postgres_changes', { 
                 event: '*', 
                 schema: 'public', 
-                table: 'menu_items' 
+                table: 'menu_items',
+                filter: `user_id=eq.${currentUserId}` // Filter by user ID
             }, () => {
                 fetchFromCloudMenu();
             })
@@ -82,7 +83,12 @@ export const initSupabaseSync = async () => {
 
 const fetchFromCloud = async () => {
     if (!supabase || !currentUserId) return;
-    const { data, error } = await supabase.from('orders').select('*');
+    // CRITICAL FIX: Explicitly filter by user_id to prevent data mixing
+    const { data, error } = await supabase
+        .from('orders')
+        .select('*')
+        .eq('user_id', currentUserId);
+
     if (error) {
         console.error('Error fetching orders:', error);
         return;
@@ -107,7 +113,13 @@ const fetchFromCloud = async () => {
 
 const fetchFromCloudMenu = async () => {
     if (!supabase || !currentUserId) return;
-    const { data, error } = await supabase.from('menu_items').select('*');
+    // CRITICAL FIX: Explicitly filter by user_id. 
+    // Since we enabled "Public Read" for the digital menu, select('*') returns EVERYONE'S menu without this filter.
+    const { data, error } = await supabase
+        .from('menu_items')
+        .select('*')
+        .eq('user_id', currentUserId);
+
     if (!error && data) {
          // Map DB snake_case columns back to camelCase for App
          const appMenuItems: MenuItem[] = data.map((row: any) => ({
@@ -532,8 +544,10 @@ export const getMenuItems = (): MenuItem[] => {
     if (data) {
         return JSON.parse(data);
     } else {
-        localStorage.setItem(MENU_KEY, JSON.stringify(DEFAULT_MENU_ITEMS));
-        return DEFAULT_MENU_ITEMS;
+        // CHANGED: Do NOT return default items. Start with empty to avoid data mixing appearance.
+        // localStorage.setItem(MENU_KEY, JSON.stringify(DEFAULT_MENU_ITEMS));
+        // return DEFAULT_MENU_ITEMS;
+        return [];
     }
 };
 

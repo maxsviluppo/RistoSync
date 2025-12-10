@@ -66,15 +66,17 @@ const AuthScreen: React.FC = () => {
                     return;
                 }
                 
-                // GESTIONE PROFILO (Soft Check)
+                // GESTIONE PROFILO (Ensure Profile Creation for Trial)
                 if (data.user) {
                      try {
                          // CALCOLO 15 GIORNI DI PROVA GRATUITA
-                         const trialEndDate = new Date();
-                         trialEndDate.setDate(trialEndDate.getDate() + 15);
+                         const today = new Date();
+                         const trialEndDate = new Date(today);
+                         trialEndDate.setDate(today.getDate() + 15);
 
-                         // Tentativo manuale di sicurezza (se il trigger non parte)
-                         await supabase.from('profiles').insert({
+                         // Attempt insertion. If trigger exists on Supabase side, this might fail or be redundant, 
+                         // but we do it to ensure settings are populated correctly.
+                         const { error: profileError } = await supabase.from('profiles').insert({
                              id: data.user.id,
                              email: email,
                              restaurant_name: restaurantName,
@@ -83,15 +85,19 @@ const AuthScreen: React.FC = () => {
                                  restaurantProfile: {
                                      planType: 'Trial',
                                      subscriptionEndDate: trialEndDate.toISOString(),
-                                     subscriptionCost: defaultCost // Use dynamic cost
+                                     subscriptionCost: defaultCost,
+                                     name: restaurantName
                                  }
                              }
                          });
+                         
+                         if(profileError) console.log("Profile insert info:", profileError.message);
+
                      } catch (e) {
-                         // Ignoriamo errori di duplicati
-                         console.log("Insert profile skipped/failed or trigger handled it");
+                         console.log("Profile setup check: ", e);
                      }
-                     await new Promise(r => setTimeout(r, 500));
+                     // Small delay to allow propagation
+                     await new Promise(r => setTimeout(r, 1000));
                 }
             }
         } catch (err: any) {
