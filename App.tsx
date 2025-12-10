@@ -4,7 +4,7 @@ import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import DigitalMenu from './components/DigitalMenu';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, RefreshCw, Send, Printer, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, FileSpreadsheet, Image as ImageIcon, Upload, FileImage, ExternalLink, CreditCard, Banknote, Briefcase, Clock, Check, ListPlus, ArrowRightLeft } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, RefreshCw, Send, Printer, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, FileSpreadsheet, Image as ImageIcon, Upload, FileImage, ExternalLink, CreditCard, Banknote, Briefcase, Clock, Check, ListPlus, ArrowRightLeft, Code2, Cookie, Shield, Wrench } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate, performFactoryReset } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { askChefAI, generateRestaurantAnalysis, generateDishDescription, generateDishIngredients } from './services/geminiService';
@@ -152,6 +152,10 @@ export default function App() {
   
   // Dynamic Admin Config
   const [adminContactEmail, setAdminContactEmail] = useState(SUPER_ADMIN_EMAIL);
+  // NEW: Dynamic Banking & Support Info
+  const [adminIban, setAdminIban] = useState('IT73W0623074792000057589384');
+  const [adminHolder, setAdminHolder] = useState('Massimo Castro');
+  const [adminPhone, setAdminPhone] = useState('3478127440');
 
   const isSuperAdmin = session?.user?.email === SUPER_ADMIN_EMAIL;
 
@@ -234,7 +238,7 @@ export default function App() {
   }, [publicMenuId]);
 
   useEffect(() => {
-      // Fetch Dynamic Global Settings (Admin Contact Email)
+      // Fetch Dynamic Global Settings (Admin Contact Email & Banking)
       const fetchGlobalSettings = async () => {
           if (!supabase) return;
           try {
@@ -244,8 +248,16 @@ export default function App() {
                   .eq('email', SUPER_ADMIN_EMAIL)
                   .single();
               
-              if (adminProfile?.settings?.globalConfig?.contactEmail) {
-                  setAdminContactEmail(adminProfile.settings.globalConfig.contactEmail);
+              if (adminProfile?.settings?.globalConfig) {
+                  const config = adminProfile.settings.globalConfig;
+                  if (config.contactEmail) setAdminContactEmail(config.contactEmail);
+                  if (config.bankDetails) {
+                      if (config.bankDetails.iban) setAdminIban(config.bankDetails.iban);
+                      if (config.bankDetails.holder) setAdminHolder(config.bankDetails.holder);
+                  }
+                  if (config.supportContact?.phone) {
+                      setAdminPhone(config.supportContact.phone);
+                  }
               }
           } catch (e) {
               console.error("Error fetching global settings", e);
@@ -381,7 +393,7 @@ export default function App() {
   const handleSaveApiKey = () => { saveGoogleApiKey(apiKeyInput.trim()); alert("Chiave API salvata!"); };
   const handleSaveProfile = async () => { const newProfile = { ...profileForm }; const newSettings: AppSettings = { ...appSettings, restaurantProfile: newProfile }; await saveAppSettings(newSettings); setAppSettingsState(newSettings); if (supabase && session?.user?.id && newProfile.name) { const { error } = await supabase.from('profiles').update({ restaurant_name: newProfile.name }).eq('id', session.user.id); if (error) console.error("Name update error:", error); } if (newProfile.name) { setRestaurantName(newProfile.name); } alert("Profilo aggiornato con successo!"); };
   const handleSocialChange = (network: string, value: string) => { setProfileForm(prev => ({ ...prev, socials: { ...prev.socials, [network]: value } })); };
-  const handleCopyIban = () => { navigator.clipboard.writeText("IT73W0623074792000057589384"); setIbanCopied(true); setTimeout(() => setIbanCopied(false), 2000); };
+  const handleCopyIban = () => { navigator.clipboard.writeText(adminIban); setIbanCopied(true); setTimeout(() => setIbanCopied(false), 2000); };
   const handleCopyAdminEmail = () => { navigator.clipboard.writeText(adminContactEmail); setAdminEmailCopied(true); setTimeout(() => setAdminEmailCopied(false), 2000); };
 
   // MENU COMPLETO HELPERS
@@ -411,6 +423,24 @@ In allegato la distinta del pagamento.
 Attendo conferma attivazione.
 
 Cordiali saluti.`);
+      return `mailto:${adminContactEmail}?subject=${subject}&body=${body}`;
+  };
+
+  const getRequestMailto = () => {
+      const subject = encodeURIComponent(`Richiesta Supporto/Personalizzazione - ${restaurantName}`);
+      const body = encodeURIComponent(`Salve DevTools,
+
+Sono ${profileForm.responsiblePerson || 'il titolare'} del ristorante ${restaurantName}.
+
+RICHIESTA:
+[Scrivi qui la tua richiesta...]
+
+INFO UTENTE:
+Email: ${session?.user?.email}
+Telefono: ${profileForm.phoneNumber || ''}
+
+Attendo un vostro riscontro.
+Grazie.`);
       return `mailto:${adminContactEmail}?subject=${subject}&body=${body}`;
   };
 
@@ -495,7 +525,7 @@ Cordiali saluti.`);
                   <div className="w-20 h-20 bg-red-600/20 rounded-full flex items-center justify-center mx-auto mb-6 text-red-500 animate-pulse">{subscriptionExpired ? <Banknote size={40}/> : <AlertTriangle size={40}/>}</div>
                   <h1 className="text-3xl font-black text-white mb-2">{isBanned ? 'Richiesta Inviata' : accountDeleted ? 'Account Rimosso' : subscriptionExpired ? 'Abbonamento Scaduto' : 'Account Sospeso'}</h1>
                   <p className="text-slate-400 mb-6 text-lg">{subscriptionExpired ? "Il periodo di abbonamento è terminato. Rinnova per continuare a usare RistoSync." : "Contatta l'amministrazione per maggiori informazioni."}</p>
-                  {subscriptionExpired && (<div className="mb-6 bg-slate-950 p-4 rounded-xl border border-slate-800 text-left"><p className="text-xs text-slate-500 uppercase font-bold mb-2">Come riattivare:</p><ul className="text-sm text-slate-300 space-y-2"><li>1. Effettua il pagamento del canone.</li><li>2. Invia la distinta al supporto (347 812 7440).</li><li>3. Il servizio verrà riattivato entro 24h.</li></ul></div>)}
+                  {subscriptionExpired && (<div className="mb-6 bg-slate-950 p-4 rounded-xl border border-slate-800 text-left"><p className="text-xs text-slate-500 uppercase font-bold mb-2">Come riattivare:</p><ul className="text-sm text-slate-300 space-y-2"><li>1. Effettua il pagamento del canone.</li><li>2. Invia la distinta al supporto ({adminContactEmail}).</li><li>3. Il servizio verrà riattivato entro 24h.</li></ul></div>)}
                   {accountDeleted && <button onClick={handleReactivationRequest} className="w-full bg-green-600 text-white px-6 py-3 rounded-xl font-bold">Richiedi Riattivazione</button>}
                   <button onClick={signOut} className="w-full bg-slate-800 text-white px-6 py-3 rounded-xl font-bold mt-4 border border-slate-700 hover:bg-slate-700 transition-colors">Esci</button>
               </div>
@@ -546,7 +576,7 @@ Cordiali saluti.`);
                          <button onClick={() => setAdminTab('notif')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'notif' ? 'bg-green-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><Bell size={20}/> Notifiche</button>
                          <button onClick={() => setAdminTab('share')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'share' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><QrCode size={20}/> Menu Digitale</button>
                          <button onClick={() => setAdminTab('ai')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'ai' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><Bot size={20}/> AI Intelligence</button>
-                         <button onClick={() => setAdminTab('info')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'info' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><Info size={20}/> Legenda</button>
+                         <button onClick={() => setAdminTab('info')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'info' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><Code2 size={20}/> Contatti & DevTools</button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-6 bg-slate-950 relative">
                         {/* MOBILE NAV BAR UPDATED */}
@@ -558,7 +588,7 @@ Cordiali saluti.`);
                             <button onClick={() => setAdminTab('share')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'share' ? 'bg-pink-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Menu QR</button>
                             <button onClick={() => setAdminTab('ai')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'ai' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-400'}`}>AI & Key</button>
                             <button onClick={() => setAdminTab('notif')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'notif' ? 'bg-green-600 text-white' : 'bg-slate-800 text-slate-400'}`}>Notifiche</button>
-                            <button onClick={() => setAdminTab('info')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'info' ? 'bg-slate-800 text-white' : 'bg-slate-800 text-slate-400'}`}>Legenda</button>
+                            <button onClick={() => setAdminTab('info')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'info' ? 'bg-slate-800 text-white' : 'bg-slate-800 text-slate-400'}`}>DevTools</button>
                         </div>
                         
                         {/* SUBSCRIPTION TAB - RESTORED */}
@@ -575,10 +605,93 @@ Cordiali saluti.`);
                                         <p className="text-[10px] text-slate-500 mt-3">Link sicuro PayPal.Me</p>
                                     </div>
                                 </div>
-                                <div className="bg-slate-900 rounded-3xl border border-slate-800 p-6"><h4 className="font-bold text-white mb-6 flex items-center gap-2"><Banknote size={20} className="text-green-500"/> Coordinate Bancarie (Bonifico)</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm"><div><p className="text-slate-500 mb-1">Intestatario</p><p className="text-white font-bold text-lg mb-4">Massimo Castro</p><p className="text-slate-500 mb-1">IBAN</p><div className="flex items-center gap-2 bg-slate-950 p-3 rounded-lg border border-slate-800"><p className="text-white font-mono select-all cursor-text text-xs md:text-sm flex-1">IT73W0623074792000057589384</p><button onClick={handleCopyIban} className="p-2 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors relative" title="Copia IBAN">{ibanCopied ? <Check size={16} className="text-green-500"/> : <Copy size={16}/>}</button></div></div><div><p className="text-slate-500 mb-1">Causale</p><p className="text-white font-bold mb-4">{profileForm.businessName || restaurantName} - Mese/Anno</p><div className="bg-blue-900/20 border border-blue-500/30 p-5 rounded-2xl shadow-inner"><div className="flex items-start gap-3 mb-4"><Info size={20} className="text-blue-400 shrink-0 mt-0.5" /><div><p className="text-blue-300 text-xs font-black uppercase tracking-wider mb-1">CONFERMA PAGAMENTO</p><p className="text-slate-400 text-xs leading-relaxed">Dopo il bonifico, invia la distinta a <strong>{adminContactEmail}</strong> per l'attivazione immediata.</p></div></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><a href={getPaymentMailto()} className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-xl font-bold text-xs transition-all shadow-lg shadow-blue-600/20"><Send size={14} /> INVIA EMAIL CON DATI</a><button onClick={handleCopyAdminEmail} className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white py-2.5 rounded-xl font-bold text-xs transition-all border border-slate-700">{adminEmailCopied ? <Check size={14} className="text-green-500"/> : <Copy size={14} />} {adminEmailCopied ? 'EMAIL COPIATA' : 'COPIA INDIRIZZO EMAIL'}</button></div></div></div></div></div>
+                                <div className="bg-slate-900 rounded-3xl border border-slate-800 p-6"><h4 className="font-bold text-white mb-6 flex items-center gap-2"><Banknote size={20} className="text-green-500"/> Coordinate Bancarie (Bonifico)</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm"><div><p className="text-slate-500 mb-1">Intestatario</p><p className="text-white font-bold text-lg mb-4">{adminHolder}</p><p className="text-slate-500 mb-1">IBAN</p><div className="flex items-center gap-2 bg-slate-950 p-3 rounded-lg border border-slate-800"><p className="text-white font-mono select-all cursor-text text-xs md:text-sm flex-1">{adminIban}</p><button onClick={handleCopyIban} className="p-2 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors relative" title="Copia IBAN">{ibanCopied ? <Check size={16} className="text-green-500"/> : <Copy size={16}/>}</button></div></div><div><p className="text-slate-500 mb-1">Causale</p><p className="text-white font-bold mb-4">{profileForm.businessName || restaurantName} - Mese/Anno</p><div className="bg-blue-900/20 border border-blue-500/30 p-5 rounded-2xl shadow-inner"><div className="flex items-start gap-3 mb-4"><Info size={20} className="text-blue-400 shrink-0 mt-0.5" /><div><p className="text-blue-300 text-xs font-black uppercase tracking-wider mb-1">CONFERMA PAGAMENTO</p><p className="text-slate-400 text-xs leading-relaxed">Dopo il bonifico, invia la distinta a <strong>{adminContactEmail}</strong> per l'attivazione immediata.</p></div></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><a href={getPaymentMailto()} className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-xl font-bold text-xs transition-all shadow-lg shadow-blue-600/20"><Send size={14} /> INVIA EMAIL CON DATI</a><button onClick={handleCopyAdminEmail} className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white py-2.5 rounded-xl font-bold text-xs transition-all border border-slate-700">{adminEmailCopied ? <Check size={14} className="text-green-500"/> : <Copy size={14} />} {adminEmailCopied ? 'EMAIL COPIATA' : 'COPIA INDIRIZZO EMAIL'}</button></div></div></div></div></div>
                             </div>
                         )}
 
+                        {/* INFO & CONTACTS TAB (REPLACED LEGENDA) */}
+                        {adminTab === 'info' && (
+                            <div className="max-w-3xl mx-auto pb-20 animate-fade-in">
+                                <div className="flex flex-col items-center text-center mb-10">
+                                    <div className="w-20 h-20 bg-slate-800 rounded-3xl flex items-center justify-center mb-4 shadow-xl border border-slate-700 rotate-6 transform transition-transform hover:rotate-0">
+                                        <Code2 size={40} className="text-blue-400"/>
+                                    </div>
+                                    <h3 className="text-3xl font-black text-white mb-2 tracking-tight">DevTools Solutions</h3>
+                                    <p className="text-slate-400 max-w-lg leading-relaxed">Software innovativi per la gestione aziendale moderna.<br/>Sviluppo Web, App Mobile e Integrazioni AI.</p>
+                                </div>
+
+                                {/* CONTACTS CARD */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                                    <a href={`mailto:${adminContactEmail}`} className="bg-slate-900 hover:bg-slate-800 p-6 rounded-2xl border border-slate-800 flex flex-col items-center gap-3 transition-colors group">
+                                        <div className="p-3 bg-blue-500/10 rounded-full text-blue-400 group-hover:bg-blue-500 group-hover:text-white transition-colors"><Mail size={24}/></div>
+                                        <div className="text-center">
+                                            <p className="text-xs text-slate-500 font-bold uppercase mb-1">Email Supporto</p>
+                                            <p className="text-white font-bold text-sm break-all">{adminContactEmail}</p>
+                                        </div>
+                                    </a>
+                                    <a href={`tel:${adminPhone}`} className="bg-slate-900 hover:bg-slate-800 p-6 rounded-2xl border border-slate-800 flex flex-col items-center gap-3 transition-colors group">
+                                        <div className="p-3 bg-green-500/10 rounded-full text-green-400 group-hover:bg-green-500 group-hover:text-white transition-colors"><Phone size={24}/></div>
+                                        <div className="text-center">
+                                            <p className="text-xs text-slate-500 font-bold uppercase mb-1">Telefono</p>
+                                            <p className="text-white font-bold text-sm">{adminPhone}</p>
+                                        </div>
+                                    </a>
+                                    <a href={`https://wa.me/${adminPhone.replace(/\+/g, '').replace(/\s/g, '')}`} target="_blank" rel="noreferrer" className="bg-slate-900 hover:bg-slate-800 p-6 rounded-2xl border border-slate-800 flex flex-col items-center gap-3 transition-colors group">
+                                        <div className="p-3 bg-green-500/10 rounded-full text-green-400 group-hover:bg-green-500 group-hover:text-white transition-colors"><MessageCircle size={24}/></div>
+                                        <div className="text-center">
+                                            <p className="text-xs text-slate-500 font-bold uppercase mb-1">WhatsApp</p>
+                                            <p className="text-white font-bold text-sm">Chatta Ora</p>
+                                        </div>
+                                    </a>
+                                </div>
+
+                                {/* ABOUT & TUTORIAL */}
+                                <div className="bg-slate-900 rounded-3xl border border-slate-800 p-8 mb-8">
+                                    <h4 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><Sparkles className="text-orange-500"/> Cos'è RistoSync AI?</h4>
+                                    <p className="text-slate-300 leading-relaxed mb-6">
+                                        RistoSync AI è una piattaforma PWA (Progressive Web App) progettata per sincronizzare perfettamente il flusso di lavoro tra Sala e Cucina. Utilizza l'intelligenza artificiale per supportare lo staff con informazioni istantanee sugli allergeni e traduzioni, e un sistema in tempo reale per la gestione delle comande.
+                                    </p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                                            <div className="flex items-center gap-2 mb-2 text-blue-400 font-bold uppercase text-xs"><Smartphone size={14}/> Per i Camerieri (Sala)</div>
+                                            <p className="text-slate-400 text-xs">Usa lo smartphone in verticale. Prendi l'ordine, invialo in cucina e ricevi una notifica quando i piatti sono pronti per essere serviti.</p>
+                                        </div>
+                                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
+                                            <div className="flex items-center gap-2 mb-2 text-orange-400 font-bold uppercase text-xs"><ChefHat size={14}/> Per lo Chef (Cucina)</div>
+                                            <p className="text-slate-400 text-xs">Usa un tablet in orizzontale. Visualizza le comande in arrivo, segna i piatti come pronti e gestisci le priorità di uscita.</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* REQUEST FORM */}
+                                <div className="bg-gradient-to-br from-indigo-900/50 to-slate-900 rounded-3xl border border-indigo-500/30 p-8 mb-8 relative overflow-hidden">
+                                    <div className="relative z-10">
+                                        <h4 className="text-xl font-bold text-white mb-2">Richiedi Personalizzazioni</h4>
+                                        <p className="text-indigo-200 text-sm mb-6">Hai bisogno di una funzionalità specifica o di un'altra app per la tua attività? Invia una richiesta diretta al nostro team di sviluppo.</p>
+                                        <a href={getRequestMailto()} className="inline-flex items-center gap-2 bg-white text-indigo-900 px-6 py-3 rounded-xl font-bold hover:bg-indigo-50 transition-colors shadow-lg">
+                                            <Send size={18}/> Invia Richiesta via Email
+                                        </a>
+                                    </div>
+                                    <div className="absolute -right-10 -bottom-10 opacity-10 text-white"><Wrench size={200}/></div>
+                                </div>
+
+                                {/* LEGAL & PRIVACY */}
+                                <div className="text-xs text-slate-500 text-center space-y-4 border-t border-slate-800 pt-8">
+                                    <div className="flex justify-center gap-6 font-bold uppercase tracking-wider">
+                                        <span className="flex items-center gap-1"><Shield size={12}/> Privacy Policy</span>
+                                        <span className="flex items-center gap-1"><Cookie size={12}/> Cookie Policy</span>
+                                    </div>
+                                    <p className="max-w-2xl mx-auto leading-relaxed">
+                                        <strong>DevTools Solutions</strong> garantisce che i dati raccolti (menu, ordini, statistiche) sono di esclusiva proprietà del ristoratore. 
+                                        L'applicazione utilizza cookie tecnici essenziali per il funzionamento e il mantenimento della sessione (Supabase Auth). 
+                                        Nessun dato viene ceduto a terzi per scopi commerciali. L'Intelligenza Artificiale (Google Gemini) processa i dati in modo anonimo e stateless solo su richiesta esplicita dell'utente.
+                                    </p>
+                                    <p>© {new Date().getFullYear()} DevTools Solutions - P.IVA: {profileForm.vatNumber || 'N/A'}</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* OTHER TABS... */}
                         {/* PROFILE TAB - RESTORED FULL */}
                         {adminTab === 'profile' && (
                             <div className="max-w-2xl mx-auto pb-20 animate-fade-in">

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, signOut } from '../services/supabase';
-import { ShieldCheck, Users, Database, LogOut, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon, FileText, MapPin, CreditCard, Mail, MessageCircle, Share2, PhoneCall, Facebook, Instagram, Store, Compass, Wrench, Calendar, DollarSign, Briefcase, Sparkles, Clock, AlertOctagon, UserCheck, Banknote, CalendarCheck, Settings, Inbox } from 'lucide-react';
+import { ShieldCheck, Users, Database, LogOut, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon, FileText, MapPin, CreditCard, Mail, MessageCircle, Share2, PhoneCall, Facebook, Instagram, Store, Compass, Wrench, Calendar, DollarSign, Briefcase, Sparkles, Clock, AlertOctagon, UserCheck, Banknote, CalendarCheck, Settings, Inbox, Hash } from 'lucide-react';
 
 interface SuperAdminDashboardProps {
     onEnterApp: () => void;
@@ -22,6 +22,12 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     // Global Config State
     const [globalContactEmail, setGlobalContactEmail] = useState(SUPER_ADMIN_EMAIL);
     const [globalDefaultCost, setGlobalDefaultCost] = useState('49.90');
+    
+    // Global Bank & Support Data
+    const [globalIban, setGlobalIban] = useState('IT73W0623074792000057589384');
+    const [globalBankHolder, setGlobalBankHolder] = useState('Massimo Castro');
+    const [globalSupportPhone, setGlobalSupportPhone] = useState('3478127440');
+    
     const [isSavingGlobal, setIsSavingGlobal] = useState(false);
 
     // Edit State
@@ -63,8 +69,18 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
             // Extract Global Config from Super Admin Profile
             const superAdminProfile = data.find(p => p.email === SUPER_ADMIN_EMAIL);
             if (superAdminProfile && superAdminProfile.settings?.globalConfig) {
-                setGlobalContactEmail(superAdminProfile.settings.globalConfig.contactEmail || SUPER_ADMIN_EMAIL);
-                setGlobalDefaultCost(superAdminProfile.settings.globalConfig.defaultCost || '49.90');
+                const config = superAdminProfile.settings.globalConfig;
+                setGlobalContactEmail(config.contactEmail || SUPER_ADMIN_EMAIL);
+                setGlobalDefaultCost(config.defaultCost || '49.90');
+                
+                // Load Bank & Phone
+                if (config.bankDetails) {
+                    setGlobalIban(config.bankDetails.iban || '');
+                    setGlobalBankHolder(config.bankDetails.holder || '');
+                }
+                if (config.supportContact) {
+                    setGlobalSupportPhone(config.supportContact.phone || '');
+                }
             }
         }
         if (error) console.error("Errore recupero profili:", error);
@@ -88,7 +104,14 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
             ...currentSettings,
             globalConfig: {
                 contactEmail: globalContactEmail,
-                defaultCost: globalDefaultCost
+                defaultCost: globalDefaultCost,
+                bankDetails: {
+                    iban: globalIban,
+                    holder: globalBankHolder
+                },
+                supportContact: {
+                    phone: globalSupportPhone
+                }
             }
         };
 
@@ -241,28 +264,54 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
                         <div className="p-2 bg-indigo-500/20 rounded-lg text-indigo-400"><Globe size={24}/></div>
                         <div>
                             <h2 className="text-xl font-bold text-white">Configurazione Globale</h2>
-                            <p className="text-sm text-slate-400">Impostazioni predefinite per tutti i nuovi clienti e comunicazioni.</p>
+                            <p className="text-sm text-slate-400">Dati aziendali visibili a tutti i clienti.</p>
                         </div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-                        <div>
-                            <label className="text-xs text-slate-500 uppercase font-bold block mb-2 flex items-center gap-2"><Inbox size={14}/> Email Ricezione Pagamenti & Info</label>
-                            <input type="email" value={globalContactEmail} onChange={(e) => setGlobalContactEmail(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white font-medium focus:border-indigo-500 outline-none" placeholder="admin@example.com" />
-                            <p className="text-[10px] text-slate-500 mt-1">Questa email apparirà nei box di pagamento dei clienti.</p>
-                        </div>
-                        <div>
-                            <label className="text-xs text-slate-500 uppercase font-bold block mb-2 flex items-center gap-2"><DollarSign size={14}/> Costo Abbonamento Default</label>
-                            <div className="relative">
-                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">€</span>
-                                <input type="text" value={globalDefaultCost} onChange={(e) => setGlobalDefaultCost(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded-xl pl-8 pr-4 py-3 text-white font-bold focus:border-indigo-500 outline-none" placeholder="49.90" />
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 relative z-10 mb-6">
+                        {/* COSTI & EMAIL */}
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-xs text-slate-500 uppercase font-bold block mb-2 flex items-center gap-2"><Inbox size={14}/> Email Ricezione</label>
+                                <input type="email" value={globalContactEmail} onChange={(e) => setGlobalContactEmail(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white font-medium focus:border-indigo-500 outline-none" placeholder="admin@example.com" />
                             </div>
-                            <p className="text-[10px] text-slate-500 mt-1">Prezzo applicato automaticamente alle nuove registrazioni.</p>
+                            <div>
+                                <label className="text-xs text-slate-500 uppercase font-bold block mb-2 flex items-center gap-2"><DollarSign size={14}/> Costo Default</label>
+                                <div className="relative">
+                                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">€</span>
+                                    <input type="text" value={globalDefaultCost} onChange={(e) => setGlobalDefaultCost(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded-xl pl-8 pr-4 py-3 text-white font-bold focus:border-indigo-500 outline-none" placeholder="49.90" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* DATI BANCARI */}
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-xs text-slate-500 uppercase font-bold block mb-2 flex items-center gap-2"><Banknote size={14}/> Intestatario Bonifico</label>
+                                <input type="text" value={globalBankHolder} onChange={(e) => setGlobalBankHolder(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white font-medium focus:border-indigo-500 outline-none" placeholder="Nome Cognome" />
+                            </div>
+                            <div>
+                                <label className="text-xs text-slate-500 uppercase font-bold block mb-2 flex items-center gap-2"><Hash size={14}/> IBAN</label>
+                                <input type="text" value={globalIban} onChange={(e) => setGlobalIban(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white font-mono text-sm focus:border-indigo-500 outline-none" placeholder="IT00..." />
+                            </div>
+                        </div>
+
+                        {/* CONTATTI SUPPORTO */}
+                        <div className="space-y-4">
+                            <div>
+                                <label className="text-xs text-slate-500 uppercase font-bold block mb-2 flex items-center gap-2"><Smartphone size={14}/> Telefono / WhatsApp</label>
+                                <input type="text" value={globalSupportPhone} onChange={(e) => setGlobalSupportPhone(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white font-medium focus:border-indigo-500 outline-none" placeholder="+39..." />
+                            </div>
+                            <div className="bg-slate-900 p-3 rounded-xl border border-slate-600 opacity-50 flex items-center justify-center h-[52px]">
+                                <span className="text-xs text-slate-400">DevTools Branding Attivo</span>
+                            </div>
                         </div>
                     </div>
-                    <div className="flex justify-end mt-6 relative z-10">
+
+                    <div className="flex justify-end mt-6 relative z-10 border-t border-slate-700 pt-4">
                         <button onClick={saveGlobalConfig} disabled={isSavingGlobal} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50">
                             {isSavingGlobal ? <RefreshCw size={18} className="animate-spin"/> : <Save size={18}/>}
-                            Salva Configurazione
+                            Salva Configurazione Globale
                         </button>
                     </div>
                 </div>
