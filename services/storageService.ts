@@ -514,6 +514,18 @@ export const performFactoryReset = async () => {
     }
 };
 
+// --- MENU DELETION (BULK) ---
+export const deleteAllMenuItems = async () => {
+    // 1. Clear Local Menu
+    localStorage.setItem(MENU_KEY, '[]');
+    window.dispatchEvent(new Event('local-menu-update'));
+
+    // 2. Clear Cloud Menu Items
+    if (supabase && currentUserId) {
+        await supabase.from('menu_items').delete().eq('user_id', currentUserId);
+    }
+};
+
 // --- DYNAMIC TABLE COUNT ---
 export const getTableCount = (): number => {
     const count = localStorage.getItem(TABLES_COUNT_KEY);
