@@ -265,7 +265,17 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
                                     const isCombo = item.category === Category.MENU_COMPLETO;
                                     let comboChildren: MenuItem[] = [];
                                     if(isCombo && item.comboItems) {
-                                        comboChildren = activeMenuData ? activeMenuData.filter(i => item.comboItems?.includes(i.id)) : [];
+                                        // Need full menu reference for mapping IDs
+                                        const fullMenu = activeMenuData || menuItems; 
+                                        comboChildren = fullMenu.filter(i => item.comboItems?.includes(i.id));
+                                    }
+
+                                    // ALLERGEN AGGREGATION LOGIC
+                                    let displayAllergens = item.allergens || [];
+                                    if (isCombo && comboChildren.length > 0) {
+                                        const childAllergens = comboChildren.flatMap(c => c.allergens || []);
+                                        // Merge main item allergens + children allergens, remove duplicates
+                                        displayAllergens = [...new Set([...displayAllergens, ...childAllergens])];
                                     }
 
                                     return (
@@ -303,10 +313,10 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
                                                         {item.description || <span className="italic opacity-50">.</span>}
                                                     </p>
                                                     
-                                                    {/* 3. ALLERGENS */}
-                                                    {item.allergens && item.allergens.length > 0 && (
+                                                    {/* 3. ALLERGENS (Aggregated) */}
+                                                    {displayAllergens.length > 0 && (
                                                         <div className="flex flex-wrap gap-1.5 pt-2 mt-1">
-                                                            {item.allergens.map(alg => {
+                                                            {displayAllergens.map(alg => {
                                                                 const Icon = ALLERGENS_ICONS[alg] || Info;
                                                                 return (
                                                                     <span key={alg} className={`inline-flex items-center gap-1 font-bold uppercase text-slate-500 bg-slate-100 rounded-md ${isPreview ? 'text-[8px] px-1.5 py-0.5' : 'text-[9px] px-2 py-1'}`}>

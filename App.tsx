@@ -851,22 +851,6 @@ Grazie.`);
                                 </div>
                             </div>
                         )}
-                        
-                        {adminTab === 'info' && (
-                            <div className="max-w-2xl mx-auto pb-20 animate-fade-in">
-                                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Info className="text-slate-400"/> Legenda Stati & Icone</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800">
-                                        <h4 className="text-slate-400 text-xs font-bold uppercase mb-4 tracking-widest">Stati Ordine</h4>
-                                        <div className="space-y-3">
-                                            <div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full bg-yellow-500"></div><span className="text-white font-bold">In Attesa (Giallo)</span></div>
-                                            <div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full bg-orange-500"></div><span className="text-white font-bold">In Preparazione (Arancio)</span></div>
-                                            <div className="flex items-center gap-3"><div className="w-3 h-3 rounded-full bg-green-500"></div><span className="text-white font-bold">Pronto (Verde)</span></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>

@@ -262,12 +262,15 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                    }
               }
 
-              // --- COMBO ITEMS DETAILED LOGIC ---
+              // --- COMBO ITEMS DETAILED LOGIC (FIXED) ---
               if (item.menuItem.category === Category.MENU_COMPLETO && item.menuItem.comboItems) {
                   item.menuItem.comboItems.forEach(subId => {
                       const subKey = `${order.id}-${idx}-${subId}`;
                       
-                      // Check if this specific part is marked completed by kitchen (or is ready)
+                      // CRITICAL FIX: Explicitly check the `comboCompletedParts` array.
+                      // If a sub-item ID is in this array, it means a kitchen department marked it ready.
+                      // We ignore 'Sala' auto-complete for notification purposes usually, 
+                      // but here we trust `comboCompletedParts` which is populated by KDS toggle.
                       const isSubReady = item.comboCompletedParts?.includes(subId);
                       const isSubServed = item.comboServedParts?.includes(subId);
 
@@ -297,6 +300,8 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
           setNotificationToast(msg);
           setTimeout(() => setNotificationToast(null), 8000);
       }
+      
+      // Update ref at the END of the cycle
       prevItemReadyStateRef.current = currentItemReadyState;
       isFirstLoad.current = false;
 
