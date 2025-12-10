@@ -248,16 +248,41 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
           if (name && order.waiterName && order.waiterName !== name) return;
 
           order.items.forEach((item, idx) => {
-              const uniqueKey = `${order.id}-${idx}`;
-              // Track if kitchen finished it
-              currentItemReadyState[uniqueKey] = item.completed || false;
-              
+              // --- STANDARD ITEMS LOGIC ---
+              const mainKey = `${order.id}-${idx}`;
+              currentItemReadyState[mainKey] = item.completed || false;
+
               if (!isFirstLoad.current) {
-                  const wasReady = prevItemReadyStateRef.current[uniqueKey] || false;
-                  // If it became ready just now AND isn't served yet
-                  if (!wasReady && item.completed && !item.served) {
-                      newlyReadyCount++;
-                  }
+                   const wasMainReady = prevItemReadyStateRef.current[mainKey] || false;
+                   // Only count as new notification if it's NOT a combo (Combos are handled by sub-items below)
+                   if (item.menuItem.category !== Category.MENU_COMPLETO) {
+                       if (!wasMainReady && item.completed && !item.served) {
+                           newlyReadyCount++;
+                       }
+                   }
+              }
+
+              // --- COMBO ITEMS DETAILED LOGIC ---
+              if (item.menuItem.category === Category.MENU_COMPLETO && item.menuItem.comboItems) {
+                  item.menuItem.comboItems.forEach(subId => {
+                      const subKey = `${order.id}-${idx}-${subId}`;
+                      
+                      // Check if this specific part is marked completed by kitchen (or is ready)
+                      const isSubReady = item.comboCompletedParts?.includes(subId);
+                      const isSubServed = item.comboServedParts?.includes(subId);
+
+                      // Store current state
+                      currentItemReadyState[subKey] = isSubReady || false;
+
+                      if (!isFirstLoad.current) {
+                          const wasSubReady = prevItemReadyStateRef.current[subKey] || false;
+                          
+                          // Trigger if it wasn't ready before, is now ready, and hasn't been served
+                          if (!wasSubReady && isSubReady && !isSubServed) {
+                              newlyReadyCount++;
+                          }
+                      }
+                  });
               }
           });
       });
