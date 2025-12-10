@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, signOut } from '../services/supabase';
-import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon, FileText, MapPin, Phone, CreditCard, Mail, MessageCircle, Share2, PhoneCall } from 'lucide-react';
+import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon, FileText, MapPin, Phone, CreditCard, Mail, MessageCircle, Share2, PhoneCall, Facebook, Instagram, Music, Linkedin, Youtube, Store, Compass, UtensilsCrossed } from 'lucide-react';
 
 interface SuperAdminDashboardProps {
     onEnterApp: () => void;
@@ -22,13 +22,15 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     const [showPublicModal, setShowPublicModal] = useState(false);
     const [showImageModal, setShowImageModal] = useState(false);
     
-    // Registry / Profile View State
+    // Registry / Profile View & Edit State
     const [viewingProfile, setViewingProfile] = useState<any | null>(null);
+    const [isEditingRegistry, setIsEditingRegistry] = useState(false);
+    const [registryForm, setRegistryForm] = useState<any>({});
 
     // Recovery State
     const [recoveryEmail, setRecoveryEmail] = useState('');
 
-    // Editing State
+    // Inline Name Editing State
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editName, setEditName] = useState('');
     
@@ -45,61 +47,119 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     const fetchProfiles = async () => {
         if (!supabase) return;
         setLoading(true);
-        // Ensure we explicitly select settings to be sure (though * usually covers it)
         const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
         if (data) setProfiles(data);
         if (error) console.error("Errore recupero profili:", error);
         setLoading(false);
     };
 
+    // --- REGISTRY EDIT LOGIC ---
+    const openRegistry = (profile: any) => {
+        setViewingProfile(profile);
+        setIsEditingRegistry(false);
+        // Pre-fill form data immediately to be ready for edit
+        const profileData = profile.settings?.restaurantProfile || {};
+        setRegistryForm({
+            vatNumber: profileData.vatNumber || '',
+            phoneNumber: profileData.phoneNumber || '',
+            landlineNumber: profileData.landlineNumber || '',
+            whatsappNumber: profileData.whatsappNumber || '',
+            email: profileData.email || '',
+            address: profileData.address || '',
+            billingAddress: profileData.billingAddress || '',
+            website: profileData.website || '',
+            socials: profileData.socials || {}
+        });
+    };
+
+    const handleRegistryChange = (field: string, value: string) => {
+        setRegistryForm((prev: any) => ({ ...prev, [field]: value }));
+    };
+
+    const handleSocialChange = (network: string, value: string) => {
+        setRegistryForm((prev: any) => ({
+            ...prev,
+            socials: {
+                ...prev.socials,
+                [network]: value
+            }
+        }));
+    };
+
+    const saveRegistryChanges = async () => {
+        if (!supabase || !viewingProfile) return;
+
+        // 1. Prepare Deep Merge
+        // We must preserve existing settings (like printers, destinations)
+        // and only update the restaurantProfile section.
+        const currentSettings = viewingProfile.settings || {};
+        
+        const updatedSettings = {
+            ...currentSettings,
+            restaurantProfile: {
+                ...registryForm,
+                // Ensure name is synced if needed, though name is usually top-level
+                name: viewingProfile.restaurant_name 
+            }
+        };
+
+        // 2. Optimistic Update (Local)
+        const updatedProfile = { ...viewingProfile, settings: updatedSettings };
+        setViewingProfile(updatedProfile);
+        setProfiles(prev => prev.map(p => p.id === viewingProfile.id ? updatedProfile : p));
+
+        // 3. Database Update
+        const { error } = await supabase
+            .from('profiles')
+            .update({ settings: updatedSettings })
+            .eq('id', viewingProfile.id);
+
+        if (error) {
+            alert("Errore salvataggio: " + error.message);
+            fetchProfiles(); // Revert on error
+        } else {
+            setIsEditingRegistry(false);
+            alert("Dati aggiornati con successo!");
+        }
+    };
+
+    // --- EXISTING LOGIC ---
+
     const toggleStatus = async (id: string, currentStatus: string, email: string) => {
         if (id.startsWith('demo-')) {
             alert("Questa è una riga simulata. Non puoi modificarne lo stato reale.");
             return;
         }
-
         if (email === SUPER_ADMIN_EMAIL) {
             alert("Non puoi sospendere l'account Super Admin principale.");
             return;
         }
-
         if (!supabase) return;
-        // SE è banned -> diventa active. SE è active -> diventa suspended. SE è suspended -> diventa active.
         const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
-        
         const { error } = await supabase.from('profiles').update({ subscription_status: newStatus }).eq('id', id);
         if (!error) fetchProfiles();
         else alert("Errore modifica stato: " + error.message);
     };
 
     const deleteProfile = async (id: string, name: string, email: string) => {
-        // 0. SECURITY CHECK: Block deletion of Super Admin
         if (email === SUPER_ADMIN_EMAIL) {
-            alert("OPERAZIONE NEGATA\n\nNon è possibile eliminare l'account Super Admin principale.\nQuesto causerebbe la perdita di accesso alla Dashboard.");
+            alert("OPERAZIONE NEGATA\n\nNon è possibile eliminare l'account Super Admin principale.");
             return;
         }
-
-        // 1. Handle Fake Demo Rows
         if (id.startsWith('demo-')) {
             setProfiles(prev => prev.filter(p => p.id !== id));
             return;
         }
-
-        // 2. Confirm Deletion
-        if (!confirm(`⚠️ ATTENZIONE: ELIMINAZIONE RISTORANTE\n\nStai per cancellare definitivamente:\nNome: "${name}"\nEmail: ${email}\n\nCOSA SUCCEDE:\n1. Tutti i dati del menu e ordini verranno PERSI.\n2. L'utente non potrà più accedere all'app (vedrà "Account Rimosso").\n\nSe vuoi solo bloccare l'accesso momentaneamente, usa il tasto 'Pausa'.\n\nSei assolutamente sicuro di voler ELIMINARE?`)) {
+        if (!confirm(`⚠️ ATTENZIONE: ELIMINAZIONE RISTORANTE\n\nStai per cancellare definitivamente:\nNome: "${name}"\nEmail: ${email}\n\nSei assolutamente sicuro di voler ELIMINARE?`)) {
             return;
         }
-
         if (!supabase) return;
-
-        // 3. Delete from DB
         const { error } = await supabase.from('profiles').delete().eq('id', id);
-        
         if (!error) {
-            fetchProfiles(); // Refresh list
+            fetchProfiles();
         } else {
             console.error(error);
-            alert("ERRORE CANCELLAZIONE: " + error.message + "\n\nAssicurati di aver aggiornato le policy SQL premendo 'Copia SQL' in basso e eseguendolo su Supabase.");
+            alert("ERRORE CANCELLAZIONE: " + error.message);
         }
     };
 
@@ -134,7 +194,6 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
             setLoading(false);
             return;
         }
-
         const { data } = await supabase.from('profiles').select('id').eq('id', user.id).single();
         if (!data) {
             const { error } = await supabase.from('profiles').insert({
@@ -149,7 +208,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
                 fetchProfiles();
             }
         } else {
-            alert("Il tuo profilo esiste già (vedi lista). Usa il tasto Modifica (matita) per cambiare il nome.");
+            alert("Il tuo profilo esiste già.");
         }
         setLoading(false);
     };
@@ -174,170 +233,36 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
         setProfiles(prev => [fakeProfile, ...prev]);
     };
 
-    const getDemoUserSQL = () => {
-        return `-- Crea Utente Demo Reale (Email: demo@ristosync.com / Pass: password123)
--- Richiede che la tabella public.profiles esista già!
-
-create extension if not exists pgcrypto;
-
-insert into auth.users (id, instance_id, email, encrypted_password, email_confirmed_at, aud, role, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token)
-values (
-  'd0d0d0d0-d0d0-d0d0-d0d0-d0d0d0d0d0d0', 
-  '00000000-0000-0000-0000-000000000000', 
-  'demo@ristosync.com', 
-  crypt('password123', gen_salt('bf')), 
-  now(), 
-  'authenticated', 
-  'authenticated', 
-  '{"provider":"email","providers":["email"]}', 
-  '{"restaurant_name":"Ristorante Demo"}', 
-  now(), 
-  now(), 
-  '', 
-  ''
-) on conflict (id) do nothing;
-
--- Inserimento manuale se il trigger non parte
-insert into public.profiles (id, email, restaurant_name, subscription_status)
-values (
-  'd0d0d0d0-d0d0-d0d0-d0d0-d0d0d0d0d0d0', 
-  'demo@ristosync.com', 
-  'Ristorante Demo', 
-  'active'
-) on conflict (id) do update 
-set restaurant_name = 'Ristorante Demo';`;
-    };
-
-    const getRecoverySQL = (email: string) => {
-        if (!email) return '-- Inserisci un indirizzo email sopra per generare lo script';
-        return `-- Recupera Utente: ${email}
--- Inserisce una riga in profiles se l'utente esiste in auth.users
-insert into public.profiles (id, email, restaurant_name, subscription_status)
-select id, email, 'Ristorante Ripristinato', 'active'
-from auth.users
-where email = '${email}'
-on conflict (id) do update 
-set subscription_status = 'active';`;
-    };
-
-    const getPublicAccessSQL = () => {
-        return `-- PERMETTI LETTURA PUBBLICA DEL MENU (Per Menu Digitale)
-
--- 1. Permetti a chiunque di LEGGERE il nome del ristorante
-drop policy if exists "Public profiles are viewable by everyone" on public.profiles;
-create policy "Public profiles are viewable by everyone" 
-on public.profiles for select 
-using (true);
-
--- 2. Permetti a chiunque di LEGGERE i piatti
-drop policy if exists "Public menu items are viewable by everyone" on public.menu_items;
-create policy "Public menu items are viewable by everyone" 
-on public.menu_items for select 
-using (true);`;
-    };
-
-    const getImageUpdateSQL = () => {
-        return `-- ABILITA FOTO PIATTI NEL DATABASE
--- Aggiunge la colonna 'image' se non esiste per salvare le foto
-alter table public.menu_items 
-add column if not exists image text;`;
-    };
+    const getDemoUserSQL = () => `create extension if not exists pgcrypto; insert into auth.users (id, instance_id, email, encrypted_password, email_confirmed_at, aud, role, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token) values ('d0d0d0d0-d0d0-d0d0-d0d0-d0d0d0d0d0d0', '00000000-0000-0000-0000-000000000000', 'demo@ristosync.com', crypt('password123', gen_salt('bf')), now(), 'authenticated', 'authenticated', '{"provider":"email","providers":["email"]}', '{"restaurant_name":"Ristorante Demo"}', now(), now(), '', '') on conflict (id) do nothing; insert into public.profiles (id, email, restaurant_name, subscription_status) values ('d0d0d0d0-d0d0-d0d0-d0d0-d0d0d0d0d0d0', 'demo@ristosync.com', 'Ristorante Demo', 'active') on conflict (id) do update set restaurant_name = 'Ristorante Demo';`;
+    
+    const getRecoverySQL = (email: string) => `insert into public.profiles (id, email, restaurant_name, subscription_status) select id, email, 'Ristorante Ripristinato', 'active' from auth.users where email = '${email}' on conflict (id) do update set subscription_status = 'active';`;
+    
+    const getPublicAccessSQL = () => `drop policy if exists "Public profiles are viewable by everyone" on public.profiles; create policy "Public profiles are viewable by everyone" on public.profiles for select using (true); drop policy if exists "Public menu items are viewable by everyone" on public.menu_items; create policy "Public menu items are viewable by everyone" on public.menu_items for select using (true);`;
+    
+    const getImageUpdateSQL = () => `alter table public.menu_items add column if not exists image text;`;
     
     const copySQL = (sql: string, type: 'reset' | 'demo' | 'recovery' | 'public' | 'image') => {
         navigator.clipboard.writeText(sql);
-        if (type === 'reset') {
-            setCopiedSQL(true);
-            setTimeout(() => setCopiedSQL(false), 2000);
-        } else if (type === 'demo') {
-            setCopiedDemo(true);
-            setTimeout(() => setCopiedDemo(false), 2000);
-        } else if (type === 'public') {
-            setCopiedPublic(true);
-            setTimeout(() => setCopiedPublic(false), 2000);
-        } else if (type === 'image') {
-            setCopiedImage(true);
-            setTimeout(() => setCopiedImage(false), 2000);
-        } else {
-            setCopiedRecovery(true);
-            setTimeout(() => setCopiedRecovery(false), 2000);
-        }
+        if (type === 'reset') { setCopiedSQL(true); setTimeout(() => setCopiedSQL(false), 2000); }
+        else if (type === 'demo') { setCopiedDemo(true); setTimeout(() => setCopiedDemo(false), 2000); }
+        else if (type === 'public') { setCopiedPublic(true); setTimeout(() => setCopiedPublic(false), 2000); }
+        else if (type === 'image') { setCopiedImage(true); setTimeout(() => setCopiedImage(false), 2000); }
+        else { setCopiedRecovery(true); setTimeout(() => setCopiedRecovery(false), 2000); }
     };
 
     const resetSQL = `-- SCRIPT CONFIGURAZIONE DATABASE
--- Eseguilo 1 volta sola per creare le tabelle.
-
--- 1. Crea la tabella dei Profili Ristoranti
-create table if not exists public.profiles (
-  id uuid references auth.users on delete cascade not null primary key,
-  email text,
-  restaurant_name text,
-  subscription_status text default 'active',
-  google_api_key text,
-  settings jsonb,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- 2. Crea la tabella del Menu
-create table if not exists public.menu_items (
-  id text primary key,
-  user_id uuid references auth.users(id),
-  name text,
-  price numeric,
-  category text,
-  description text,
-  allergens jsonb,
-  image text,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- 3. Crea la tabella degli Ordini
-create table if not exists public.orders (
-  id text primary key,
-  user_id uuid references auth.users(id),
-  table_number text,
-  status text,
-  items jsonb,
-  timestamp bigint,
-  waiter_name text,
-  created_at timestamp with time zone default timezone('utc'::text, now()) not null
-);
-
--- 4. Abilita la sicurezza (RLS)
-alter table public.profiles enable row level security;
-alter table public.menu_items enable row level security;
-alter table public.orders enable row level security;
-
--- 5. ASSEGNA I PERMESSI (Fondamentale)
-grant usage on schema public to postgres, anon, authenticated, service_role;
-grant all privileges on all tables in schema public to postgres, anon, authenticated, service_role;
-grant all privileges on all functions in schema public to postgres, anon, authenticated, service_role;
-grant all privileges on all sequences in schema public to postgres, anon, authenticated, service_role;
-
--- 6. Crea le Policy di accesso
-drop policy if exists "Public profiles view" on public.profiles;
-create policy "Public profiles view" on public.profiles for select using (true);
-
-drop policy if exists "User update own profile" on public.profiles;
-create policy "User update own profile" on public.profiles for update using (auth.uid() = id);
-
-drop policy if exists "User insert own profile" on public.profiles;
-create policy "User insert own profile" on public.profiles for insert with check (auth.uid() = id);
-
-drop policy if exists "Public menu view" on public.menu_items;
-create policy "Public menu view" on public.menu_items for select using (true);
-
-drop policy if exists "User manage menu" on public.menu_items;
-create policy "User manage menu" on public.menu_items for all using (auth.uid() = user_id);
-
-drop policy if exists "User manage orders" on public.orders;
-create policy "User manage orders" on public.orders for all using (auth.uid() = user_id);
-
--- 7. Inserisci il profilo Demo manualmente (se l'utente auth esiste già)
-insert into public.profiles (id, email, restaurant_name, subscription_status)
-select id, email, 'Ristorante Demo', 'active'
-from auth.users where email = 'demo@ristosync.com'
-on conflict (id) do nothing;
-`;
+create table if not exists public.profiles (id uuid references auth.users on delete cascade not null primary key, email text, restaurant_name text, subscription_status text default 'active', google_api_key text, settings jsonb, created_at timestamp with time zone default timezone('utc'::text, now()) not null);
+create table if not exists public.menu_items (id text primary key, user_id uuid references auth.users(id), name text, price numeric, category text, description text, allergens jsonb, image text, created_at timestamp with time zone default timezone('utc'::text, now()) not null);
+create table if not exists public.orders (id text primary key, user_id uuid references auth.users(id), table_number text, status text, items jsonb, timestamp bigint, waiter_name text, created_at timestamp with time zone default timezone('utc'::text, now()) not null);
+alter table public.profiles enable row level security; alter table public.menu_items enable row level security; alter table public.orders enable row level security;
+grant usage on schema public to postgres, anon, authenticated, service_role; grant all privileges on all tables in schema public to postgres, anon, authenticated, service_role; grant all privileges on all functions in schema public to postgres, anon, authenticated, service_role; grant all privileges on all sequences in schema public to postgres, anon, authenticated, service_role;
+drop policy if exists "Public profiles view" on public.profiles; create policy "Public profiles view" on public.profiles for select using (true);
+drop policy if exists "User update own profile" on public.profiles; create policy "User update own profile" on public.profiles for update using (auth.uid() = id);
+drop policy if exists "User insert own profile" on public.profiles; create policy "User insert own profile" on public.profiles for insert with check (auth.uid() = id);
+drop policy if exists "Public menu view" on public.menu_items; create policy "Public menu view" on public.menu_items for select using (true);
+drop policy if exists "User manage menu" on public.menu_items; create policy "User manage menu" on public.menu_items for all using (auth.uid() = user_id);
+drop policy if exists "User manage orders" on public.orders; create policy "User manage orders" on public.orders for all using (auth.uid() = user_id);
+insert into public.profiles (id, email, restaurant_name, subscription_status) select id, email, 'Ristorante Demo', 'active' from auth.users where email = 'demo@ristosync.com' on conflict (id) do nothing;`;
 
     const isEmailCorrect = currentEmail.toLowerCase() === SUPER_ADMIN_EMAIL;
 
@@ -385,39 +310,14 @@ on conflict (id) do nothing;
                         <div className="flex justify-between items-start mb-4">
                             <div className="p-3 bg-orange-500/10 rounded-xl text-orange-400"><FlaskConical /></div>
                             <div className="flex gap-2">
-                                <button 
-                                    onClick={() => setShowImageModal(true)}
-                                    className="text-xs bg-indigo-600/20 hover:bg-indigo-600 hover:text-white text-indigo-400 w-8 h-8 rounded-lg flex items-center justify-center transition-colors border border-indigo-500/30"
-                                    title="Abilita Foto Database"
-                                >
-                                    <ImageIcon size={16}/>
-                                </button>
-                                <button 
-                                    onClick={() => setShowPublicModal(true)}
-                                    className="text-xs bg-pink-600/20 hover:bg-pink-600 hover:text-white text-pink-400 w-8 h-8 rounded-lg flex items-center justify-center transition-colors border border-pink-500/30"
-                                    title="Abilita Menu Pubblico"
-                                >
-                                    <Globe size={16}/>
-                                </button>
-                                <button 
-                                    onClick={() => setShowRecoveryModal(true)}
-                                    className="text-xs bg-slate-700 hover:bg-slate-600 text-white w-8 h-8 rounded-lg flex items-center justify-center transition-colors"
-                                    title="SOS Recovery Utente"
-                                >
-                                    <LifeBuoy size={16} className="text-blue-400"/>
-                                </button>
-                                <button 
-                                    onClick={() => setShowSqlModal(true)}
-                                    className="text-xs bg-orange-600 hover:bg-orange-500 text-white px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors"
-                                >
-                                    <Terminal size={12}/> CREA DEMO
-                                </button>
+                                <button onClick={() => setShowImageModal(true)} className="text-xs bg-indigo-600/20 hover:bg-indigo-600 hover:text-white text-indigo-400 w-8 h-8 rounded-lg flex items-center justify-center transition-colors border border-indigo-500/30" title="Abilita Foto Database"><ImageIcon size={16}/></button>
+                                <button onClick={() => setShowPublicModal(true)} className="text-xs bg-pink-600/20 hover:bg-pink-600 hover:text-white text-pink-400 w-8 h-8 rounded-lg flex items-center justify-center transition-colors border border-pink-500/30" title="Abilita Menu Pubblico"><Globe size={16}/></button>
+                                <button onClick={() => setShowRecoveryModal(true)} className="text-xs bg-slate-700 hover:bg-slate-600 text-white w-8 h-8 rounded-lg flex items-center justify-center transition-colors" title="SOS Recovery Utente"><LifeBuoy size={16} className="text-blue-400"/></button>
+                                <button onClick={() => setShowSqlModal(true)} className="text-xs bg-orange-600 hover:bg-orange-500 text-white px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 transition-colors"><Terminal size={12}/> CREA DEMO</button>
                             </div>
                         </div>
                         <h3 className="text-slate-400 font-bold uppercase text-xs tracking-wider mb-2">Area Demo & Utility</h3>
-                        <button onClick={simulateDemoRow} className="text-orange-400 text-xs hover:underline text-left">
-                            + Aggiungi riga simulata alla tabella
-                        </button>
+                        <button onClick={simulateDemoRow} className="text-orange-400 text-xs hover:underline text-left">+ Aggiungi riga simulata alla tabella</button>
                     </div>
 
                     <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700">
@@ -451,8 +351,6 @@ on conflict (id) do nothing;
                                     const isFake = p.id.toString().startsWith('demo-');
                                     const isSuperAdminProfile = p.email === SUPER_ADMIN_EMAIL;
                                     const isBanned = p.subscription_status === 'banned';
-                                    
-                                    // Check if Profile Data exists
                                     const hasProfileData = p.settings?.restaurantProfile?.vatNumber || p.settings?.restaurantProfile?.phoneNumber;
                                     
                                     return (
@@ -460,13 +358,7 @@ on conflict (id) do nothing;
                                             <td className="p-6">
                                                 {editingId === p.id ? (
                                                     <div className="flex items-center gap-2">
-                                                        <input 
-                                                            type="text" 
-                                                            value={editName}
-                                                            onChange={(e) => setEditName(e.target.value)}
-                                                            className="bg-slate-950 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm font-bold w-full focus:border-blue-500 outline-none"
-                                                            autoFocus
-                                                        />
+                                                        <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="bg-slate-950 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm font-bold w-full focus:border-blue-500 outline-none" autoFocus />
                                                         <button onClick={saveEdit} className="p-2 bg-green-600 rounded-lg hover:bg-green-500"><Save size={16}/></button>
                                                         <button onClick={cancelEdit} className="p-2 bg-slate-700 rounded-lg hover:bg-slate-600"><X size={16}/></button>
                                                     </div>
@@ -482,63 +374,30 @@ on conflict (id) do nothing;
                                                             <div className="text-xs font-mono text-slate-500 mt-1">{p.id}</div>
                                                         </div>
                                                         {!isFake && (
-                                                            <button onClick={() => startEdit(p)} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-slate-800 text-blue-400 hover:bg-blue-500 hover:text-white transition-all" title="Modifica Nome">
-                                                                <Edit2 size={14}/>
-                                                            </button>
+                                                            <button onClick={() => startEdit(p)} className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-slate-800 text-blue-400 hover:bg-blue-500 hover:text-white transition-all" title="Modifica Nome"><Edit2 size={14}/></button>
                                                         )}
                                                     </div>
                                                 )}
                                             </td>
                                             <td className="p-6 text-slate-300 font-medium">{p.email}</td>
                                             <td className="p-6">
-                                                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase 
-                                                    ${p.subscription_status === 'active' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 
-                                                      p.subscription_status === 'banned' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 
-                                                      'bg-red-500/20 text-red-400 border border-red-500/30'}`}>
-                                                    {p.subscription_status}
-                                                </span>
+                                                <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${p.subscription_status === 'active' ? 'bg-green-500/20 text-green-400 border border-green-500/30' : p.subscription_status === 'banned' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>{p.subscription_status}</span>
                                             </td>
                                             <td className="p-6 text-right">
                                                 <div className="flex justify-end gap-2">
-                                                    {/* NEW ANAGRAFICA BUTTON */}
-                                                    <button 
-                                                        onClick={() => setViewingProfile(p)}
-                                                        className={`inline-flex items-center justify-center p-2 rounded-lg border transition-colors
-                                                            ${hasProfileData ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-500/20' : 'bg-indigo-500/10 text-indigo-400 hover:bg-indigo-600 hover:text-white border-indigo-500/20'}
-                                                        `}
-                                                        title="Vedi Anagrafica"
-                                                    >
+                                                    <button onClick={() => openRegistry(p)} className={`inline-flex items-center justify-center p-2 rounded-lg border transition-colors ${hasProfileData ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-500/20' : 'bg-indigo-500/10 text-indigo-400 hover:bg-indigo-600 hover:text-white border-indigo-500/20'}`} title="Vedi/Modifica Anagrafica">
                                                         <FileText size={14} />
                                                         {hasProfileData && <span className="ml-1 text-[10px] font-bold">INFO</span>}
                                                     </button>
-
                                                     {!isSuperAdminProfile && (
-                                                        <button 
-                                                            onClick={() => toggleStatus(p.id, p.subscription_status, p.email)}
-                                                            className={`inline-flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold uppercase transition-colors
-                                                                ${isFake ? 'opacity-50 cursor-not-allowed bg-slate-700 text-slate-400' : 
-                                                                    (p.subscription_status === 'active' 
-                                                                    ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white border border-blue-500/20' 
-                                                                    : 'bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white border border-green-500/20')}
-                                                            `}
-                                                            title={p.subscription_status === 'active' ? 'Sospendi Account' : 'Attiva Account'}
-                                                        >
+                                                        <button onClick={() => toggleStatus(p.id, p.subscription_status, p.email)} className={`inline-flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-bold uppercase transition-colors ${isFake ? 'opacity-50 cursor-not-allowed bg-slate-700 text-slate-400' : (p.subscription_status === 'active' ? 'bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white border border-blue-500/20' : 'bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white border border-green-500/20')}`} title={p.subscription_status === 'active' ? 'Sospendi Account' : 'Attiva Account'}>
                                                             {p.subscription_status === 'active' ? <PauseCircle size={14}/> : <PlayCircle size={14}/>}
                                                         </button>
                                                     )}
-                                                    
                                                     {isSuperAdminProfile ? (
-                                                        <div className="inline-flex items-center justify-center p-2 rounded-lg bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed" title="Protetto da cancellazione">
-                                                            <Lock size={14} />
-                                                        </div>
+                                                        <div className="inline-flex items-center justify-center p-2 rounded-lg bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed" title="Protetto da cancellazione"><Lock size={14} /></div>
                                                     ) : (
-                                                        <button 
-                                                            onClick={() => deleteProfile(p.id, p.restaurant_name, p.email)}
-                                                            className="inline-flex items-center justify-center p-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-600 hover:text-white border border-red-500/20 transition-colors"
-                                                            title="Elimina Definitivamente"
-                                                        >
-                                                            <Trash2 size={14} />
-                                                        </button>
+                                                        <button onClick={() => deleteProfile(p.id, p.restaurant_name, p.email)} className="inline-flex items-center justify-center p-2 rounded-lg bg-red-500/10 text-red-500 hover:bg-red-600 hover:text-white border border-red-500/20 transition-colors" title="Elimina Definitivamente"><Trash2 size={14} /></button>
                                                     )}
                                                 </div>
                                             </td>
@@ -551,20 +410,11 @@ on conflict (id) do nothing;
                                             <div className="flex flex-col items-center gap-3 text-slate-500 max-w-lg mx-auto">
                                                 <AlertTriangle size={40} className="text-orange-500 mb-2"/>
                                                 <p className="font-bold text-white text-lg">Nessun Ristorante Trovato</p>
-                                                <button 
-                                                    onClick={ensureAdminProfile}
-                                                    className="bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-green-600/20 my-4"
-                                                >
-                                                    <PlusCircle size={20} /> Crea Profilo
-                                                </button>
+                                                <button onClick={ensureAdminProfile} className="bg-green-600 hover:bg-green-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-green-600/20 my-4"><PlusCircle size={20} /> Crea Profilo</button>
                                                 <div className="bg-slate-950 p-4 rounded-xl border border-slate-700 w-full mt-4 relative group text-left">
                                                     <div className="mb-2 text-xs text-slate-400 uppercase font-bold flex items-center gap-2"><Database size={12}/> SQL Configurazione Iniziale:</div>
-                                                    <pre className="text-left text-xs text-green-400 font-mono whitespace-pre-wrap overflow-x-auto h-20 custom-scroll">
-{resetSQL}
-                                                    </pre>
-                                                    <button onClick={() => copySQL(resetSQL, 'reset')} className="absolute top-2 right-2 p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-white flex items-center gap-2 font-bold text-xs">
-                                                        {copiedSQL ? <Check size={14} className="text-green-500"/> : <Copy size={14}/>}
-                                                    </button>
+                                                    <pre className="text-left text-xs text-green-400 font-mono whitespace-pre-wrap overflow-x-auto h-20 custom-scroll">{resetSQL}</pre>
+                                                    <button onClick={() => copySQL(resetSQL, 'reset')} className="absolute top-2 right-2 p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-white flex items-center gap-2 font-bold text-xs">{copiedSQL ? <Check size={14} className="text-green-500"/> : <Copy size={14}/>}</button>
                                                 </div>
                                             </div>
                                         </td>
@@ -576,114 +426,127 @@ on conflict (id) do nothing;
                 </div>
             </div>
 
-            {/* VIEW ANAGRAFICA/REGISTRY MODAL */}
+            {/* EDITABLE ANAGRAFICA MODAL */}
             {viewingProfile && (
                 <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-                    <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-lg shadow-2xl animate-slide-up relative flex flex-col max-h-[90vh]">
-                        <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+                    <div className="bg-slate-900 border border-slate-700 rounded-3xl w-full max-w-2xl shadow-2xl animate-slide-up relative flex flex-col max-h-[90vh]">
+                        <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-900 rounded-t-3xl">
                             <div>
                                 <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                                    <FileText className="text-indigo-500" /> Anagrafica Ristorante
+                                    <FileText className="text-indigo-500" /> Scheda Cliente
                                 </h2>
                                 <p className="text-slate-400 text-sm">{viewingProfile.restaurant_name}</p>
                             </div>
-                            <button onClick={() => setViewingProfile(null)} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors"><X size={20}/></button>
+                            <div className="flex gap-2">
+                                {!isEditingRegistry ? (
+                                    <button onClick={() => setIsEditingRegistry(true)} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl flex items-center gap-2 transition-colors text-xs"><Edit2 size={14}/> MODIFICA DATI</button>
+                                ) : (
+                                    <button onClick={saveRegistryChanges} className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white font-bold rounded-xl flex items-center gap-2 transition-colors text-xs"><Save size={14}/> SALVA</button>
+                                )}
+                                <button onClick={() => setViewingProfile(null)} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white transition-colors"><X size={20}/></button>
+                            </div>
                         </div>
                         
-                        <div className="p-6 overflow-y-auto space-y-6">
-                            {/* Account Info */}
+                        <div className="p-6 overflow-y-auto space-y-6 bg-slate-900">
+                            {/* Account Info (Read Only) */}
                             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
-                                <h3 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2"><User size={14}/> Dati Account</h3>
+                                <h3 className="text-xs font-bold text-slate-500 uppercase mb-3 flex items-center gap-2"><User size={14}/> Account ID (Non modificabile)</h3>
                                 <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="text-[10px] text-slate-500 uppercase block mb-1">ID Tenant</label>
-                                        <p className="text-xs font-mono text-slate-300 break-all">{viewingProfile.id}</p>
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] text-slate-500 uppercase block mb-1">Email Login</label>
-                                        <p className="text-xs font-mono text-slate-300 break-all">{viewingProfile.email}</p>
-                                    </div>
+                                    <div><label className="text-[10px] text-slate-500 uppercase block mb-1">ID Tenant</label><p className="text-xs font-mono text-slate-300 break-all">{viewingProfile.id}</p></div>
+                                    <div><label className="text-[10px] text-slate-500 uppercase block mb-1">Email Login</label><p className="text-xs font-mono text-slate-300 break-all">{viewingProfile.email}</p></div>
                                 </div>
                             </div>
 
-                            {/* Business Profile */}
-                            {viewingProfile.settings?.restaurantProfile ? (
-                                <div className="space-y-4">
-                                    {/* Ragione Sociale / P.IVA */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                        <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-                                            <div className="flex items-center gap-2 mb-1 text-slate-400 text-xs font-bold uppercase"><CreditCard size={14}/> P.IVA / C.F.</div>
-                                            <p className="text-white font-mono font-bold text-lg">{viewingProfile.settings.restaurantProfile.vatNumber || '-'}</p>
-                                        </div>
-                                        <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-                                            <div className="flex items-center gap-2 mb-1 text-slate-400 text-xs font-bold uppercase"><Smartphone size={14}/> Cellulare</div>
-                                            <p className="text-white font-bold">{viewingProfile.settings.restaurantProfile.phoneNumber || '-'}</p>
-                                        </div>
+                            {/* EDIT FORM */}
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+                                        <div className="flex items-center gap-2 mb-2 text-slate-400 text-xs font-bold uppercase"><CreditCard size={14}/> P.IVA / C.F.</div>
+                                        {isEditingRegistry ? (
+                                            <input type="text" value={registryForm.vatNumber} onChange={e => handleRegistryChange('vatNumber', e.target.value)} className="w-full bg-slate-950 border border-slate-600 rounded px-2 py-1 text-white font-mono" placeholder="IT..." />
+                                        ) : ( <p className="text-white font-mono font-bold text-lg">{viewingProfile.settings?.restaurantProfile?.vatNumber || '-'}</p> )}
                                     </div>
-
-                                    {/* Indirizzi */}
-                                    <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                                        <div className="flex items-center gap-2 mb-3 text-slate-400 text-xs font-bold uppercase"><MapPin size={14}/> Sede Legale & Operativa</div>
-                                        <p className="text-white font-medium mb-2">{viewingProfile.settings.restaurantProfile.address || 'Nessun indirizzo specificato'}</p>
-                                        {viewingProfile.settings.restaurantProfile.billingAddress && (
-                                            <div className="mt-3 pt-3 border-t border-slate-700">
-                                                <span className="text-[10px] text-slate-500 uppercase block mb-1">Fatturazione</span>
-                                                <p className="text-slate-300 text-sm">{viewingProfile.settings.restaurantProfile.billingAddress}</p>
-                                            </div>
-                                        )}
+                                    <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+                                        <div className="flex items-center gap-2 mb-2 text-slate-400 text-xs font-bold uppercase"><Smartphone size={14}/> Cellulare</div>
+                                        {isEditingRegistry ? (
+                                            <input type="text" value={registryForm.phoneNumber} onChange={e => handleRegistryChange('phoneNumber', e.target.value)} className="w-full bg-slate-950 border border-slate-600 rounded px-2 py-1 text-white" placeholder="333..." />
+                                        ) : ( <p className="text-white font-bold">{viewingProfile.settings?.restaurantProfile?.phoneNumber || '-'}</p> )}
                                     </div>
+                                </div>
 
-                                    {/* Contatti Extra */}
-                                    <div className="grid grid-cols-2 gap-4">
-                                         <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-                                            <div className="flex items-center gap-2 mb-1 text-green-500 text-xs font-bold uppercase"><MessageCircle size={14}/> WhatsApp</div>
-                                            <p className="text-white font-mono">{viewingProfile.settings.restaurantProfile.whatsappNumber || '-'}</p>
-                                        </div>
-                                        <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-                                            <div className="flex items-center gap-2 mb-1 text-blue-400 text-xs font-bold uppercase"><Mail size={14}/> Email Pubblica</div>
-                                            <p className="text-white text-xs truncate" title={viewingProfile.settings.restaurantProfile.email}>{viewingProfile.settings.restaurantProfile.email || '-'}</p>
-                                        </div>
-                                    </div>
-
-                                    {/* Fisso */}
-                                    {viewingProfile.settings.restaurantProfile.landlineNumber && (
-                                        <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-                                            <div className="flex items-center gap-2 mb-1 text-slate-400 text-xs font-bold uppercase"><PhoneCall size={14}/> Telefono Fisso</div>
-                                            <p className="text-white font-bold">{viewingProfile.settings.restaurantProfile.landlineNumber}</p>
-                                        </div>
-                                    )}
+                                <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                                    <div className="flex items-center gap-2 mb-3 text-slate-400 text-xs font-bold uppercase"><MapPin size={14}/> Sede Legale & Operativa</div>
+                                    {isEditingRegistry ? (
+                                        <input type="text" value={registryForm.address} onChange={e => handleRegistryChange('address', e.target.value)} className="w-full bg-slate-950 border border-slate-600 rounded px-2 py-1 text-white mb-2" placeholder="Via Roma 1..." />
+                                    ) : ( <p className="text-white font-medium mb-2">{viewingProfile.settings?.restaurantProfile?.address || 'Nessun indirizzo specificato'}</p> )}
                                     
-                                    {/* Website */}
-                                    {viewingProfile.settings.restaurantProfile.website && (
-                                         <div className="bg-slate-800 p-3 rounded-xl border border-slate-700 flex items-center justify-between">
-                                            <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase"><Globe size={14}/> Sito Web</div>
-                                            <a href={viewingProfile.settings.restaurantProfile.website} target="_blank" rel="noreferrer" className="text-blue-400 text-sm hover:underline truncate max-w-[200px]">{viewingProfile.settings.restaurantProfile.website}</a>
-                                        </div>
-                                    )}
-
-                                    {/* Socials */}
-                                    {viewingProfile.settings.restaurantProfile.socials && Object.keys(viewingProfile.settings.restaurantProfile.socials).some(k => !!viewingProfile.settings.restaurantProfile.socials[k]) && (
-                                        <div className="col-span-full mt-4 pt-4 border-t border-slate-800">
-                                             <span className="text-[10px] text-slate-500 uppercase block mb-2 font-bold flex items-center gap-2"><Share2 size={12}/> Social Networks</span>
-                                             <div className="flex flex-wrap gap-2">
-                                                 {Object.entries(viewingProfile.settings.restaurantProfile.socials).map(([key, val]) => (
-                                                     val ? <a key={key} href={val as string} target="_blank" rel="noreferrer" className="px-3 py-1 bg-slate-800 rounded-lg text-xs text-blue-400 hover:bg-slate-700 hover:text-white border border-slate-700 font-bold capitalize">{key}</a> : null
-                                                 ))}
-                                             </div>
-                                        </div>
-                                    )}
-
+                                    <div className="mt-3 pt-3 border-t border-slate-700">
+                                        <span className="text-[10px] text-slate-500 uppercase block mb-1">Fatturazione</span>
+                                        {isEditingRegistry ? (
+                                            <input type="text" value={registryForm.billingAddress} onChange={e => handleRegistryChange('billingAddress', e.target.value)} className="w-full bg-slate-950 border border-slate-600 rounded px-2 py-1 text-white text-sm" placeholder="Se diverso..." />
+                                        ) : ( <p className="text-slate-300 text-sm">{viewingProfile.settings?.restaurantProfile?.billingAddress || '-'}</p> )}
+                                    </div>
                                 </div>
-                            ) : (
-                                <div className="text-center py-10 bg-slate-950 rounded-xl border border-slate-800 border-dashed">
-                                    <AlertTriangle size={32} className="text-slate-600 mx-auto mb-3"/>
-                                    <p className="text-slate-500 font-bold">Nessun dato anagrafico inserito.</p>
-                                    <p className="text-slate-600 text-xs mt-1">L'utente non ha ancora compilato la sezione Profilo.</p>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                     <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+                                        <div className="flex items-center gap-2 mb-2 text-green-500 text-xs font-bold uppercase"><MessageCircle size={14}/> WhatsApp</div>
+                                        {isEditingRegistry ? (
+                                            <input type="text" value={registryForm.whatsappNumber} onChange={e => handleRegistryChange('whatsappNumber', e.target.value)} className="w-full bg-slate-950 border border-slate-600 rounded px-2 py-1 text-white" />
+                                        ) : ( <p className="text-white font-mono">{viewingProfile.settings?.restaurantProfile?.whatsappNumber || '-'}</p> )}
+                                    </div>
+                                    <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+                                        <div className="flex items-center gap-2 mb-2 text-blue-400 text-xs font-bold uppercase"><Mail size={14}/> Email Pubblica</div>
+                                        {isEditingRegistry ? (
+                                            <input type="text" value={registryForm.email} onChange={e => handleRegistryChange('email', e.target.value)} className="w-full bg-slate-950 border border-slate-600 rounded px-2 py-1 text-white text-xs" />
+                                        ) : ( <p className="text-white text-xs truncate" title={viewingProfile.settings?.restaurantProfile?.email}>{viewingProfile.settings?.restaurantProfile?.email || '-'}</p> )}
+                                    </div>
+                                    <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+                                        <div className="flex items-center gap-2 mb-2 text-slate-400 text-xs font-bold uppercase"><PhoneCall size={14}/> Fisso</div>
+                                        {isEditingRegistry ? (
+                                            <input type="text" value={registryForm.landlineNumber} onChange={e => handleRegistryChange('landlineNumber', e.target.value)} className="w-full bg-slate-950 border border-slate-600 rounded px-2 py-1 text-white" />
+                                        ) : ( <p className="text-white font-bold">{viewingProfile.settings?.restaurantProfile?.landlineNumber || '-'}</p> )}
+                                    </div>
                                 </div>
-                            )}
+                                
+                                <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+                                    <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase mb-2"><Globe size={14}/> Sito Web</div>
+                                    {isEditingRegistry ? (
+                                        <input type="text" value={registryForm.website} onChange={e => handleRegistryChange('website', e.target.value)} className="w-full bg-slate-950 border border-slate-600 rounded px-2 py-1 text-blue-400 text-sm" placeholder="https://..." />
+                                    ) : ( <a href={viewingProfile.settings?.restaurantProfile?.website} target="_blank" rel="noreferrer" className="text-blue-400 text-sm hover:underline truncate block">{viewingProfile.settings?.restaurantProfile?.website || '-'}</a> )}
+                                </div>
+
+                                {/* Socials Editing */}
+                                {isEditingRegistry && (
+                                    <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                                        <span className="text-[10px] text-slate-500 uppercase block mb-3 font-bold flex items-center gap-2"><Share2 size={12}/> Modifica Social Links</span>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div className="relative"><Facebook size={14} className="absolute left-2 top-2 text-blue-500"/><input type="text" value={registryForm.socials?.facebook || ''} onChange={e => handleSocialChange('facebook', e.target.value)} className="w-full bg-slate-950 border border-slate-600 rounded pl-7 py-1 text-xs text-white" placeholder="Facebook"/></div>
+                                            <div className="relative"><Instagram size={14} className="absolute left-2 top-2 text-pink-500"/><input type="text" value={registryForm.socials?.instagram || ''} onChange={e => handleSocialChange('instagram', e.target.value)} className="w-full bg-slate-950 border border-slate-600 rounded pl-7 py-1 text-xs text-white" placeholder="Instagram"/></div>
+                                            <div className="relative"><Store size={14} className="absolute left-2 top-2 text-blue-400"/><input type="text" value={registryForm.socials?.google || ''} onChange={e => handleSocialChange('google', e.target.value)} className="w-full bg-slate-950 border border-slate-600 rounded pl-7 py-1 text-xs text-white" placeholder="Google"/></div>
+                                            <div className="relative"><Compass size={14} className="absolute left-2 top-2 text-green-500"/><input type="text" value={registryForm.socials?.tripadvisor || ''} onChange={e => handleSocialChange('tripadvisor', e.target.value)} className="w-full bg-slate-950 border border-slate-600 rounded pl-7 py-1 text-xs text-white" placeholder="TripAdvisor"/></div>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Socials Display */}
+                                {!isEditingRegistry && viewingProfile.settings?.restaurantProfile?.socials && Object.keys(viewingProfile.settings.restaurantProfile.socials).some(k => !!viewingProfile.settings.restaurantProfile.socials[k]) && (
+                                    <div className="col-span-full mt-4 pt-4 border-t border-slate-800">
+                                         <span className="text-[10px] text-slate-500 uppercase block mb-2 font-bold flex items-center gap-2"><Share2 size={12}/> Social Networks</span>
+                                         <div className="flex flex-wrap gap-2">
+                                             {Object.entries(viewingProfile.settings.restaurantProfile.socials).map(([key, val]) => (
+                                                 val ? <a key={key} href={val as string} target="_blank" rel="noreferrer" className="px-3 py-1 bg-slate-800 rounded-lg text-xs text-blue-400 hover:bg-slate-700 hover:text-white border border-slate-700 font-bold capitalize">{key}</a> : null
+                                             ))}
+                                         </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                        <div className="p-4 bg-slate-950 border-t border-slate-800 rounded-b-3xl flex justify-end">
-                            <button onClick={() => setViewingProfile(null)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-colors">Chiudi</button>
+                        <div className="p-4 bg-slate-900 border-t border-slate-800 rounded-b-3xl flex justify-end gap-3">
+                            {isEditingRegistry && <button onClick={() => setIsEditingRegistry(false)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-colors">Annulla</button>}
+                            <button onClick={isEditingRegistry ? saveRegistryChanges : () => setViewingProfile(null)} className={`px-6 py-2 font-bold rounded-xl transition-colors ${isEditingRegistry ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-slate-800 hover:bg-slate-700 text-white'}`}>
+                                {isEditingRegistry ? 'Salva Modifiche' : 'Chiudi'}
+                            </button>
                         </div>
                     </div>
                 </div>
