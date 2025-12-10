@@ -10,7 +10,7 @@ interface DigitalMenuProps {
     activeRestaurantName?: string; // Name injected directly (for Preview)
 }
 
-const CATEGORY_ORDER = [Category.ANTIPASTI, Category.PANINI, Category.PIZZE, Category.PRIMI, Category.SECONDI, Category.DOLCI, Category.BEVANDE];
+const CATEGORY_ORDER = [Category.MENU_COMPLETO, Category.ANTIPASTI, Category.PANINI, Category.PIZZE, Category.PRIMI, Category.SECONDI, Category.DOLCI, Category.BEVANDE];
 
 const ALLERGENS_CONFIG = [
     { id: 'Glutine', icon: Wheat, label: 'Glutine' },
@@ -135,7 +135,7 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
     };
 
     const getCategoryIcon = (cat: Category, size: number = 18) => {
-        switch (cat) { case Category.ANTIPASTI: return <UtensilsCrossed size={size} />; case Category.PANINI: return <Sandwich size={size} />; case Category.PIZZE: return <Pizza size={size} />; case Category.PRIMI: return <ChefHat size={size} />; case Category.SECONDI: return <Utensils size={size} />; case Category.DOLCI: return <CakeSlice size={size} />; case Category.BEVANDE: return <Wine size={size} />; default: return <Utensils size={size} />; }
+        switch (cat) { case Category.MENU_COMPLETO: return <Star size={size}/>; case Category.ANTIPASTI: return <UtensilsCrossed size={size} />; case Category.PANINI: return <Sandwich size={size} />; case Category.PIZZE: return <Pizza size={size} />; case Category.PRIMI: return <ChefHat size={size} />; case Category.SECONDI: return <Utensils size={size} />; case Category.DOLCI: return <CakeSlice size={size} />; case Category.BEVANDE: return <Wine size={size} />; default: return <Utensils size={size} />; }
     };
 
     const exitMenuMode = () => {
@@ -260,44 +260,74 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
                             </div>
 
                             <div className={`grid ${isPreview ? 'gap-3' : 'gap-4'}`}>
-                                {items.map(item => (
-                                    <div key={item.id} className={`bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col relative overflow-hidden group ${isPreview ? 'p-3 gap-1.5' : 'p-5 gap-3'}`}>
-                                        <div className="flex justify-between items-start gap-3">
-                                            <div className="flex-1">
-                                                <div className="flex justify-between items-start">
-                                                    <h3 className={`${isPreview ? 'text-sm' : 'text-base'} font-bold text-slate-900 leading-tight`}>{item.name}</h3>
-                                                    <div className="font-bold text-orange-600 text-sm whitespace-nowrap ml-2">
-                                                        € {item.price.toFixed(2)}
+                                {items.map(item => {
+                                    // COMBO ITEMS DISPLAY LOGIC
+                                    const isCombo = item.category === Category.MENU_COMPLETO;
+                                    let comboChildren: MenuItem[] = [];
+                                    if(isCombo && item.comboItems) {
+                                        comboChildren = activeMenuData ? activeMenuData.filter(i => item.comboItems?.includes(i.id)) : [];
+                                    }
+
+                                    return (
+                                        <div key={item.id} className={`bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col relative overflow-hidden group ${isPreview ? 'p-3 gap-1.5' : 'p-5 gap-3'}`}>
+                                            <div className="flex justify-between items-start gap-3">
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex justify-between items-start">
+                                                        <h3 className={`${isPreview ? 'text-sm' : 'text-base'} font-bold text-slate-900 leading-tight`}>{item.name}</h3>
+                                                        <div className="font-bold text-orange-600 text-sm whitespace-nowrap ml-2">
+                                                            € {item.price.toFixed(2)}
+                                                        </div>
                                                     </div>
+                                                    
+                                                    {/* 1. INGREDIENTS (New Order) */}
+                                                    {item.ingredients && (
+                                                        <p className={`text-slate-600 font-medium italic mt-1 leading-snug ${isPreview ? 'text-[10px]' : 'text-xs'}`}>
+                                                            {item.ingredients}
+                                                        </p>
+                                                    )}
+
+                                                    {/* COMBO CHILDREN LISTING */}
+                                                    {isCombo && comboChildren.length > 0 && (
+                                                        <div className="mt-2 mb-1">
+                                                            <p className={`text-[9px] font-bold text-slate-400 uppercase mb-1`}>Include:</p>
+                                                            <ul className={`list-disc list-inside text-slate-700 ${isPreview ? 'text-[10px]' : 'text-xs'}`}>
+                                                                {comboChildren.map(child => (
+                                                                    <li key={child.id}>{child.name}</li>
+                                                                ))}
+                                                            </ul>
+                                                        </div>
+                                                    )}
+
+                                                    {/* 2. DESCRIPTION */}
+                                                    <p className={`text-slate-500 leading-relaxed mt-2 border-t border-dashed border-slate-100 pt-2 ${isPreview ? 'text-[10px]' : 'text-xs'}`}>
+                                                        {item.description || <span className="italic opacity-50">.</span>}
+                                                    </p>
+                                                    
+                                                    {/* 3. ALLERGENS */}
+                                                    {item.allergens && item.allergens.length > 0 && (
+                                                        <div className="flex flex-wrap gap-1.5 pt-2 mt-1">
+                                                            {item.allergens.map(alg => {
+                                                                const Icon = ALLERGENS_ICONS[alg] || Info;
+                                                                return (
+                                                                    <span key={alg} className={`inline-flex items-center gap-1 font-bold uppercase text-slate-500 bg-slate-100 rounded-md ${isPreview ? 'text-[8px] px-1.5 py-0.5' : 'text-[9px] px-2 py-1'}`}>
+                                                                        <Icon size={isPreview ? 8 : 10} className="text-orange-500"/> {alg}
+                                                                    </span>
+                                                                )
+                                                            })}
+                                                        </div>
+                                                    )}
                                                 </div>
-                                                <p className={`text-slate-500 leading-snug mt-1 ${isPreview ? 'text-[10px]' : 'text-xs'}`}>
-                                                    {item.description || <span className="italic opacity-50">Nessuna descrizione.</span>}
-                                                </p>
                                                 
-                                                {/* Allergens */}
-                                                {item.allergens && item.allergens.length > 0 && (
-                                                    <div className="flex flex-wrap gap-1.5 pt-2 mt-1">
-                                                        {item.allergens.map(alg => {
-                                                            const Icon = ALLERGENS_ICONS[alg] || Info;
-                                                            return (
-                                                                <span key={alg} className={`inline-flex items-center gap-1 font-bold uppercase text-slate-500 bg-slate-100 rounded-md ${isPreview ? 'text-[8px] px-1.5 py-0.5' : 'text-[9px] px-2 py-1'}`}>
-                                                                    <Icon size={isPreview ? 8 : 10} className="text-orange-500"/> {alg}
-                                                                </span>
-                                                            )
-                                                        })}
+                                                {/* DISH IMAGE */}
+                                                {item.image && (
+                                                    <div className={`shrink-0 rounded-xl border border-slate-100 overflow-hidden shadow-sm ${isPreview ? 'w-16 h-16' : 'w-24 h-24'}`}>
+                                                        <img src={item.image} alt={item.name} className="w-full h-full object-cover"/>
                                                     </div>
                                                 )}
                                             </div>
-                                            
-                                            {/* DISH IMAGE */}
-                                            {item.image && (
-                                                <div className={`shrink-0 rounded-full border-2 border-orange-400 overflow-hidden shadow-sm ${isPreview ? 'w-14 h-14' : 'w-20 h-20'}`}>
-                                                    <img src={item.image} alt={item.name} className="w-full h-full object-cover"/>
-                                                </div>
-                                            )}
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
                     );
