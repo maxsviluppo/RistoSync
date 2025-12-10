@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, signOut } from '../services/supabase';
-import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon, FileText, MapPin, Phone, CreditCard, Mail, MessageCircle } from 'lucide-react';
+import { ShieldCheck, Users, Database, LogOut, Activity, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon, FileText, MapPin, Phone, CreditCard, Mail, MessageCircle, Share2, PhoneCall } from 'lucide-react';
 
 interface SuperAdminDashboardProps {
     onEnterApp: () => void;
@@ -45,6 +45,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     const fetchProfiles = async () => {
         if (!supabase) return;
         setLoading(true);
+        // Ensure we explicitly select settings to be sure (though * usually covers it)
         const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
         if (data) setProfiles(data);
         if (error) console.error("Errore recupero profili:", error);
@@ -451,6 +452,9 @@ on conflict (id) do nothing;
                                     const isSuperAdminProfile = p.email === SUPER_ADMIN_EMAIL;
                                     const isBanned = p.subscription_status === 'banned';
                                     
+                                    // Check if Profile Data exists
+                                    const hasProfileData = p.settings?.restaurantProfile?.vatNumber || p.settings?.restaurantProfile?.phoneNumber;
+                                    
                                     return (
                                         <tr key={p.id} className={`transition-colors ${isFake ? 'bg-orange-500/5 hover:bg-orange-500/10' : 'hover:bg-slate-700/30'} ${isSuperAdminProfile ? 'bg-blue-900/10' : ''}`}>
                                             <td className="p-6">
@@ -499,10 +503,13 @@ on conflict (id) do nothing;
                                                     {/* NEW ANAGRAFICA BUTTON */}
                                                     <button 
                                                         onClick={() => setViewingProfile(p)}
-                                                        className="inline-flex items-center justify-center p-2 rounded-lg bg-indigo-500/10 text-indigo-400 hover:bg-indigo-600 hover:text-white border border-indigo-500/20 transition-colors"
+                                                        className={`inline-flex items-center justify-center p-2 rounded-lg border transition-colors
+                                                            ${hasProfileData ? 'bg-indigo-600 text-white border-indigo-500 shadow-lg shadow-indigo-500/20' : 'bg-indigo-500/10 text-indigo-400 hover:bg-indigo-600 hover:text-white border-indigo-500/20'}
+                                                        `}
                                                         title="Vedi Anagrafica"
                                                     >
                                                         <FileText size={14} />
+                                                        {hasProfileData && <span className="ml-1 text-[10px] font-bold">INFO</span>}
                                                     </button>
 
                                                     {!isSuperAdminProfile && (
@@ -609,7 +616,7 @@ on conflict (id) do nothing;
                                             <p className="text-white font-mono font-bold text-lg">{viewingProfile.settings.restaurantProfile.vatNumber || '-'}</p>
                                         </div>
                                         <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-                                            <div className="flex items-center gap-2 mb-1 text-slate-400 text-xs font-bold uppercase"><Phone size={14}/> Telefono</div>
+                                            <div className="flex items-center gap-2 mb-1 text-slate-400 text-xs font-bold uppercase"><Smartphone size={14}/> Cellulare</div>
                                             <p className="text-white font-bold">{viewingProfile.settings.restaurantProfile.phoneNumber || '-'}</p>
                                         </div>
                                     </div>
@@ -637,6 +644,14 @@ on conflict (id) do nothing;
                                             <p className="text-white text-xs truncate" title={viewingProfile.settings.restaurantProfile.email}>{viewingProfile.settings.restaurantProfile.email || '-'}</p>
                                         </div>
                                     </div>
+
+                                    {/* Fisso */}
+                                    {viewingProfile.settings.restaurantProfile.landlineNumber && (
+                                        <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
+                                            <div className="flex items-center gap-2 mb-1 text-slate-400 text-xs font-bold uppercase"><PhoneCall size={14}/> Telefono Fisso</div>
+                                            <p className="text-white font-bold">{viewingProfile.settings.restaurantProfile.landlineNumber}</p>
+                                        </div>
+                                    )}
                                     
                                     {/* Website */}
                                     {viewingProfile.settings.restaurantProfile.website && (
@@ -645,6 +660,19 @@ on conflict (id) do nothing;
                                             <a href={viewingProfile.settings.restaurantProfile.website} target="_blank" rel="noreferrer" className="text-blue-400 text-sm hover:underline truncate max-w-[200px]">{viewingProfile.settings.restaurantProfile.website}</a>
                                         </div>
                                     )}
+
+                                    {/* Socials */}
+                                    {viewingProfile.settings.restaurantProfile.socials && Object.keys(viewingProfile.settings.restaurantProfile.socials).some(k => !!viewingProfile.settings.restaurantProfile.socials[k]) && (
+                                        <div className="col-span-full mt-4 pt-4 border-t border-slate-800">
+                                             <span className="text-[10px] text-slate-500 uppercase block mb-2 font-bold flex items-center gap-2"><Share2 size={12}/> Social Networks</span>
+                                             <div className="flex flex-wrap gap-2">
+                                                 {Object.entries(viewingProfile.settings.restaurantProfile.socials).map(([key, val]) => (
+                                                     val ? <a key={key} href={val as string} target="_blank" rel="noreferrer" className="px-3 py-1 bg-slate-800 rounded-lg text-xs text-blue-400 hover:bg-slate-700 hover:text-white border border-slate-700 font-bold capitalize">{key}</a> : null
+                                                 ))}
+                                             </div>
+                                        </div>
+                                    )}
+
                                 </div>
                             ) : (
                                 <div className="text-center py-10 bg-slate-950 rounded-xl border border-slate-800 border-dashed">
