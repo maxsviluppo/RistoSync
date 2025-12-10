@@ -131,6 +131,18 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
         };
     }, [restaurantId, isPreview, activeMenuData]); 
 
+    // FILTER: Determine visible categories (hide empty ones)
+    const visibleCategories = useMemo(() => {
+        return CATEGORY_ORDER.filter(cat => menuItems.some(item => item.category === cat));
+    }, [menuItems]);
+
+    // SET INITIAL ACTIVE CATEGORY ONCE DATA LOADS
+    useEffect(() => {
+        if (visibleCategories.length > 0 && !visibleCategories.includes(activeCategory)) {
+            setActiveCategory(visibleCategories[0]);
+        }
+    }, [visibleCategories]);
+
     const scrollToCategory = (cat: Category) => {
         setActiveCategory(cat);
         const element = document.getElementById(`cat-${cat}`);
@@ -159,11 +171,6 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
         url.searchParams.delete('menu');
         window.location.href = url.toString();
     };
-
-    // FILTER: Determine visible categories (hide empty ones)
-    const visibleCategories = useMemo(() => {
-        return CATEGORY_ORDER.filter(cat => menuItems.some(item => item.category === cat));
-    }, [menuItems]);
 
     // Social Button Helper
     const SocialButton = ({ link, icon: Icon, colorClass, label }: { link?: string, icon: any, colorClass: string, label: string }) => {

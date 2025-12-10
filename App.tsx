@@ -4,7 +4,7 @@ import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import DigitalMenu from './components/DigitalMenu';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, RefreshCw, Send, Printer, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, FileSpreadsheet, Image as ImageIcon, Upload, FileImage, ExternalLink, CreditCard, Banknote, Briefcase, Clock, Check, ListPlus, ArrowRightLeft, Code2, Cookie, Shield, Wrench, Download } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, RefreshCw, Send, Printer, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, FileSpreadsheet, Image as ImageIcon, Upload, FileImage, ExternalLink, CreditCard, Banknote, Briefcase, Clock, Check, ListPlus, ArrowRightLeft, Code2, Cookie, Shield, Wrench, Download, CloudUpload } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate, performFactoryReset } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { askChefAI, generateRestaurantAnalysis, generateDishDescription, generateDishIngredients } from './services/geminiService';
@@ -132,6 +132,7 @@ export default function App() {
   const [isListening, setIsListening] = useState(false);
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false); 
   const [isGeneratingIngr, setIsGeneratingIngr] = useState(false); // NEW
+  const [isSyncingMenu, setIsSyncingMenu] = useState(false); // Sync State
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bulkInputRef = useRef<HTMLInputElement>(null);
   
@@ -363,6 +364,42 @@ export default function App() {
   const handleExitApp = () => setRole(null);
   const handleReactivationRequest = async () => { if (!supabase || !session) return; try { const originalName = session.user.user_metadata?.restaurant_name || "Richiesta Sblocco"; await supabase.from('profiles').insert({ id: session.user.id, email: session.user.email, restaurant_name: `${originalName} (RICHIESTA)`, subscription_status: 'banned' }); alert("Richiesta inviata!"); window.location.reload(); } catch (e: any) { alert("Errore: " + e.message); } };
   
+  const handleForceSyncMenu = async () => {
+      if(!supabase || !session?.user?.id) {
+          alert("Errore di connessione.");
+          return;
+      }
+      setIsSyncingMenu(true);
+      try {
+          const currentMenu = getMenuItems(); // Get local menu
+          // Upsert all items to cloud
+          let successCount = 0;
+          for(const item of currentMenu) {
+              const payload = {
+                  id: item.id,
+                  user_id: session.user.id,
+                  name: item.name,
+                  price: item.price,
+                  category: item.category,
+                  description: item.description,
+                  ingredients: item.ingredients,
+                  allergens: item.allergens,
+                  image: item.image,
+                  combo_items: item.comboItems,
+                  specific_department: item.specificDepartment
+              };
+              const { error } = await supabase.from('menu_items').upsert(payload);
+              if(!error) successCount++;
+          }
+          alert(`Sincronizzazione Completata: ${successCount}/${currentMenu.length} piatti aggiornati nel Cloud.`);
+      } catch(e) {
+          alert("Errore durante la sincronizzazione.");
+          console.error(e);
+      } finally {
+          setIsSyncingMenu(false);
+      }
+  };
+
   const handleSaveMenu = () => { 
       if (editingItem.name && editingItem.price && editingItem.category) { 
           const itemToSave: MenuItem = { 
@@ -651,6 +688,135 @@ Grazie.`);
                             <button onClick={() => setAdminTab('info')} className={`px-4 py-2 rounded-lg font-bold text-sm whitespace-nowrap ${adminTab === 'info' ? 'bg-slate-800 text-white' : 'bg-slate-800 text-slate-400'}`}>DevTools</button>
                         </div>
                         
+                        {/* MENU TAB */}
+                        {adminTab === 'menu' && (
+                             <div className="max-w-4xl mx-auto pb-20 animate-fade-in"><div className="flex justify-between items-center mb-6"><div><h3 className="text-xl font-bold text-white">Gestione Menu</h3><p className="text-slate-400 text-sm">Aggiungi, modifica o rimuovi piatti.</p></div><div className="flex gap-2"><button onClick={handleForceSyncMenu} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-600/20 active:scale-95 transition-all" title="Carica tutto il menu nel cloud per il Menu Digitale">{isSyncingMenu ? <Loader size={18} className="animate-spin"/> : <CloudUpload size={18}/>} Forza Sync Cloud</button><button onClick={() => bulkInputRef.current?.click()} className="bg-slate-800 hover:bg-slate-700 text-blue-400 px-4 py-2 rounded-xl font-bold flex items-center gap-2 border border-slate-700 transition-all active:scale-95" title="Carica foto in massa (Nome file = Nome piatto)"><FileImage size={18}/> Foto Smart</button><input type="file" ref={bulkInputRef} multiple accept="image/*" onChange={handleBulkImageUpload} className="hidden"/><button onClick={() => { setIsEditingItem(true); setEditingItem({}); }} className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-orange-600/20 active:scale-95"><Plus size={18}/> Nuovo Piatto</button></div></div><div className="space-y-8">{ADMIN_CATEGORY_ORDER.map(category => { const items = menuItems.filter(i => i.category === category); if (items.length === 0) return null; return ( <div key={category} className="mb-8"><h4 className="text-slate-400 font-bold text-xs uppercase tracking-widest mb-3 flex items-center gap-2 border-b border-slate-800 pb-2">{getCategoryIcon(category)} {category}</h4><div className="space-y-3">{items.map(item => ( <div key={item.id} onDoubleClick={() => { setEditingItem(item); setIsEditingItem(true); }} className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex justify-between items-center hover:border-slate-700 transition-colors group cursor-pointer select-none"><div className="flex items-center gap-4"><div className="text-orange-500 font-black text-lg min-w-[3.5rem] text-center">€ {item.price.toFixed(2)}</div><div><div className="flex items-center gap-2"><h4 className="font-bold text-white text-lg">{item.name}</h4>{item.image && <ImageIcon size={14} className="text-green-500" />}</div><div className="flex items-center gap-2 text-xs"><span className="text-slate-500">{item.description || 'Nessuna descrizione'}</span></div></div></div><div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => { setEditingItem(item); setIsEditingItem(true); }} className="p-2 bg-slate-800 text-blue-400 rounded-lg hover:bg-blue-600 hover:text-white"><Edit2 size={16}/></button><button onClick={() => setItemToDelete(item)} className="p-2 bg-slate-800 text-red-400 rounded-lg hover:bg-red-600 hover:text-white"><Trash2 size={16}/></button></div></div> ))}</div></div> ) })}</div><div className="mt-12 pt-12 border-t border-slate-800"><div className="flex justify-between items-center mb-6"><div><h3 className="text-xl font-bold text-white">Configurazione Reparti</h3><p className="text-slate-400 text-sm">Dove inviare e stampare le comande?</p></div>{hasUnsavedDestinations && <button onClick={saveDestinationsToCloud} className="bg-green-600 text-white px-4 py-2 rounded-xl font-bold shadow-lg animate-pulse">Salva Modifiche</button>}</div><div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">{ADMIN_CATEGORY_ORDER.filter(cat => cat !== Category.MENU_COMPLETO).map(cat => ( <div key={cat} className="flex items-center justify-between bg-slate-900 p-4 rounded-xl border border-slate-800"><span className="font-bold text-slate-300 uppercase flex items-center gap-2"><div className="w-2 h-2 bg-orange-500 rounded-full"></div>{cat}</span><div className="flex bg-slate-950 rounded-lg p-1 border border-slate-800 overflow-x-auto"><button onClick={() => handleTempDestinationChange(cat, 'Cucina')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${tempDestinations[cat] === 'Cucina' ? 'bg-orange-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>CUCINA</button><button onClick={() => handleTempDestinationChange(cat, 'Sala')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${tempDestinations[cat] === 'Sala' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>SALA</button><button onClick={() => handleTempDestinationChange(cat, 'Pizzeria')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${tempDestinations[cat] === 'Pizzeria' ? 'bg-red-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>PIZZERIA</button><button onClick={() => handleTempDestinationChange(cat, 'Pub')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${tempDestinations[cat] === 'Pub' ? 'bg-amber-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>PUB</button></div></div> ))}</div><div className="bg-slate-900 rounded-2xl border border-slate-800 p-6"><div className="flex items-center gap-2 mb-4"><Printer className="text-white"/><h4 className="font-bold text-white uppercase tracking-wider">Stampanti Wi-Fi (Scontrino Fisico)</h4></div><p className="text-slate-400 text-sm mb-6">Abilitando queste opzioni, il <strong>Terminale del Reparto (es. Cucina)</strong> lancerà automaticamente la stampa quando arriva un nuovo ordine.<br/>La "Cassa / Totale" viene invece stampata subito dal terminale di Sala.</p><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">{(['Cucina', 'Pizzeria', 'Pub', 'Cassa'] as string[]).map(dept => ( <div key={dept} className="flex justify-between items-center bg-slate-950 p-4 rounded-xl border border-slate-800"><div className="flex items-center gap-3">{dept === 'Cucina' && <ChefHat size={18} className="text-orange-500"/>}{dept === 'Pizzeria' && <Pizza size={18} className="text-red-500"/>}{dept === 'Pub' && <Sandwich size={18} className="text-amber-500"/>}{dept === 'Cassa' && <Receipt size={18} className="text-green-500"/>}<div className="flex flex-col"><span className="font-bold text-white">{dept === 'Cassa' ? 'Cassa / Totale' : dept}</span><span className="text-[9px] text-slate-500 uppercase">{dept === 'Cassa' ? 'Stampa da Sala' : 'Stampa al Reparto'}</span></div></div><button onClick={() => toggleTempPrint(dept)} className={`w-12 h-6 rounded-full relative transition-colors ${tempPrintSettings[dept] ? 'bg-green-500' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all shadow-sm ${tempPrintSettings[dept] ? 'left-7' : 'left-1'}`}></div></button></div> ))}</div></div></div></div>
+                        )}
+                        
+                        {/* ANALYTICS TAB - Restored */}
+                        {adminTab === 'analytics' && (
+                            <div className="max-w-5xl mx-auto pb-20 animate-fade-in">
+                                <div className="flex justify-between items-center mb-6 bg-slate-900 p-4 rounded-2xl border border-slate-800">
+                                    <div><h3 className="text-xl font-bold text-white">Analisi & Cassa</h3><p className="text-slate-400 text-sm">Resoconto Giornaliero</p></div>
+                                    <div className="flex items-center bg-slate-950 rounded-xl p-1 border border-slate-800"><button onClick={() => changeDate(-1)} className="p-3 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white"><ChevronLeft/></button><div className="px-6 font-bold text-white flex items-center gap-2 uppercase tracking-wide"><Calendar size={18} className="text-orange-500"/> {formatDate(selectedDate)}</div><button onClick={() => changeDate(1)} className="p-3 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white"><ChevronRight/></button></div>
+                                </div>
+                                
+                                <div className="flex mb-6 bg-slate-900 p-1 rounded-xl w-max border border-slate-800">
+                                    <button onClick={() => setAnalyticsView('stats')} className={`px-6 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${analyticsView === 'stats' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}><BarChart3 size={16}/> Statistiche</button>
+                                    <button onClick={() => setAnalyticsView('receipts')} className={`px-6 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${analyticsView === 'receipts' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}><FileSpreadsheet size={16}/> Registro Scontrini</button>
+                                </div>
+
+                                {analyticsView === 'stats' ? (
+                                    <>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><div className="flex justify-between items-start mb-2"><div className="p-3 bg-green-900/20 rounded-xl text-green-500"><DollarSign/></div><span className="text-xs font-bold text-slate-500 uppercase">Incasso</span></div><p className="text-3xl font-black text-white">€ {stats.totalRevenue.toFixed(2)}</p></div>
+                                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><div className="flex justify-between items-start mb-2"><div className="p-3 bg-blue-900/20 rounded-xl text-blue-500"><UtensilsCrossed/></div><span className="text-xs font-bold text-slate-500 uppercase">Piatti</span></div><p className="text-3xl font-black text-white">{stats.totalItems}</p></div>
+                                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><div className="flex justify-between items-start mb-2"><div className="p-3 bg-purple-900/20 rounded-xl text-purple-500"><History/></div><span className="text-xs font-bold text-slate-500 uppercase">Attesa Media</span></div><p className="text-3xl font-black text-white">{stats.avgWait} <span className="text-base font-medium text-slate-500">min</span></p></div>
+                                        </div>
+                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                                                <h4 className="text-white font-bold mb-6 flex items-center gap-2"><Star size={18} className="text-yellow-500"/> Piatti Più Venduti</h4>
+                                                <div className="space-y-4">
+                                                    {stats.topDishes.map((dish, idx) => (
+                                                        <div key={idx} className="relative">
+                                                            <div className="flex justify-between text-sm mb-1 z-10 relative">
+                                                                <span className="font-bold text-slate-200">{dish.name}</span>
+                                                                <span className="text-slate-400">{dish.count} ordini</span>
+                                                            </div>
+                                                            <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
+                                                                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(dish.count / (stats.topDishes[0]?.count || 1)) * 100}%` }}></div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                    {stats.topDishes.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nessun dato disponibile</p>}
+                                                </div>
+                                            </div>
+                                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                                                <h4 className="text-white font-bold mb-6 flex items-center gap-2"><Clock size={18} className="text-orange-500"/> Affluenza Oraria</h4>
+                                                <div className="flex items-end justify-between h-40 gap-1 pt-4 border-b border-slate-800">
+                                                    {stats.chartHours.map((h, i) => (
+                                                        <div key={i} className="flex-1 flex flex-col justify-end items-center group">
+                                                            {h.count > 0 && (<div className="mb-1 text-[9px] text-white font-bold bg-slate-700 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity absolute -translate-y-6">{h.count}</div>)}
+                                                            <div className={`w-full rounded-t-sm transition-all hover:bg-orange-400 ${h.count > 0 ? 'bg-orange-500' : 'bg-slate-800'}`} style={{ height: `${(h.count / stats.maxHourly) * 100}%` }}></div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <div className="flex justify-between text-[9px] text-slate-500 mt-2 font-mono uppercase"><span>00:00</span><span>12:00</span><span>23:00</span></div>
+                                            </div>
+                                        </div>
+                                        <div className="bg-gradient-to-br from-indigo-900 to-slate-900 p-6 rounded-3xl border border-indigo-500/30 shadow-lg shadow-indigo-900/20">
+                                            <div className="flex items-center justify-between mb-4">
+                                                <div className="flex items-center gap-3 text-indigo-400"><Bot size={32} /><h3 className="text-2xl font-bold text-white">AI Strategy Advisor</h3></div>
+                                                <button onClick={handleRunAiAnalysis} disabled={isAnalyzing} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-indigo-600/30 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">{isAnalyzing ? <Loader className="animate-spin" size={18}/> : <Sparkles size={18}/>}{isAnalyzing ? 'Analisi in corso...' : 'Genera Strategia'}</button>
+                                            </div>
+                                            {aiAnalysisResult ? (<div className="bg-slate-950/50 p-6 rounded-2xl border border-indigo-500/20 text-indigo-100 leading-relaxed whitespace-pre-wrap animate-fade-in shadow-inner">{aiAnalysisResult}</div>) : (<p className="text-slate-400 text-sm">Clicca su "Genera Strategia" per analizzare i dati di oggi con l'Intelligenza Artificiale.</p>)}
+                                        </div>
+                                        
+                                        <div className="mt-8 text-center">
+                                            <button onClick={handleDeleteDailyHistory} className="text-red-500 hover:text-red-400 text-xs font-bold uppercase underline flex items-center justify-center gap-2 mx-auto"><Trash2 size={12}/> Cancella storico di oggi</button>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
+                                        <div className="p-6 border-b border-slate-800 flex items-center gap-3"><Receipt size={24} className="text-green-500"/><h3 className="text-xl font-bold text-white">Archivio Scontrini</h3></div>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left">
+                                                <thead className="bg-slate-950 text-slate-400 text-xs uppercase font-bold"><tr><th className="p-4">Ora</th><th className="p-4">Tavolo</th><th className="p-4">Staff</th><th className="p-4 text-right">Totale</th><th className="p-4 text-center">Azioni</th></tr></thead>
+                                                <tbody className="divide-y divide-slate-800">
+                                                    {filteredHistoryOrders.map(order => (
+                                                        <tr key={order.id} className="hover:bg-slate-800/50 transition-colors">
+                                                            <td className="p-4 font-mono text-slate-300">{new Date(order.createdAt || order.timestamp).toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}</td>
+                                                            <td className="p-4 font-bold text-white">{order.tableNumber.replace('_HISTORY', '')}</td>
+                                                            <td className="p-4 text-slate-400 text-sm">{order.waiterName || 'Staff'}</td>
+                                                            <td className="p-4 text-right font-black text-green-400">€ {order.items.reduce((acc, i) => acc + (i.menuItem.price * i.quantity), 0).toFixed(2)}</td>
+                                                            <td className="p-4 text-center"><div className="flex items-center justify-center gap-2"><button onClick={() => setViewOrderDetails(order)} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold border border-blue-500/50 flex items-center gap-2 transition-colors shadow-lg shadow-blue-600/20"><Eye size={14}/> VISUALIZZA</button><button onClick={() => handleReprintReceipt(order)} className="bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-700 flex items-center gap-2 transition-colors"><Printer size={14}/> RISTAMPA</button></div></td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* PROFILE TAB - RESTORED FULL */}
+                        {adminTab === 'profile' && (
+                            <div className="max-w-2xl mx-auto pb-20 animate-fade-in">
+                                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Store className="text-slate-400"/> Dati Attività & Fatturazione</h3>
+                                <div className="space-y-6">
+                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                                        <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Account Principale</label>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                            <div>
+                                                <label className="text-[10px] font-bold text-blue-400 uppercase mb-1 block flex items-center gap-1"><Lock size={10}/> Email Login</label>
+                                                <input type="text" value={session?.user?.email || 'Non disponibile'} disabled className="w-full bg-slate-950/50 border border-slate-700/50 rounded-xl p-3 text-slate-400 text-sm cursor-not-allowed font-mono" />
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">ID Tenant</label>
+                                                <input type="text" value={session?.user?.id || '...'} disabled className="w-full bg-slate-950/50 border border-slate-700/50 rounded-xl p-3 text-slate-500 text-xs cursor-not-allowed font-mono" />
+                                            </div>
+                                        </div>
+                                        <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Insegna Ristorante</label>
+                                        <div className="relative"><ChefHat className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/><input type="text" value={profileForm.name || ''} onChange={e => setProfileForm({...profileForm, name: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white font-bold text-lg outline-none" placeholder="Il Tuo Ristorante"/></div>
+                                    </div>
+                                    
+                                    {/* BILLING DATA */}
+                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h4 className="text-slate-300 font-bold mb-4 flex items-center gap-2"><Briefcase size={18}/> Dati Fiscali</h4><div className="grid grid-cols-1 gap-4"><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Ragione Sociale</label><input type="text" value={profileForm.businessName || ''} onChange={e => setProfileForm({...profileForm, businessName: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Es. Rossi S.r.l."/></div><div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Responsabile</label><input type="text" value={profileForm.responsiblePerson || ''} onChange={e => setProfileForm({...profileForm, responsiblePerson: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Nome Cognome"/></div><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">P.IVA / CF</label><input type="text" value={profileForm.vatNumber || ''} onChange={e => setProfileForm({...profileForm, vatNumber: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm font-mono"/></div></div>
+                                    <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Codice SDI</label><input type="text" value={profileForm.sdiCode || ''} onChange={e => setProfileForm({...profileForm, sdiCode: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm font-mono uppercase" placeholder="XXXXXXX"/></div><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">PEC</label><input type="text" value={profileForm.pecEmail || ''} onChange={e => setProfileForm({...profileForm, pecEmail: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm font-mono"/></div></div>
+                                    <div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Indirizzo Sede Legale</label><input type="text" value={profileForm.address || ''} onChange={e => setProfileForm({...profileForm, address: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Via Roma 1, Milano"/></div><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Indirizzo Fatturazione (Opzionale)</label><input type="text" value={profileForm.billingAddress || ''} onChange={e => setProfileForm({...profileForm, billingAddress: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Se diverso dalla sede legale"/></div></div></div>
+                                    
+                                    {/* CONTACTS DATA */}
+                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h4 className="text-slate-300 font-bold mb-4 flex items-center gap-2"><PhoneCall size={18}/> Contatti Pubblici</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Email Contatto</label><input type="email" value={profileForm.email || ''} onChange={e => setProfileForm({...profileForm, email: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm"/></div><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Cellulare</label><input type="text" value={profileForm.phoneNumber || ''} onChange={e => setProfileForm({...profileForm, phoneNumber: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm"/></div><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">WhatsApp</label><input type="text" value={profileForm.whatsappNumber || ''} onChange={e => setProfileForm({...profileForm, whatsappNumber: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm"/></div><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Telefono Fisso</label><input type="text" value={profileForm.landlineNumber || ''} onChange={e => setProfileForm({...profileForm, landlineNumber: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm"/></div><div className="col-span-full"><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Sito Web</label><input type="text" value={profileForm.website || ''} onChange={e => setProfileForm({...profileForm, website: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm text-blue-400" placeholder="https://"/></div></div></div>
+                                    
+                                    {/* SOCIAL DATA */}
+                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h4 className="text-slate-300 font-bold mb-4 flex items-center gap-2"><Share2 size={18}/> Social Networks</h4><div className="space-y-3"><div className="flex items-center gap-3"><Instagram className="text-pink-500"/><input type="text" value={profileForm.socials?.instagram || ''} onChange={e => handleSocialChange('instagram', e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Link Instagram"/></div><div className="flex items-center gap-3"><Facebook className="text-blue-600"/><input type="text" value={profileForm.socials?.facebook || ''} onChange={e => handleSocialChange('facebook', e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Link Facebook"/></div><div className="flex items-center gap-3"><Store className="text-blue-400"/><input type="text" value={profileForm.socials?.google || ''} onChange={e => handleSocialChange('google', e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Link Google Business"/></div><div className="flex items-center gap-3"><Compass className="text-green-500"/><input type="text" value={profileForm.socials?.tripadvisor || ''} onChange={e => handleSocialChange('tripadvisor', e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Link TripAdvisor"/></div></div></div>
+                                    
+                                    <div className="pt-4 border-t border-slate-800"><button onClick={handleSaveProfile} className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-green-600/20 active:scale-95 transition-all"><Save size={20}/> SALVA PROFILO</button></div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* SHARE TAB - RESTORED */}
                         {adminTab === 'share' && (
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start max-w-5xl mx-auto h-full animate-fade-in">
@@ -691,6 +857,37 @@ Grazie.`);
                             </div>
                         )}
 
+                        {/* AI TAB - Restored */}
+                        {adminTab === 'ai' && (
+                            <div className="max-w-xl mx-auto pb-20 animate-fade-in">
+                                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Bot className="text-indigo-500"/> AI Configuration</h3>
+                                <div className="bg-slate-900 p-6 rounded-2xl border border-indigo-500/30 shadow-lg shadow-indigo-500/10">
+                                    <div className="mb-4">
+                                        <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">API Key (Google Gemini)</label>
+                                        <input type="password" value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-4 pr-4 text-white focus:border-indigo-500 outline-none font-mono" placeholder="AIzaSy..."/>
+                                    </div>
+                                    <button onClick={handleSaveApiKey} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"><Save size={18}/> SALVA CHIAVE</button>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* NOTIFICATIONS TAB - Restored */}
+                        {adminTab === 'notif' && (
+                            <div className="max-w-md mx-auto animate-fade-in">
+                                <h3 className="text-xl font-bold text-white mb-6">Impostazioni Notifiche</h3>
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-center bg-slate-900 p-4 rounded-xl border border-slate-800">
+                                        <div className="flex items-center gap-3"><div className="p-2 bg-orange-500/20 rounded-lg text-orange-500"><Bell size={20}/></div><div><p className="font-bold text-white">Suoni Cucina</p><p className="text-xs text-slate-400">Audio all'arrivo ordini</p></div></div>
+                                        <button onClick={() => toggleNotif('kitchenSound')} className={`w-12 h-6 rounded-full relative transition-colors ${notifSettings.kitchenSound ? 'bg-green-500' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${notifSettings.kitchenSound ? 'left-7' : 'left-1'}`}></div></button>
+                                    </div>
+                                    <div className="flex justify-between items-center bg-slate-900 p-4 rounded-xl border border-slate-800">
+                                        <div className="flex items-center gap-3"><div className="p-2 bg-blue-500/20 rounded-lg text-blue-500"><Smartphone size={20}/></div><div><p className="font-bold text-white">Suoni Sala</p><p className="text-xs text-slate-400">Audio piatti pronti</p></div></div>
+                                        <button onClick={() => toggleNotif('waiterSound')} className={`w-12 h-6 rounded-full relative transition-colors ${notifSettings.waiterSound ? 'bg-green-500' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${notifSettings.waiterSound ? 'left-7' : 'left-1'}`}></div></button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* SUBSCRIPTION TAB - RESTORED */}
                         {adminTab === 'subscription' && (
                             <div className="max-w-4xl mx-auto pb-20 animate-fade-in">
@@ -709,7 +906,7 @@ Grazie.`);
                             </div>
                         )}
 
-                        {/* INFO & CONTACTS TAB (REPLACED LEGENDA) */}
+                        {/* INFO & CONTACTS TAB - RESTORED */}
                         {adminTab === 'info' && (
                             <div className="max-w-3xl mx-auto pb-20 animate-fade-in">
                                 <div className="flex flex-col items-center text-center mb-10">
@@ -790,162 +987,6 @@ Grazie.`);
                                 </div>
                             </div>
                         )}
-
-                        {/* OTHER TABS... */}
-                        {/* PROFILE TAB - RESTORED FULL */}
-                        {adminTab === 'profile' && (
-                            <div className="max-w-2xl mx-auto pb-20 animate-fade-in">
-                                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Store className="text-slate-400"/> Dati Attività & Fatturazione</h3>
-                                <div className="space-y-6">
-                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-                                        <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Account Principale</label>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                            <div>
-                                                <label className="text-[10px] font-bold text-blue-400 uppercase mb-1 block flex items-center gap-1"><Lock size={10}/> Email Login</label>
-                                                <input type="text" value={session?.user?.email || 'Non disponibile'} disabled className="w-full bg-slate-950/50 border border-slate-700/50 rounded-xl p-3 text-slate-400 text-sm cursor-not-allowed font-mono" />
-                                            </div>
-                                            <div>
-                                                <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">ID Tenant</label>
-                                                <input type="text" value={session?.user?.id || '...'} disabled className="w-full bg-slate-950/50 border border-slate-700/50 rounded-xl p-3 text-slate-500 text-xs cursor-not-allowed font-mono" />
-                                            </div>
-                                        </div>
-                                        <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Insegna Ristorante</label>
-                                        <div className="relative"><ChefHat className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/><input type="text" value={profileForm.name || ''} onChange={e => setProfileForm({...profileForm, name: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white font-bold text-lg outline-none" placeholder="Il Tuo Ristorante"/></div>
-                                    </div>
-                                    
-                                    {/* BILLING DATA */}
-                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h4 className="text-slate-300 font-bold mb-4 flex items-center gap-2"><Briefcase size={18}/> Dati Fiscali</h4><div className="grid grid-cols-1 gap-4"><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Ragione Sociale</label><input type="text" value={profileForm.businessName || ''} onChange={e => setProfileForm({...profileForm, businessName: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Es. Rossi S.r.l."/></div><div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Responsabile</label><input type="text" value={profileForm.responsiblePerson || ''} onChange={e => setProfileForm({...profileForm, responsiblePerson: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Nome Cognome"/></div><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">P.IVA / CF</label><input type="text" value={profileForm.vatNumber || ''} onChange={e => setProfileForm({...profileForm, vatNumber: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm font-mono"/></div></div>
-                                    <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Codice SDI</label><input type="text" value={profileForm.sdiCode || ''} onChange={e => setProfileForm({...profileForm, sdiCode: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm font-mono uppercase" placeholder="XXXXXXX"/></div><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">PEC</label><input type="text" value={profileForm.pecEmail || ''} onChange={e => setProfileForm({...profileForm, pecEmail: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm font-mono"/></div></div>
-                                    <div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Indirizzo Sede Legale</label><input type="text" value={profileForm.address || ''} onChange={e => setProfileForm({...profileForm, address: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Via Roma 1, Milano"/></div><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Indirizzo Fatturazione (Opzionale)</label><input type="text" value={profileForm.billingAddress || ''} onChange={e => setProfileForm({...profileForm, billingAddress: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Se diverso dalla sede legale"/></div></div></div>
-                                    
-                                    {/* CONTACTS DATA */}
-                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h4 className="text-slate-300 font-bold mb-4 flex items-center gap-2"><PhoneCall size={18}/> Contatti Pubblici</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Email Contatto</label><input type="email" value={profileForm.email || ''} onChange={e => setProfileForm({...profileForm, email: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm"/></div><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Cellulare</label><input type="text" value={profileForm.phoneNumber || ''} onChange={e => setProfileForm({...profileForm, phoneNumber: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm"/></div><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">WhatsApp</label><input type="text" value={profileForm.whatsappNumber || ''} onChange={e => setProfileForm({...profileForm, whatsappNumber: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm"/></div><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Telefono Fisso</label><input type="text" value={profileForm.landlineNumber || ''} onChange={e => setProfileForm({...profileForm, landlineNumber: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm"/></div><div className="col-span-full"><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Sito Web</label><input type="text" value={profileForm.website || ''} onChange={e => setProfileForm({...profileForm, website: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm text-blue-400" placeholder="https://"/></div></div></div>
-                                    
-                                    {/* SOCIAL DATA */}
-                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h4 className="text-slate-300 font-bold mb-4 flex items-center gap-2"><Share2 size={18}/> Social Networks</h4><div className="space-y-3"><div className="flex items-center gap-3"><Instagram className="text-pink-500"/><input type="text" value={profileForm.socials?.instagram || ''} onChange={e => handleSocialChange('instagram', e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Link Instagram"/></div><div className="flex items-center gap-3"><Facebook className="text-blue-600"/><input type="text" value={profileForm.socials?.facebook || ''} onChange={e => handleSocialChange('facebook', e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Link Facebook"/></div><div className="flex items-center gap-3"><Store className="text-blue-400"/><input type="text" value={profileForm.socials?.google || ''} onChange={e => handleSocialChange('google', e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Link Google Business"/></div><div className="flex items-center gap-3"><Compass className="text-green-500"/><input type="text" value={profileForm.socials?.tripadvisor || ''} onChange={e => handleSocialChange('tripadvisor', e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Link TripAdvisor"/></div></div></div>
-                                    
-                                    <div className="pt-4 border-t border-slate-800"><button onClick={handleSaveProfile} className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-green-600/20 active:scale-95 transition-all"><Save size={20}/> SALVA PROFILO</button></div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* MENU TAB (Updated Logic to hide MENU_COMPLETO from Department Config) */}
-                        {adminTab === 'menu' && (
-                             <div className="max-w-4xl mx-auto pb-20 animate-fade-in"><div className="flex justify-between items-center mb-6"><div><h3 className="text-xl font-bold text-white">Gestione Menu</h3><p className="text-slate-400 text-sm">Aggiungi, modifica o rimuovi piatti.</p></div><div className="flex gap-2"><button onClick={() => bulkInputRef.current?.click()} className="bg-slate-800 hover:bg-slate-700 text-blue-400 px-4 py-2 rounded-xl font-bold flex items-center gap-2 border border-slate-700 transition-all active:scale-95" title="Carica foto in massa (Nome file = Nome piatto)"><FileImage size={18}/> Foto Smart</button><input type="file" ref={bulkInputRef} multiple accept="image/*" onChange={handleBulkImageUpload} className="hidden"/><button onClick={() => { setIsEditingItem(true); setEditingItem({}); }} className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-orange-600/20 active:scale-95"><Plus size={18}/> Nuovo Piatto</button></div></div><div className="space-y-8">{ADMIN_CATEGORY_ORDER.map(category => { const items = menuItems.filter(i => i.category === category); if (items.length === 0) return null; return ( <div key={category} className="mb-8"><h4 className="text-slate-400 font-bold text-xs uppercase tracking-widest mb-3 flex items-center gap-2 border-b border-slate-800 pb-2">{getCategoryIcon(category)} {category}</h4><div className="space-y-3">{items.map(item => ( <div key={item.id} onDoubleClick={() => { setEditingItem(item); setIsEditingItem(true); }} className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex justify-between items-center hover:border-slate-700 transition-colors group cursor-pointer select-none"><div className="flex items-center gap-4"><div className="text-orange-500 font-black text-lg min-w-[3.5rem] text-center">€ {item.price.toFixed(2)}</div><div><div className="flex items-center gap-2"><h4 className="font-bold text-white text-lg">{item.name}</h4>{item.image && <ImageIcon size={14} className="text-green-500" />}</div><div className="flex items-center gap-2 text-xs"><span className="text-slate-500">{item.description || 'Nessuna descrizione'}</span></div></div></div><div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity"><button onClick={() => { setEditingItem(item); setIsEditingItem(true); }} className="p-2 bg-slate-800 text-blue-400 rounded-lg hover:bg-blue-600 hover:text-white"><Edit2 size={16}/></button><button onClick={() => setItemToDelete(item)} className="p-2 bg-slate-800 text-red-400 rounded-lg hover:bg-red-600 hover:text-white"><Trash2 size={16}/></button></div></div> ))}</div></div> ) })}</div><div className="mt-12 pt-12 border-t border-slate-800"><div className="flex justify-between items-center mb-6"><div><h3 className="text-xl font-bold text-white">Configurazione Reparti</h3><p className="text-slate-400 text-sm">Dove inviare e stampare le comande?</p></div>{hasUnsavedDestinations && <button onClick={saveDestinationsToCloud} className="bg-green-600 text-white px-4 py-2 rounded-xl font-bold shadow-lg animate-pulse">Salva Modifiche</button>}</div><div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">{ADMIN_CATEGORY_ORDER.filter(cat => cat !== Category.MENU_COMPLETO).map(cat => ( <div key={cat} className="flex items-center justify-between bg-slate-900 p-4 rounded-xl border border-slate-800"><span className="font-bold text-slate-300 uppercase flex items-center gap-2"><div className="w-2 h-2 bg-orange-500 rounded-full"></div>{cat}</span><div className="flex bg-slate-950 rounded-lg p-1 border border-slate-800 overflow-x-auto"><button onClick={() => handleTempDestinationChange(cat, 'Cucina')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${tempDestinations[cat] === 'Cucina' ? 'bg-orange-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>CUCINA</button><button onClick={() => handleTempDestinationChange(cat, 'Sala')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${tempDestinations[cat] === 'Sala' ? 'bg-blue-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>SALA</button><button onClick={() => handleTempDestinationChange(cat, 'Pizzeria')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${tempDestinations[cat] === 'Pizzeria' ? 'bg-red-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>PIZZERIA</button><button onClick={() => handleTempDestinationChange(cat, 'Pub')} className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all whitespace-nowrap ${tempDestinations[cat] === 'Pub' ? 'bg-amber-600 text-white shadow' : 'text-slate-500 hover:text-white'}`}>PUB</button></div></div> ))}</div><div className="bg-slate-900 rounded-2xl border border-slate-800 p-6"><div className="flex items-center gap-2 mb-4"><Printer className="text-white"/><h4 className="font-bold text-white uppercase tracking-wider">Stampanti Wi-Fi (Scontrino Fisico)</h4></div><p className="text-slate-400 text-sm mb-6">Abilitando queste opzioni, il <strong>Terminale del Reparto (es. Cucina)</strong> lancerà automaticamente la stampa quando arriva un nuovo ordine.<br/>La "Cassa / Totale" viene invece stampata subito dal terminale di Sala.</p><div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">{(['Cucina', 'Pizzeria', 'Pub', 'Cassa'] as string[]).map(dept => ( <div key={dept} className="flex justify-between items-center bg-slate-950 p-4 rounded-xl border border-slate-800"><div className="flex items-center gap-3">{dept === 'Cucina' && <ChefHat size={18} className="text-orange-500"/>}{dept === 'Pizzeria' && <Pizza size={18} className="text-red-500"/>}{dept === 'Pub' && <Sandwich size={18} className="text-amber-500"/>}{dept === 'Cassa' && <Receipt size={18} className="text-green-500"/>}<div className="flex flex-col"><span className="font-bold text-white">{dept === 'Cassa' ? 'Cassa / Totale' : dept}</span><span className="text-[9px] text-slate-500 uppercase">{dept === 'Cassa' ? 'Stampa da Sala' : 'Stampa al Reparto'}</span></div></div><button onClick={() => toggleTempPrint(dept)} className={`w-12 h-6 rounded-full relative transition-colors ${tempPrintSettings[dept] ? 'bg-green-500' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all shadow-sm ${tempPrintSettings[dept] ? 'left-7' : 'left-1'}`}></div></button></div> ))}</div></div></div></div>
-                        )}
-                        
-                        {/* Other tabs follow normally... */}
-                        {adminTab === 'analytics' && (
-                             <div className="max-w-5xl mx-auto pb-20 animate-fade-in">
-                                {/* Analytics Content (Unchanged) */}
-                                <div className="flex justify-between items-center mb-6 bg-slate-900 p-4 rounded-2xl border border-slate-800">
-                                    <div><h3 className="text-xl font-bold text-white">Analisi & Cassa</h3><p className="text-slate-400 text-sm">Resoconto Giornaliero</p></div>
-                                    <div className="flex items-center bg-slate-950 rounded-xl p-1 border border-slate-800"><button onClick={() => changeDate(-1)} className="p-3 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white"><ChevronLeft/></button><div className="px-6 font-bold text-white flex items-center gap-2 uppercase tracking-wide"><Calendar size={18} className="text-orange-500"/> {formatDate(selectedDate)}</div><button onClick={() => changeDate(1)} className="p-3 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white"><ChevronRight/></button></div>
-                                </div>
-                                <div className="flex mb-6 bg-slate-900 p-1 rounded-xl w-max border border-slate-800">
-                                    <button onClick={() => setAnalyticsView('stats')} className={`px-6 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${analyticsView === 'stats' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}><BarChart3 size={16}/> Statistiche</button>
-                                    <button onClick={() => setAnalyticsView('receipts')} className={`px-6 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${analyticsView === 'receipts' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}><FileSpreadsheet size={16}/> Registro Scontrini</button>
-                                </div>
-                                {analyticsView === 'stats' ? (
-                                    <>
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><div className="flex justify-between items-start mb-2"><div className="p-3 bg-green-900/20 rounded-xl text-green-500"><DollarSign/></div><span className="text-xs font-bold text-slate-500 uppercase">Incasso</span></div><p className="text-3xl font-black text-white">€ {stats.totalRevenue.toFixed(2)}</p></div>
-                                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><div className="flex justify-between items-start mb-2"><div className="p-3 bg-blue-900/20 rounded-xl text-blue-500"><UtensilsCrossed/></div><span className="text-xs font-bold text-slate-500 uppercase">Piatti</span></div><p className="text-3xl font-black text-white">{stats.totalItems}</p></div>
-                                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><div className="flex justify-between items-start mb-2"><div className="p-3 bg-purple-900/20 rounded-xl text-purple-500"><History/></div><span className="text-xs font-bold text-slate-500 uppercase">Attesa Media</span></div><p className="text-3xl font-black text-white">{stats.avgWait} <span className="text-base font-medium text-slate-500">min</span></p></div>
-                                        </div>
-                                        {/* Charts... */}
-                                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-                                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-                                                <h4 className="text-white font-bold mb-6 flex items-center gap-2"><Star size={18} className="text-yellow-500"/> Piatti Più Venduti</h4>
-                                                <div className="space-y-4">
-                                                    {stats.topDishes.map((dish, idx) => (
-                                                        <div key={idx} className="relative">
-                                                            <div className="flex justify-between text-sm mb-1 z-10 relative">
-                                                                <span className="font-bold text-slate-200">{dish.name}</span>
-                                                                <span className="text-slate-400">{dish.count} ordini</span>
-                                                            </div>
-                                                            <div className="h-2 bg-slate-800 rounded-full overflow-hidden">
-                                                                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(dish.count / (stats.topDishes[0]?.count || 1)) * 100}%` }}></div>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                    {stats.topDishes.length === 0 && <p className="text-slate-500 text-sm text-center py-4">Nessun dato disponibile</p>}
-                                                </div>
-                                            </div>
-                                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-                                                <h4 className="text-white font-bold mb-6 flex items-center gap-2"><Clock size={18} className="text-orange-500"/> Affluenza Oraria</h4>
-                                                <div className="flex items-end justify-between h-40 gap-1 pt-4 border-b border-slate-800">
-                                                    {stats.chartHours.map((h, i) => (
-                                                        <div key={i} className="flex-1 flex flex-col justify-end items-center group">
-                                                            {h.count > 0 && (<div className="mb-1 text-[9px] text-white font-bold bg-slate-700 px-1 rounded opacity-0 group-hover:opacity-100 transition-opacity absolute -translate-y-6">{h.count}</div>)}
-                                                            <div className={`w-full rounded-t-sm transition-all hover:bg-orange-400 ${h.count > 0 ? 'bg-orange-500' : 'bg-slate-800'}`} style={{ height: `${(h.count / stats.maxHourly) * 100}%` }}></div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                                <div className="flex justify-between text-[9px] text-slate-500 mt-2 font-mono uppercase"><span>00:00</span><span>12:00</span><span>23:00</span></div>
-                                            </div>
-                                        </div>
-                                        <div className="bg-gradient-to-br from-indigo-900 to-slate-900 p-6 rounded-3xl border border-indigo-500/30 shadow-lg shadow-indigo-900/20">
-                                            <div className="flex items-center justify-between mb-4">
-                                                <div className="flex items-center gap-3 text-indigo-400"><Bot size={32} /><h3 className="text-2xl font-bold text-white">AI Strategy Advisor</h3></div>
-                                                <button onClick={handleRunAiAnalysis} disabled={isAnalyzing} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-indigo-600/30 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">{isAnalyzing ? <Loader className="animate-spin" size={18}/> : <Sparkles size={18}/>}{isAnalyzing ? 'Analisi in corso...' : 'Genera Strategia'}</button>
-                                            </div>
-                                            {aiAnalysisResult ? (<div className="bg-slate-950/50 p-6 rounded-2xl border border-indigo-500/20 text-indigo-100 leading-relaxed whitespace-pre-wrap animate-fade-in shadow-inner">{aiAnalysisResult}</div>) : (<p className="text-slate-400 text-sm">Clicca su "Genera Strategia" per analizzare i dati di oggi con l'Intelligenza Artificiale.</p>)}
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
-                                        <div className="p-6 border-b border-slate-800 flex items-center gap-3"><Receipt size={24} className="text-green-500"/><h3 className="text-xl font-bold text-white">Archivio Scontrini</h3></div>
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-left">
-                                                <thead className="bg-slate-950 text-slate-400 text-xs uppercase font-bold"><tr><th className="p-4">Ora</th><th className="p-4">Tavolo</th><th className="p-4">Staff</th><th className="p-4 text-right">Totale</th><th className="p-4 text-center">Azioni</th></tr></thead>
-                                                <tbody className="divide-y divide-slate-800">
-                                                    {filteredHistoryOrders.map(order => (
-                                                        <tr key={order.id} className="hover:bg-slate-800/50 transition-colors">
-                                                            <td className="p-4 font-mono text-slate-300">{new Date(order.createdAt || order.timestamp).toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}</td>
-                                                            <td className="p-4 font-bold text-white">{order.tableNumber.replace('_HISTORY', '')}</td>
-                                                            <td className="p-4 text-slate-400 text-sm">{order.waiterName || 'Staff'}</td>
-                                                            <td className="p-4 text-right font-black text-green-400">€ {order.items.reduce((acc, i) => acc + (i.menuItem.price * i.quantity), 0).toFixed(2)}</td>
-                                                            <td className="p-4 text-center"><div className="flex items-center justify-center gap-2"><button onClick={() => setViewOrderDetails(order)} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold border border-blue-500/50 flex items-center gap-2 transition-colors shadow-lg shadow-blue-600/20"><Eye size={14}/> VISUALIZZA</button><button onClick={() => handleReprintReceipt(order)} className="bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-700 flex items-center gap-2 transition-colors"><Printer size={14}/> RISTAMPA</button></div></td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                )}
-                             </div>
-                        )}
-
-                        {/* AI & Notif & Info tabs... (Unchanged) */}
-                        {adminTab === 'ai' && (
-                            <div className="max-w-xl mx-auto pb-20 animate-fade-in">
-                                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Bot className="text-indigo-500"/> AI Configuration</h3>
-                                <div className="bg-slate-900 p-6 rounded-2xl border border-indigo-500/30 shadow-lg shadow-indigo-500/10">
-                                    <div className="mb-4">
-                                        <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">API Key (Google Gemini)</label>
-                                        <input type="password" value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-4 pr-4 text-white focus:border-indigo-500 outline-none font-mono" placeholder="AIzaSy..."/>
-                                    </div>
-                                    <button onClick={handleSaveApiKey} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"><Save size={18}/> SALVA CHIAVE</button>
-                                </div>
-                            </div>
-                        )}
-                        
-                        {adminTab === 'notif' && (
-                            <div className="max-w-md mx-auto animate-fade-in">
-                                <h3 className="text-xl font-bold text-white mb-6">Impostazioni Notifiche</h3>
-                                <div className="space-y-4">
-                                    <div className="flex justify-between items-center bg-slate-900 p-4 rounded-xl border border-slate-800">
-                                        <div className="flex items-center gap-3"><div className="p-2 bg-orange-500/20 rounded-lg text-orange-500"><Bell size={20}/></div><div><p className="font-bold text-white">Suoni Cucina</p><p className="text-xs text-slate-400">Audio all'arrivo ordini</p></div></div>
-                                        <button onClick={() => toggleNotif('kitchenSound')} className={`w-12 h-6 rounded-full relative transition-colors ${notifSettings.kitchenSound ? 'bg-green-500' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${notifSettings.kitchenSound ? 'left-7' : 'left-1'}`}></div></button>
-                                    </div>
-                                    <div className="flex justify-between items-center bg-slate-900 p-4 rounded-xl border border-slate-800">
-                                        <div className="flex items-center gap-3"><div className="p-2 bg-blue-500/20 rounded-lg text-blue-500"><Smartphone size={20}/></div><div><p className="font-bold text-white">Suoni Sala</p><p className="text-xs text-slate-400">Audio piatti pronti</p></div></div>
-                                        <button onClick={() => toggleNotif('waiterSound')} className={`w-12 h-6 rounded-full relative transition-colors ${notifSettings.waiterSound ? 'bg-green-500' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${notifSettings.waiterSound ? 'left-7' : 'left-1'}`}></div></button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
                     </div>
                 </div>
             </div>
@@ -953,7 +994,7 @@ Grazie.`);
 
         {isEditingItem && (
             <div className="absolute inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
-                {/* Editor Modal UI */}
+                {/* ... (Editor Modal remains unchanged) ... */}
                 <div className="bg-slate-900 border border-orange-500/30 rounded-3xl p-6 w-full max-w-lg shadow-2xl animate-slide-up relative flex flex-col max-h-[90vh]">
                     <div className="flex justify-between items-center mb-6 shrink-0">
                         <h2 className="text-2xl font-bold text-white flex items-center gap-2"><Edit2 className="text-orange-500"/> {editingItem.id ? 'Modifica Piatto' : 'Nuovo Piatto'}</h2>
@@ -961,7 +1002,7 @@ Grazie.`);
                     </div>
                     
                     <div className="space-y-4 overflow-y-auto custom-scroll pr-2 flex-1">
-                        {/* Form Inputs ... */}
+                        {/* ... (Inputs remain unchanged) ... */}
                         <div className="grid grid-cols-3 gap-4">
                             <div className="col-span-2"><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Nome Piatto / Menu</label><input type="text" value={editingItem.name || ''} onChange={e => setEditingItem({...editingItem, name: capitalize(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-bold" autoFocus /></div>
                             <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Prezzo (€)</label><input type="number" value={editingItem.price || ''} onChange={e => setEditingItem({...editingItem, price: parseFloat(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-mono text-right" placeholder="0.00" /></div>
@@ -1074,6 +1115,7 @@ Grazie.`);
             </div>
         )}
 
+        {/* ... (Delete Confirmation Modal remains unchanged) ... */}
         {showResetModal && (
             <div className="absolute inset-0 z-[100] bg-red-950/80 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in"><div className="bg-slate-900 w-full max-w-md rounded-3xl p-8 shadow-2xl border-2 border-red-600 flex flex-col items-center text-center animate-slide-up relative overflow-hidden"><div className="absolute top-0 left-0 w-full h-2 bg-red-600 animate-pulse"></div><div className="w-20 h-20 bg-red-600/20 rounded-full flex items-center justify-center mb-6 text-red-500 animate-pulse border border-red-500/50"><Trash2 size={40} /></div><h2 className="text-3xl font-black text-white mb-2">SEI SICURO?</h2><p className="text-slate-300 mb-6 font-medium leading-relaxed">Stai per cancellare <strong className="text-red-400">TUTTI GLI ORDINI</strong>, il <strong className="text-red-400">MENU</strong> e le <strong className="text-red-400">STATISTICHE</strong>.<br/><br/>Questa operazione è <span className="underline decoration-red-500">irreversibile</span>.<br/>Le impostazioni del profilo e l'API Key rimarranno salvate.</p><div className="flex flex-col gap-3 w-full"><button onClick={handleFactoryReset} className="w-full py-4 bg-red-600 hover:bg-red-700 text-white font-black text-lg rounded-xl shadow-[0_0_20px_rgba(220,38,38,0.4)] active:scale-95 transition-all">SÌ, CANCELLA TUTTO</button><button onClick={() => setShowResetModal(false)} className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition-all">ANNULLA</button></div></div></div>
         )}
