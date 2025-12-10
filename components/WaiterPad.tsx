@@ -13,7 +13,6 @@ const playWaiterNotification = () => {
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
         if (!AudioContext) return;
         const ctx = new AudioContext();
-        // Attempt to resume if suspended (common on mobile)
         if (ctx.state === 'suspended') ctx.resume();
 
         const now = ctx.currentTime;
@@ -241,7 +240,8 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       if (name) setWaiterName(name);
       
       const currentMenuItems = getMenuItems();
-      setAppSettingsState(getAppSettings()); 
+      const currentSettings = getAppSettings();
+      setAppSettingsState(currentSettings); 
 
       // --- LOGICA NOTIFICHE ---
       let newlyReadyCount = 0;
@@ -257,10 +257,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
           if (delayMinutes >= 25 && order.status !== OrderStatus.READY) {
               currentLateTables.push(order.tableNumber);
           }
-
-          // NOTA: Abbiamo rimosso il filtro per waiterName qui per garantire che tutti ricevano la notifica 
-          // in modalità team/collaborativa e durante i test. 
-          // if (name && order.waiterName && order.waiterName !== name) return;
 
           order.items.forEach((item, idx) => {
               // ==========================================
@@ -281,17 +277,28 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
               // LOGICA DEDICATA SOTTO-PIATTI (Combo)
               // ==========================================
               else {
-                  // Iteriamo sui componenti completati (salvati dal KDS nel DB)
+                  // Recupera definizione corretta per sapere se è Sala o Cucina
+                  const subIds = item.menuItem.comboItems || [];
                   const completedParts = item.comboCompletedParts || [];
                   const servedParts = item.comboServedParts || [];
 
-                  completedParts.forEach(subId => {
-                      // Se è pronto MA NON è stato servito
-                      if (!servedParts.includes(subId)) {
+                  subIds.forEach(subId => {
+                      // 1. Check if it's already served
+                      if (servedParts.includes(subId) || item.served) return; // Skip if served
+
+                      // 2. Identify if it is Sala (Drink) or Kitchen
+                      const canonicalSub = currentMenuItems.find(m => m.id === subId);
+                      const isSala = canonicalSub && currentSettings.categoryDestinations[canonicalSub.category] === 'Sala';
+                      
+                      // 3. Determine Readiness
+                      // READY IF: (Is Sala Item) OR (Is Kitchen Item AND Completed)
+                      const isReady = isSala || completedParts.includes(subId);
+
+                      if (isReady) {
                           const uniquePartKey = `${order.id}-${idx}-${subId}`;
                           currentReadyComboParts.add(uniquePartKey);
 
-                          // Se è una NUOVA entry che non avevamo visto nel ciclo precedente
+                          // Trigger notification if this part is NEWLY ready/seen
                           if (!isFirstLoad.current && !seenReadyComboPartsRef.current.has(uniquePartKey)) {
                               newlyReadyCount++;
                           }
@@ -349,13 +356,67 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
      if (lateTables.length === 0) setLatesAcknowledged(false);
   }, [lateTables]);
 
-  // Check if ANY table has items ready to serve (completed=true, served=false)
+  // LOGICA ICONA TAVOLO (Pulsante e Badges)
+  const getTableStatusInfo = (tableNum: string) => {
+      const activeOrders = allRestaurantOrders.filter(o => o.tableNumber === tableNum);
+      if (activeOrders.length === 0) return { status: 'free', count: 0, owner: null, delay: 0 };
+      
+      const activeOrder = activeOrders[0];
+      const orderDelayMinutes = Math.floor((Date.now() - activeOrder.timestamp) / 60000);
+      const isLate = orderDelayMinutes > 25 && activeOrder.status !== OrderStatus.READY && activeOrder.status !== OrderStatus.DELIVERED;
+
+      let readyToServeCount = 0;
+      let totalItems = 0;
+      let totalServed = 0;
+
+      activeOrder.items.forEach(i => {
+          totalItems++;
+          
+          if (i.menuItem.category !== Category.MENU_COMPLETO) {
+              // Standard Item Logic
+              if (i.served) totalServed++;
+              if (i.completed && !i.served) readyToServeCount++;
+          } else {
+              // Combo Item Logic (Detailed)
+              const subIds = i.menuItem.comboItems || [];
+              subIds.forEach(subId => {
+                  const canonicalSub = menuItems.find(m => m.id === subId);
+                  const isSala = canonicalSub && appSettings.categoryDestinations[canonicalSub.category] === 'Sala';
+                  
+                  const isReady = isSala || i.comboCompletedParts?.includes(subId);
+                  // Check served: if parent served OR specific part served
+                  const isServed = i.served || i.comboServedParts?.includes(subId);
+
+                  if (isReady && !isServed) readyToServeCount++;
+              });
+              // We don't increment totalServed/totalItems for subparts to avoid skewing logic, 
+              // but we check if the MAIN item is served.
+              if (i.served) totalServed++;
+          }
+      });
+
+      // 1. PRIORITY: Ready to Serve (Includes Drinks & Combo Parts) -> GREEN
+      if (readyToServeCount > 0) return { status: 'ready', count: readyToServeCount, owner: activeOrder.waiterName, delay: orderDelayMinutes };
+      
+      // 2. All Served (Eating)
+      if (totalItems > 0 && totalItems === totalServed) return { status: 'eating', count: 0, owner: activeOrder.waiterName, delay: 0 };
+
+      // 3. Late
+      if (isLate) return { status: 'late', count: 0, owner: activeOrder.waiterName, delay: orderDelayMinutes };
+      
+      // 4. Occupied
+      return { status: 'occupied', count: 0, owner: activeOrder.waiterName, delay: orderDelayMinutes };
+  };
+
+  // Check if ANY table has items ready to serve (for Header Pulse)
   const hasUnseenNotifications = useMemo(() => {
-      return allRestaurantOrders.some(order => 
-          order.status !== OrderStatus.DELIVERED && 
-          order.items.some(i => i.completed && !i.served)
-      );
-  }, [allRestaurantOrders]);
+      // Loop all tables, check if any status is 'ready'
+      for (let i = 1; i <= totalTables; i++) {
+          const info = getTableStatusInfo(i.toString());
+          if (info.status === 'ready') return true;
+      }
+      return false;
+  }, [allRestaurantOrders, menuItems, appSettings]);
 
   const sortedCart = [...cart].sort((a, b) => CATEGORY_ORDER.indexOf(a.menuItem.category) - CATEGORY_ORDER.indexOf(b.menuItem.category));
 
@@ -489,47 +550,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
     switch (cat) { case Category.ANTIPASTI: return <UtensilsCrossed size={size} />; case Category.PANINI: return <Sandwich size={size} />; case Category.PIZZE: return <Pizza size={size} />; case Category.PRIMI: return <ChefHat size={size} />; case Category.SECONDI: return <Utensils size={size} />; case Category.DOLCI: return <CakeSlice size={size} />; case Category.BEVANDE: return <Wine size={size} />; default: return <Utensils size={size} />; }
   };
   
-  // Logic to determine table status color and badge
-  const getTableStatusInfo = (tableNum: string) => {
-      // INCLUDE DELIVERED ORDERS TO SHOW "EATING" STATUS
-      const activeOrders = allRestaurantOrders.filter(o => o.tableNumber === tableNum);
-      
-      // CRITICAL FIX: Only return 'free' if NO orders exist. 
-      if (activeOrders.length === 0) return { status: 'free', count: 0, owner: null, delay: 0 };
-      
-      const activeOrder = activeOrders[0];
-      const orderDelayMinutes = Math.floor((Date.now() - activeOrder.timestamp) / 60000);
-      
-      // Late logic applies if NOT everything is finished/served
-      const isLate = orderDelayMinutes > 25 && activeOrder.status !== OrderStatus.READY && activeOrder.status !== OrderStatus.DELIVERED;
-
-      // Calculate ready but not served
-      let readyToServeCount = 0;
-      let totalItems = 0;
-      let totalServed = 0;
-
-      activeOrder.items.forEach(i => {
-          totalItems++;
-          // For simple items
-          if (i.served) totalServed++;
-          if (i.completed && !i.served) readyToServeCount++;
-      });
-
-      // 1. PRIORITY: Ready to Serve -> GREEN
-      if (readyToServeCount > 0) return { status: 'ready', count: readyToServeCount, owner: activeOrder.waiterName, delay: orderDelayMinutes };
-      
-      // 2. PRIORITY: All Served (Eating) -> NEON ORANGE
-      if (totalItems > 0 && totalItems === totalServed) {
-          return { status: 'eating', count: 0, owner: activeOrder.waiterName, delay: 0 };
-      }
-
-      // 3. PRIORITY: Late (Only if waiting for food)
-      if (isLate) return { status: 'late', count: 0, owner: activeOrder.waiterName, delay: orderDelayMinutes };
-      
-      // 4. Standard Occupied -> DARK ORANGE
-      return { status: 'occupied', count: 0, owner: activeOrder.waiterName, delay: orderDelayMinutes };
-  };
-
   const handleDictation = () => {
     if (isListening) return;
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -781,18 +801,17 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                                                 </div>
                                                                 <div className="p-2 space-y-2">
                                                                     {subItems.map(sub => {
-                                                                        // Check if this specific part is done/ready
-                                                                        // 1. If it's a Sala item (Drink), it's auto-ready (unless specifically not, but logic says yes)
-                                                                        // 2. If it's kitchen, check completedParts
+                                                                        // Logic:
+                                                                        // 1. Is it a Sala item? (Auto Ready)
+                                                                        // 2. Is it completed by kitchen?
                                                                         const isSala = appSettings.categoryDestinations[sub.category] === 'Sala';
                                                                         
-                                                                        // A sub-item is READY if:
-                                                                        // - It's a Sala item (Auto-ready)
-                                                                        // - OR it's in the completedParts array (Kitchen finished it)
+                                                                        // Ready if Sala OR Kitchen Marked Complete
                                                                         const isReady = isSala || item.comboCompletedParts?.includes(sub.id);
                                                                         
-                                                                        // A sub-item is SERVED if it's in the servedParts array
-                                                                        const isSubServed = item.comboServedParts?.includes(sub.id);
+                                                                        // Served if Parent Item is Served OR Specific Part is Served
+                                                                        // FIX: Force served state if the whole item is served to avoid "ghosts"
+                                                                        const isSubServed = item.served || item.comboServedParts?.includes(sub.id);
 
                                                                         return (
                                                                             <div key={sub.id} className={`flex justify-between items-center pl-2 pr-1 py-1 rounded-lg ${isSubServed ? 'opacity-50' : ''}`}>
