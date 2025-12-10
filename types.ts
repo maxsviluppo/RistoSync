@@ -29,16 +29,24 @@ export interface SocialLinks {
 }
 
 export interface RestaurantProfile {
-  name?: string;
-  address?: string;
-  billingAddress?: string;
-  vatNumber?: string;
-  phoneNumber?: string;
-  landlineNumber?: string;
-  whatsappNumber?: string;
-  email?: string;
+  name?: string; // Nome Visualizzato (Insegna)
+  
+  // Dati Fatturazione
+  businessName?: string; // Ragione Sociale
+  responsiblePerson?: string; // Nome e Cognome Responsabile
+  vatNumber?: string; // P.IVA / CF
+  address?: string; // Sede Legale
+  billingAddress?: string; // Sede Fatturazione (se diversa)
+  
+  // Contatti
+  phoneNumber?: string; // Cellulare
+  landlineNumber?: string; // Fisso
+  whatsappNumber?: string; // WhatsApp
+  email?: string; // Email Contatto/Fatturazione
   website?: string;
+  
   socials?: SocialLinks;
+  
   // Subscription Fields
   subscriptionEndDate?: string; // ISO Date String
   planType?: 'Trial' | 'Pro' | 'Enterprise';

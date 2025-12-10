@@ -4,7 +4,7 @@ import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import DigitalMenu from './components/DigitalMenu';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, RefreshCw, Send, Printer, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, FileSpreadsheet, Image as ImageIcon, Upload, FileImage, ExternalLink, CreditCard, Banknote } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, RefreshCw, Send, Printer, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, FileSpreadsheet, Image as ImageIcon, Upload, FileImage, ExternalLink, CreditCard, Banknote, Briefcase } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate, performFactoryReset } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { askChefAI, generateRestaurantAnalysis } from './services/geminiService';
@@ -248,15 +248,24 @@ export default function App() {
           // PRE-FILL LOGIC
           const existingProfile = currentSettings.restaurantProfile || {};
           setProfileForm({
+              // Display Name
               name: existingProfile.name || restaurantName,
+              
+              // Billing
+              businessName: existingProfile.businessName || '',
+              responsiblePerson: existingProfile.responsiblePerson || '',
+              vatNumber: existingProfile.vatNumber || '',
               address: existingProfile.address || '',
               billingAddress: existingProfile.billingAddress || '',
-              vatNumber: existingProfile.vatNumber || '',
+              
+              // Contacts
               phoneNumber: existingProfile.phoneNumber || '',
               landlineNumber: existingProfile.landlineNumber || '',
               whatsappNumber: existingProfile.whatsappNumber || '',
               email: existingProfile.email || '',
               website: existingProfile.website || '',
+              
+              // Socials & Sub
               socials: existingProfile.socials || {},
               subscriptionEndDate: existingProfile.subscriptionEndDate || '',
               planType: existingProfile.planType || 'Pro'
@@ -270,7 +279,6 @@ export default function App() {
       }
   }, [showAdmin]); 
 
-  // ... (Keep existing Event Listener useEffects) ...
   useEffect(() => {
       const handleSettingsUpdate = () => {
           const updated = getAppSettings();
@@ -325,7 +333,6 @@ export default function App() {
       } catch (e: any) { alert("Errore: " + e.message); }
   };
 
-  // ... (Keep existing menu saving logic, dictation, etc.) ...
   const handleSaveMenu = () => {
       if (editingItem.name && editingItem.price && editingItem.category) {
           const itemToSave = {
@@ -345,7 +352,6 @@ export default function App() {
       }
   };
 
-  // ... (Keep image upload logic) ...
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
@@ -632,7 +638,7 @@ export default function App() {
                           <p className="text-xs text-slate-500 uppercase font-bold mb-2">Come riattivare:</p>
                           <ul className="text-sm text-slate-300 space-y-2">
                               <li>1. Effettua il pagamento del canone.</li>
-                              <li>2. Invia la distinta al supporto.</li>
+                              <li>2. Invia la distinta al supporto (347 812 7440).</li>
                               <li>3. Il servizio verrà riattivato entro 24h.</li>
                           </ul>
                       </div>
@@ -775,9 +781,7 @@ export default function App() {
                     <div className="w-64 bg-slate-900 border-r border-slate-800 p-4 space-y-2 hidden md:block">
                          <button onClick={() => setAdminTab('menu')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'menu' ? 'bg-orange-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><Utensils size={20}/> Menu & Destinazioni</button>
                          <button onClick={() => setAdminTab('profile')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'profile' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><Store size={20}/> Profilo Ristorante</button>
-                         {/* SUBSCRIPTION TAB BUTTON */}
                          <button onClick={() => setAdminTab('subscription')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'subscription' ? 'bg-green-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><CreditCard size={20}/> Abbonamento</button>
-                         
                          <button onClick={() => setAdminTab('analytics')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'analytics' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><TrendingUp size={20}/> Analisi & Storico</button>
                          <button onClick={() => setAdminTab('notif')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'notif' ? 'bg-green-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><Bell size={20}/> Notifiche</button>
                          <button onClick={() => setAdminTab('share')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold transition-colors ${adminTab === 'share' ? 'bg-pink-600 text-white' : 'text-slate-400 hover:bg-slate-800'}`}><QrCode size={20}/> Menu Digitale</button>
@@ -796,7 +800,7 @@ export default function App() {
                              {/* ... other mobile tabs */}
                         </div>
                         
-                        {/* --- SUBSCRIPTION TAB CONTENT --- */}
+                        {/* SUBSCRIPTION TAB */}
                         {adminTab === 'subscription' && (
                             <div className="max-w-4xl mx-auto pb-20 animate-fade-in">
                                 <div className="flex items-center gap-3 mb-8">
@@ -846,7 +850,7 @@ export default function App() {
                                         <h2 className="text-5xl font-black text-white mb-2">€ 29,90</h2>
                                         <p className="text-slate-400 text-sm mb-6">+ IVA / Mese</p>
                                         <a 
-                                            href="https://www.paypal.com/paypalme/castromassimo" 
+                                            href="https://py.pl/m2e0VSeozyjfHWZ4CWUBCQ" 
                                             target="_blank" 
                                             rel="noopener noreferrer"
                                             className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 transition-all"
@@ -869,18 +873,18 @@ export default function App() {
                                             <p className="text-white font-bold text-lg mb-4">Massimo Castro</p>
                                             
                                             <p className="text-slate-500 mb-1">IBAN</p>
-                                            <p className="text-white font-mono bg-slate-950 p-3 rounded-lg border border-slate-800 select-all cursor-text">
-                                                IT00 X000 0000 0000 0000 0000 000
+                                            <p className="text-white font-mono bg-slate-950 p-3 rounded-lg border border-slate-800 select-all cursor-text text-xs md:text-sm">
+                                                IT73W0623074792000057589384
                                             </p>
                                         </div>
                                         <div>
                                             <p className="text-slate-500 mb-1">Causale</p>
-                                            <p className="text-white font-bold mb-4">Rinnovo RistoSync - {restaurantName}</p>
+                                            <p className="text-white font-bold mb-4">{profileForm.businessName || restaurantName} - Mese/Anno</p>
                                             
                                             <div className="bg-blue-900/20 border border-blue-500/30 p-4 rounded-xl">
                                                 <p className="text-blue-300 text-xs font-bold mb-1 flex items-center gap-2"><Info size={14}/> IMPORTANTE</p>
                                                 <p className="text-slate-400 text-xs leading-relaxed">
-                                                    Dopo aver effettuato il pagamento, invia la distinta a <strong>amministrazione@ristosync.com</strong> o su WhatsApp per l'attivazione immediata.
+                                                    Dopo il pagamento, invia la distinta a <strong>castro.massimo@yahoo.com</strong> o su WhatsApp al <strong>347 812 7440</strong> per l'attivazione immediata.
                                                 </p>
                                             </div>
                                         </div>
@@ -889,11 +893,85 @@ export default function App() {
                             </div>
                         )}
 
-                        {/* SHARE TAB - FIXED QR SECTION */}
-                        {/* ... (Existing code for Share Tab) ... */}
+                        {/* PROFILE TAB (EXPANDED) */}
+                        {adminTab === 'profile' && (
+                            <div className="max-w-2xl mx-auto pb-20">
+                                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
+                                    <Store className="text-slate-400"/> Dati Attività & Fatturazione
+                                </h3>
+                                
+                                <div className="space-y-6">
+                                    {/* 1. NOME VISIBILE */}
+                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                                        <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Insegna Ristorante</label>
+                                        <div className="relative">
+                                            <ChefHat className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
+                                            <input type="text" value={profileForm.name || ''} onChange={e => setProfileForm({...profileForm, name: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white font-bold text-lg outline-none" placeholder="Il Tuo Ristorante"/>
+                                        </div>
+                                    </div>
+
+                                    {/* 2. DATI FISCALI */}
+                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                                        <h4 className="text-slate-300 font-bold mb-4 flex items-center gap-2"><Briefcase size={18}/> Dati Fiscali</h4>
+                                        <div className="grid grid-cols-1 gap-4">
+                                            <div>
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Ragione Sociale</label>
+                                                <input type="text" value={profileForm.businessName || ''} onChange={e => setProfileForm({...profileForm, businessName: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Es. Rossi S.r.l."/>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Responsabile</label>
+                                                    <input type="text" value={profileForm.responsiblePerson || ''} onChange={e => setProfileForm({...profileForm, responsiblePerson: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Nome Cognome"/>
+                                                </div>
+                                                <div>
+                                                    <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">P.IVA / CF</label>
+                                                    <input type="text" value={profileForm.vatNumber || ''} onChange={e => setProfileForm({...profileForm, vatNumber: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm font-mono"/>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Indirizzo Sede Legale</label>
+                                                <input type="text" value={profileForm.address || ''} onChange={e => setProfileForm({...profileForm, address: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Via Roma 1, Milano"/>
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Indirizzo Fatturazione (Opzionale)</label>
+                                                <input type="text" value={profileForm.billingAddress || ''} onChange={e => setProfileForm({...profileForm, billingAddress: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Se diverso dalla sede legale"/>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* 3. CONTATTI */}
+                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                                        <h4 className="text-slate-300 font-bold mb-4 flex items-center gap-2"><PhoneCall size={18}/> Contatti Pubblici</h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Email</label><input type="email" value={profileForm.email || ''} onChange={e => setProfileForm({...profileForm, email: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm"/></div>
+                                            <div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Cellulare</label><input type="text" value={profileForm.phoneNumber || ''} onChange={e => setProfileForm({...profileForm, phoneNumber: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm"/></div>
+                                            <div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">WhatsApp</label><input type="text" value={profileForm.whatsappNumber || ''} onChange={e => setProfileForm({...profileForm, whatsappNumber: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm"/></div>
+                                            <div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Telefono Fisso</label><input type="text" value={profileForm.landlineNumber || ''} onChange={e => setProfileForm({...profileForm, landlineNumber: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm"/></div>
+                                            <div className="col-span-full"><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Sito Web</label><input type="text" value={profileForm.website || ''} onChange={e => setProfileForm({...profileForm, website: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm text-blue-400" placeholder="https://"/></div>
+                                        </div>
+                                    </div>
+
+                                    {/* 4. SOCIAL */}
+                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                                        <h4 className="text-slate-300 font-bold mb-4 flex items-center gap-2"><Share2 size={18}/> Social Networks</h4>
+                                        <div className="space-y-3">
+                                            <div className="flex items-center gap-3"><Instagram className="text-pink-500"/><input type="text" value={profileForm.socials?.instagram || ''} onChange={e => handleSocialChange('instagram', e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Link Instagram"/></div>
+                                            <div className="flex items-center gap-3"><Facebook className="text-blue-600"/><input type="text" value={profileForm.socials?.facebook || ''} onChange={e => handleSocialChange('facebook', e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Link Facebook"/></div>
+                                            <div className="flex items-center gap-3"><Store className="text-blue-400"/><input type="text" value={profileForm.socials?.google || ''} onChange={e => handleSocialChange('google', e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Link Google Business"/></div>
+                                            <div className="flex items-center gap-3"><Compass className="text-green-500"/><input type="text" value={profileForm.socials?.tripadvisor || ''} onChange={e => handleSocialChange('tripadvisor', e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Link TripAdvisor"/></div>
+                                        </div>
+                                    </div>
+
+                                    <div className="pt-4 border-t border-slate-800">
+                                        <button onClick={handleSaveProfile} className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-green-600/20 active:scale-95 transition-all"><Save size={20}/> SALVA PROFILO</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* SHARE TAB */}
                         {adminTab === 'share' && (
                             <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 items-start max-w-5xl mx-auto h-full">
-                                {/* ... (Same as before) ... */}
                                 <div className="text-center lg:text-left flex flex-col items-center lg:items-start">
                                     <div className="bg-white p-4 rounded-3xl inline-block mb-6 shadow-2xl">
                                         <img 
@@ -903,7 +981,25 @@ export default function App() {
                                         />
                                     </div>
                                     <h3 className="text-3xl font-black text-white mb-2">Il tuo Menu Digitale</h3>
-                                    {/* ... */}
+                                    <p className="text-slate-400 mb-8 max-w-sm mx-auto lg:mx-0">
+                                        I clienti possono scansionare questo codice per vedere il menu completo, allergeni e foto dei piatti.
+                                    </p>
+                                    <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex items-center justify-between gap-4 mb-6 max-w-md mx-auto lg:mx-0 w-full">
+                                        <code className="text-xs text-blue-400 font-mono truncate flex-1">
+                                            https://risto-sync.vercel.app/?menu={session?.user?.id || '...'}
+                                        </code>
+                                        <button 
+                                            onClick={() => {
+                                                if (session?.user?.id) {
+                                                    navigator.clipboard.writeText(`https://risto-sync.vercel.app/?menu=${session.user.id}`);
+                                                    alert("Link copiato!");
+                                                }
+                                            }}
+                                            className="p-2 bg-slate-800 rounded-lg hover:bg-slate-700 text-white"
+                                        >
+                                            <Copy size={16}/>
+                                        </button>
+                                    </div>
                                     <div className="flex gap-4 justify-center lg:justify-start mb-8">
                                         <a 
                                             href={`https://risto-sync.vercel.app/?menu=${session?.user?.id || ''}`} 
@@ -933,10 +1029,9 @@ export default function App() {
                             </div>
                         )}
                         
-                        {/* MENU TAB */}
+                        {/* MENU TAB (Standard) */}
                         {adminTab === 'menu' && (
                              <div className="max-w-4xl mx-auto pb-20">
-                                {/* ... (Existing Menu Tab Content) ... */}
                                 <div className="flex justify-between items-center mb-6">
                                     <div><h3 className="text-xl font-bold text-white">Gestione Menu</h3><p className="text-slate-400 text-sm">Aggiungi, modifica o rimuovi piatti.</p></div>
                                     <div className="flex gap-2">
@@ -945,7 +1040,6 @@ export default function App() {
                                         <button onClick={() => { setIsEditingItem(true); setEditingItem({}); }} className="bg-orange-600 hover:bg-orange-500 text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-orange-600/20 active:scale-95"><Plus size={18}/> Nuovo Piatto</button>
                                     </div>
                                 </div>
-                                
                                 <div className="space-y-8">
                                     {ADMIN_CATEGORY_ORDER.map(category => {
                                         const items = menuItems.filter(i => i.category === category);
@@ -974,10 +1068,7 @@ export default function App() {
                                         )
                                     })}
                                 </div>
-                                
-                                {/* ... (Existing Destinations Config) ... */}
                                 <div className="mt-12 pt-12 border-t border-slate-800">
-                                    {/* ... (Destinations UI) ... */}
                                     <div className="flex justify-between items-center mb-6"><div><h3 className="text-xl font-bold text-white">Configurazione Reparti</h3><p className="text-slate-400 text-sm">Dove inviare e stampare le comande?</p></div>{hasUnsavedDestinations && <button onClick={saveDestinationsToCloud} className="bg-green-600 text-white px-4 py-2 rounded-xl font-bold shadow-lg animate-pulse">Salva Modifiche</button>}</div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
                                         {ADMIN_CATEGORY_ORDER.map(cat => (
@@ -1008,55 +1099,16 @@ export default function App() {
                              </div>
                         )}
                         
-                        {/* REST OF THE TABS (Profile, Analytics, AI, Notif, Info) */}
-                        {/* ... (Code remains largely identical, using existing Profile loading) ... */}
-                        {adminTab === 'profile' && (
-                            <div className="max-w-2xl mx-auto pb-20">
-                                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                                    <Store className="text-slate-400"/> Dati Attività
-                                </h3>
-                                {/* ... Profile fields ... */}
-                                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 space-y-6">
-                                    {/* Nome Ristorante */}
-                                    <div>
-                                        <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Nome Ristorante (Visibile ovunque)</label>
-                                        <div className="relative">
-                                            <ChefHat className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
-                                            <input 
-                                                type="text" 
-                                                value={profileForm.name || ''} 
-                                                onChange={e => setProfileForm({...profileForm, name: e.target.value})} 
-                                                className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white font-bold text-lg focus:border-orange-500 outline-none" 
-                                                placeholder="Il Tuo Ristorante"
-                                            />
-                                        </div>
-                                    </div>
-                                    {/* ... Other profile fields (Identical to previous) ... */}
-                                    {/* ... Save Button ... */}
-                                    <div className="pt-4 border-t border-slate-800">
-                                        <button onClick={handleSaveProfile} className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-green-600/20 active:scale-95 transition-all"><Save size={20}/> SALVA PROFILO</button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                        
                         {/* Analytics Tab */}
                         {adminTab === 'analytics' && (
                              <div className="max-w-5xl mx-auto pb-20">
-                                {/* ... Analytics content identical to previous ... */}
                                 <div className="flex justify-between items-center mb-6 bg-slate-900 p-4 rounded-2xl border border-slate-800">
                                     <div><h3 className="text-xl font-bold text-white">Analisi & Cassa</h3><p className="text-slate-400 text-sm">Resoconto Giornaliero</p></div>
                                     <div className="flex items-center bg-slate-950 rounded-xl p-1 border border-slate-800"><button onClick={() => changeDate(-1)} className="p-3 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white"><ChevronLeft/></button><div className="px-6 font-bold text-white flex items-center gap-2 uppercase tracking-wide"><Calendar size={18} className="text-orange-500"/> {formatDate(selectedDate)}</div><button onClick={() => changeDate(1)} className="p-3 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white"><ChevronRight/></button></div>
                                 </div>
-                                {/* View Toggle and Content... */}
-                                {/* ... (Brief for XML limit) ... */}
                                 <div className="flex mb-6 bg-slate-900 p-1 rounded-xl w-max border border-slate-800">
-                                    <button onClick={() => setAnalyticsView('stats')} className={`px-6 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${analyticsView === 'stats' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
-                                        <BarChart3 size={16}/> Statistiche
-                                    </button>
-                                    <button onClick={() => setAnalyticsView('receipts')} className={`px-6 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${analyticsView === 'receipts' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}>
-                                        <FileSpreadsheet size={16}/> Registro Scontrini
-                                    </button>
+                                    <button onClick={() => setAnalyticsView('stats')} className={`px-6 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${analyticsView === 'stats' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}><BarChart3 size={16}/> Statistiche</button>
+                                    <button onClick={() => setAnalyticsView('receipts')} className={`px-6 py-2 rounded-lg font-bold text-sm flex items-center gap-2 transition-all ${analyticsView === 'receipts' ? 'bg-green-600 text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}><FileSpreadsheet size={16}/> Registro Scontrini</button>
                                 </div>
                                 {analyticsView === 'stats' ? (
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -1066,15 +1118,10 @@ export default function App() {
                                     </div>
                                 ) : (
                                     <div className="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-2xl">
-                                        <div className="p-6 border-b border-slate-800 flex items-center gap-3">
-                                            <Receipt size={24} className="text-green-500"/>
-                                            <h3 className="text-xl font-bold text-white">Archivio Scontrini</h3>
-                                        </div>
+                                        <div className="p-6 border-b border-slate-800 flex items-center gap-3"><Receipt size={24} className="text-green-500"/><h3 className="text-xl font-bold text-white">Archivio Scontrini</h3></div>
                                         <div className="overflow-x-auto">
                                             <table className="w-full text-left">
-                                                <thead className="bg-slate-950 text-slate-400 text-xs uppercase font-bold">
-                                                    <tr><th className="p-4">Ora</th><th className="p-4">Tavolo</th><th className="p-4">Staff</th><th className="p-4 text-right">Totale</th><th className="p-4 text-center">Azioni</th></tr>
-                                                </thead>
+                                                <thead className="bg-slate-950 text-slate-400 text-xs uppercase font-bold"><tr><th className="p-4">Ora</th><th className="p-4">Tavolo</th><th className="p-4">Staff</th><th className="p-4 text-right">Totale</th><th className="p-4 text-center">Azioni</th></tr></thead>
                                                 <tbody className="divide-y divide-slate-800">
                                                     {filteredHistoryOrders.map(order => (
                                                         <tr key={order.id} className="hover:bg-slate-800/50 transition-colors">
@@ -1082,12 +1129,7 @@ export default function App() {
                                                             <td className="p-4 font-bold text-white">{order.tableNumber.replace('_HISTORY', '')}</td>
                                                             <td className="p-4 text-slate-400 text-sm">{order.waiterName || 'Staff'}</td>
                                                             <td className="p-4 text-right font-black text-green-400">€ {order.items.reduce((acc, i) => acc + (i.menuItem.price * i.quantity), 0).toFixed(2)}</td>
-                                                            <td className="p-4 text-center">
-                                                                <div className="flex items-center justify-center gap-2">
-                                                                    <button onClick={() => setViewOrderDetails(order)} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold border border-blue-500/50 flex items-center gap-2 transition-colors shadow-lg shadow-blue-600/20"><Eye size={14}/> VISUALIZZA</button>
-                                                                    <button onClick={() => handleReprintReceipt(order)} className="bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-700 flex items-center gap-2 transition-colors"><Printer size={14}/> RISTAMPA</button>
-                                                                </div>
-                                                            </td>
+                                                            <td className="p-4 text-center"><div className="flex items-center justify-center gap-2"><button onClick={() => setViewOrderDetails(order)} className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold border border-blue-500/50 flex items-center gap-2 transition-colors shadow-lg shadow-blue-600/20"><Eye size={14}/> VISUALIZZA</button><button onClick={() => handleReprintReceipt(order)} className="bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-700 flex items-center gap-2 transition-colors"><Printer size={14}/> RISTAMPA</button></div></td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
@@ -1117,17 +1159,11 @@ export default function App() {
                                 <h3 className="text-xl font-bold text-white mb-6">Impostazioni Notifiche</h3>
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center bg-slate-900 p-4 rounded-xl border border-slate-800">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-orange-500/20 rounded-lg text-orange-500"><Bell size={20}/></div>
-                                            <div><p className="font-bold text-white">Suoni Cucina</p><p className="text-xs text-slate-400">Audio all'arrivo ordini</p></div>
-                                        </div>
+                                        <div className="flex items-center gap-3"><div className="p-2 bg-orange-500/20 rounded-lg text-orange-500"><Bell size={20}/></div><div><p className="font-bold text-white">Suoni Cucina</p><p className="text-xs text-slate-400">Audio all'arrivo ordini</p></div></div>
                                         <button onClick={() => toggleNotif('kitchenSound')} className={`w-12 h-6 rounded-full relative transition-colors ${notifSettings.kitchenSound ? 'bg-green-500' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${notifSettings.kitchenSound ? 'left-7' : 'left-1'}`}></div></button>
                                     </div>
                                     <div className="flex justify-between items-center bg-slate-900 p-4 rounded-xl border border-slate-800">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-blue-500/20 rounded-lg text-blue-500"><Smartphone size={20}/></div>
-                                            <div><p className="font-bold text-white">Suoni Sala</p><p className="text-xs text-slate-400">Audio piatti pronti</p></div>
-                                        </div>
+                                        <div className="flex items-center gap-3"><div className="p-2 bg-blue-500/20 rounded-lg text-blue-500"><Smartphone size={20}/></div><div><p className="font-bold text-white">Suoni Sala</p><p className="text-xs text-slate-400">Audio piatti pronti</p></div></div>
                                         <button onClick={() => toggleNotif('waiterSound')} className={`w-12 h-6 rounded-full relative transition-colors ${notifSettings.waiterSound ? 'bg-green-500' : 'bg-slate-700'}`}><div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${notifSettings.waiterSound ? 'left-7' : 'left-1'}`}></div></button>
                                     </div>
                                 </div>

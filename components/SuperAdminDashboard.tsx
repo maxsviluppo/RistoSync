@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, signOut } from '../services/supabase';
-import { ShieldCheck, Users, Database, LogOut, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon, FileText, MapPin, CreditCard, Mail, MessageCircle, Share2, PhoneCall, Facebook, Instagram, Store, Compass, Wrench, Calendar, DollarSign } from 'lucide-react';
+import { ShieldCheck, Users, Database, LogOut, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon, FileText, MapPin, CreditCard, Mail, MessageCircle, Share2, PhoneCall, Facebook, Instagram, Store, Compass, Wrench, Calendar, DollarSign, Briefcase } from 'lucide-react';
 
 interface SuperAdminDashboardProps {
     onEnterApp: () => void;
@@ -29,8 +29,6 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     const [registryForm, setRegistryForm] = useState<any>({});
     const [subDate, setSubDate] = useState(''); // New: Subscription Date State
 
-    const [recoveryEmail, setRecoveryEmail] = useState('');
-
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editName, setEditName] = useState('');
     
@@ -47,7 +45,6 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     const fetchProfiles = async () => {
         if (!supabase) return;
         setLoading(true);
-        // We now select settings specifically to get subscriptionEndDate
         const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
         if (data) setProfiles(data);
         if (error) console.error("Errore recupero profili:", error);
@@ -61,6 +58,8 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
         
         // Load Registry Data
         setRegistryForm({
+            businessName: profileData.businessName || '', // Ragione Sociale
+            responsiblePerson: profileData.responsiblePerson || '', // Responsabile
             vatNumber: profileData.vatNumber || '',
             phoneNumber: profileData.phoneNumber || '',
             landlineNumber: profileData.landlineNumber || '',
@@ -72,9 +71,6 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
             socials: profileData.socials || {}
         });
 
-        // Load Subscription Date
-        // Note: We access this from the JSON `settings.restaurantProfile.subscriptionEndDate` 
-        // OR a top-level column if we migrated. For this implementation, we keep it in JSON `settings` for simplicity.
         setSubDate(profileData.subscriptionEndDate || '');
     };
 
@@ -101,7 +97,6 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
             ...currentSettings,
             restaurantProfile: {
                 ...registryForm,
-                // Add Subscription Date here
                 subscriptionEndDate: subDate,
                 name: viewingProfile.restaurant_name 
             }
@@ -136,7 +131,6 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
         if (profile.subscription_status === 'banned') return 'bg-red-500/20 text-red-400 border-red-500/30';
         if (profile.subscription_status === 'suspended') return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
         
-        // Check Date Expiry
         const expiry = profile.settings?.restaurantProfile?.subscriptionEndDate;
         if (expiry && new Date(expiry) < new Date()) return 'bg-red-500/20 text-red-400 border-red-500/30 animate-pulse';
         
@@ -284,20 +278,6 @@ create policy "User update own profile" on public.profiles for update using (aut
         else if (type === 'fix') { setCopiedFix(true); setTimeout(() => setCopiedFix(false), 2000); }
         else { setCopiedRecovery(true); setTimeout(() => setCopiedRecovery(false), 2000); }
     };
-
-    const resetSQL = `-- SCRIPT CONFIGURAZIONE DATABASE
-create table if not exists public.profiles (id uuid references auth.users on delete cascade not null primary key, email text, restaurant_name text, subscription_status text default 'active', google_api_key text, settings jsonb, created_at timestamp with time zone default timezone('utc'::text, now()) not null);
-create table if not exists public.menu_items (id text primary key, user_id uuid references auth.users(id), name text, price numeric, category text, description text, allergens jsonb, image text, created_at timestamp with time zone default timezone('utc'::text, now()) not null);
-create table if not exists public.orders (id text primary key, user_id uuid references auth.users(id), table_number text, status text, items jsonb, timestamp bigint, waiter_name text, created_at timestamp with time zone default timezone('utc'::text, now()) not null);
-alter table public.profiles enable row level security; alter table public.menu_items enable row level security; alter table public.orders enable row level security;
-grant usage on schema public to postgres, anon, authenticated, service_role; grant all privileges on all tables in schema public to postgres, anon, authenticated, service_role; grant all privileges on all functions in schema public to postgres, anon, authenticated, service_role; grant all privileges on all sequences in schema public to postgres, anon, authenticated, service_role;
-drop policy if exists "Public profiles view" on public.profiles; create policy "Public profiles view" on public.profiles for select using (true);
-drop policy if exists "User update own profile" on public.profiles; create policy "User update own profile" on public.profiles for update using (auth.uid() = id);
-drop policy if exists "User insert own profile" on public.profiles; create policy "User insert own profile" on public.profiles for insert with check (auth.uid() = id);
-drop policy if exists "Public menu view" on public.menu_items; create policy "Public menu view" on public.menu_items for select using (true);
-drop policy if exists "User manage menu" on public.menu_items; create policy "User manage menu" on public.menu_items for all using (auth.uid() = user_id);
-drop policy if exists "User manage orders" on public.orders; create policy "User manage orders" on public.orders for all using (auth.uid() = user_id);
-insert into public.profiles (id, email, restaurant_name, subscription_status) select id, email, 'Ristorante Demo', 'active' from auth.users where email = 'demo@ristosync.com' on conflict (id) do nothing;`;
 
     const isEmailCorrect = currentEmail.toLowerCase() === SUPER_ADMIN_EMAIL;
 
@@ -516,6 +496,25 @@ insert into public.profiles (id, email, restaurant_name, subscription_status) se
 
                             {/* EDIT FORM (Remaining fields hidden for brevity but exist in render) */}
                             <div className="space-y-4">
+                                {/* Dati Fiscali */}
+                                <div className="bg-slate-950/50 p-3 rounded-xl border border-slate-700">
+                                    <h4 className="text-xs font-bold text-slate-400 uppercase mb-3 flex items-center gap-2"><Briefcase size={14}/> Dati Aziendali</h4>
+                                    <div className="grid grid-cols-1 gap-3">
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Ragione Sociale</label>
+                                            {isEditingRegistry ? (
+                                                <input type="text" value={registryForm.businessName} onChange={e => handleRegistryChange('businessName', e.target.value)} className="w-full bg-slate-950 border border-slate-600 rounded px-2 py-1 text-white" placeholder="Es. Rossi S.r.l." />
+                                            ) : ( <p className="text-white font-bold">{viewingProfile.settings?.restaurantProfile?.businessName || '-'}</p> )}
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Responsabile</label>
+                                            {isEditingRegistry ? (
+                                                <input type="text" value={registryForm.responsiblePerson} onChange={e => handleRegistryChange('responsiblePerson', e.target.value)} className="w-full bg-slate-950 border border-slate-600 rounded px-2 py-1 text-white" placeholder="Nome Cognome" />
+                                            ) : ( <p className="text-white font-bold">{viewingProfile.settings?.restaurantProfile?.responsiblePerson || '-'}</p> )}
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
                                         <div className="flex items-center gap-2 mb-2 text-slate-400 text-xs font-bold uppercase"><CreditCard size={14}/> P.IVA / C.F.</div>
