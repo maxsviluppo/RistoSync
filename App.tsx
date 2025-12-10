@@ -146,6 +146,9 @@ export default function App() {
   const [apiKeyInput, setApiKeyInput] = useState('');
   const [ibanCopied, setIbanCopied] = useState(false);
   const [adminEmailCopied, setAdminEmailCopied] = useState(false);
+  
+  // Dynamic Admin Config
+  const [adminContactEmail, setAdminContactEmail] = useState(SUPER_ADMIN_EMAIL);
 
   const isSuperAdmin = session?.user?.email === SUPER_ADMIN_EMAIL;
 
@@ -228,9 +231,28 @@ export default function App() {
   }, [publicMenuId]);
 
   useEffect(() => {
+      // Fetch Dynamic Global Settings (Admin Contact Email)
+      const fetchGlobalSettings = async () => {
+          if (!supabase) return;
+          try {
+              const { data: adminProfile } = await supabase
+                  .from('profiles')
+                  .select('settings')
+                  .eq('email', SUPER_ADMIN_EMAIL)
+                  .single();
+              
+              if (adminProfile?.settings?.globalConfig?.contactEmail) {
+                  setAdminContactEmail(adminProfile.settings.globalConfig.contactEmail);
+              }
+          } catch (e) {
+              console.error("Error fetching global settings", e);
+          }
+      };
+      
       if (showAdmin) {
           setMenuItems(getMenuItems());
           setNotifSettings(getNotificationSettings());
+          fetchGlobalSettings();
           
           const currentSettings = getAppSettings();
           setAppSettingsState(currentSettings); 
@@ -268,7 +290,7 @@ export default function App() {
               socials: existingProfile.socials || {},
               subscriptionEndDate: existingProfile.subscriptionEndDate || '',
               planType: existingProfile.planType || 'Pro',
-              subscriptionCost: existingProfile.subscriptionCost || '29.90'
+              subscriptionCost: existingProfile.subscriptionCost || '49.90'
           });
 
           setHasUnsavedDestinations(false);
@@ -325,7 +347,7 @@ export default function App() {
   const handleSaveProfile = async () => { const newProfile = { ...profileForm }; const newSettings: AppSettings = { ...appSettings, restaurantProfile: newProfile }; await saveAppSettings(newSettings); setAppSettingsState(newSettings); if (supabase && session?.user?.id && newProfile.name) { const { error } = await supabase.from('profiles').update({ restaurant_name: newProfile.name }).eq('id', session.user.id); if (error) console.error("Name update error:", error); } if (newProfile.name) { setRestaurantName(newProfile.name); } alert("Profilo aggiornato con successo!"); };
   const handleSocialChange = (network: string, value: string) => { setProfileForm(prev => ({ ...prev, socials: { ...prev.socials, [network]: value } })); };
   const handleCopyIban = () => { navigator.clipboard.writeText("IT73W0623074792000057589384"); setIbanCopied(true); setTimeout(() => setIbanCopied(false), 2000); };
-  const handleCopyAdminEmail = () => { navigator.clipboard.writeText(SUPER_ADMIN_EMAIL); setAdminEmailCopied(true); setTimeout(() => setAdminEmailCopied(false), 2000); };
+  const handleCopyAdminEmail = () => { navigator.clipboard.writeText(adminContactEmail); setAdminEmailCopied(true); setTimeout(() => setAdminEmailCopied(false), 2000); };
 
   // Dynamic Mailto Generator
   const getPaymentMailto = () => {
@@ -340,14 +362,14 @@ Ragione Sociale: ${profileForm.businessName || ''}
 P.IVA: ${profileForm.vatNumber || ''}
 
 DETTAGLI BONIFICO:
-Importo: € ${profileForm.subscriptionCost || '29.90'}
+Importo: € ${profileForm.subscriptionCost || '49.90'}
 Causale: ${profileForm.businessName || profileForm.name || 'Ristorante'} - Mese/Anno
 
 In allegato la distinta del pagamento.
 Attendo conferma attivazione.
 
 Cordiali saluti.`);
-      return `mailto:${SUPER_ADMIN_EMAIL}?subject=${subject}&body=${body}`;
+      return `mailto:${adminContactEmail}?subject=${subject}&body=${body}`;
   };
 
   const filteredHistoryOrders = useMemo(() => {
@@ -504,13 +526,13 @@ Cordiali saluti.`);
                                     <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 relative overflow-hidden"><div className="absolute top-0 right-0 p-4 opacity-10"><Calendar size={100}/></div><div className="relative z-10"><p className="text-xs text-slate-500 uppercase font-bold mb-2">Stato Attuale</p><div className="flex items-center gap-3 mb-6"><div className={`w-4 h-4 rounded-full ${daysRemaining !== null && daysRemaining < 0 ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`}></div><span className={`text-2xl font-black ${daysRemaining !== null && daysRemaining < 0 ? 'text-red-500' : 'text-white'}`}>{daysRemaining !== null && daysRemaining < 0 ? 'SCADUTO' : 'ATTIVO'}</span><span className="bg-slate-800 px-3 py-1 rounded-full text-xs font-bold text-white border border-slate-700">{profileForm.planType === 'Trial' ? 'Periodo di Prova' : profileForm.planType || 'Pro'}</span></div><div className="bg-slate-950 p-4 rounded-xl border border-slate-800 mb-4"><div className="flex justify-between text-sm mb-2"><span className="text-slate-400">Scadenza:</span><span className="text-white font-mono font-bold">{profileForm.subscriptionEndDate ? new Date(profileForm.subscriptionEndDate).toLocaleDateString() : 'Non definita'}</span></div><div className="flex justify-between text-sm"><span className="text-slate-400">Giorni Rimanenti:</span><span className={`font-mono font-bold ${daysRemaining !== null && daysRemaining <= 7 ? 'text-red-400' : 'text-green-400'}`}>{daysRemaining !== null ? daysRemaining : '∞'}</span></div></div></div></div>
                                     <div className="bg-gradient-to-br from-indigo-900 to-slate-900 p-6 rounded-3xl border border-indigo-500/30 text-center flex flex-col justify-center items-center">
                                         <p className="text-indigo-300 font-bold uppercase text-xs mb-2">{profileForm.planType === 'Trial' ? 'Costo al rinnovo' : 'Canone Mensile'}</p>
-                                        <h2 className="text-5xl font-black text-white mb-2">€ {profileForm.subscriptionCost || '29.90'}</h2>
+                                        <h2 className="text-5xl font-black text-white mb-2">€ {profileForm.subscriptionCost || '49.90'}</h2>
                                         <p className="text-slate-400 text-sm mb-6">+ IVA / Mese</p>
-                                        <a href={`https://paypal.me/castromassimo/${(profileForm.subscriptionCost || '29.90').replace(',', '.')}`} target="_blank" rel="noopener noreferrer" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 transition-all"><CreditCard size={18}/> {profileForm.planType === 'Trial' ? 'Attiva Piano Pro' : 'Paga con PayPal / Carta'}</a>
+                                        <a href={`https://paypal.me/castromassimo/${(profileForm.subscriptionCost || '49.90').replace(',', '.')}`} target="_blank" rel="noopener noreferrer" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 transition-all"><CreditCard size={18}/> {profileForm.planType === 'Trial' ? 'Attiva Piano Pro' : 'Paga con PayPal / Carta'}</a>
                                         <p className="text-[10px] text-slate-500 mt-3">Link sicuro PayPal.Me</p>
                                     </div>
                                 </div>
-                                <div className="bg-slate-900 rounded-3xl border border-slate-800 p-6"><h4 className="font-bold text-white mb-6 flex items-center gap-2"><Banknote size={20} className="text-green-500"/> Coordinate Bancarie (Bonifico)</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm"><div><p className="text-slate-500 mb-1">Intestatario</p><p className="text-white font-bold text-lg mb-4">Massimo Castro</p><p className="text-slate-500 mb-1">IBAN</p><div className="flex items-center gap-2 bg-slate-950 p-3 rounded-lg border border-slate-800"><p className="text-white font-mono select-all cursor-text text-xs md:text-sm flex-1">IT73W0623074792000057589384</p><button onClick={handleCopyIban} className="p-2 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors relative" title="Copia IBAN">{ibanCopied ? <Check size={16} className="text-green-500"/> : <Copy size={16}/>}</button></div></div><div><p className="text-slate-500 mb-1">Causale</p><p className="text-white font-bold mb-4">{profileForm.businessName || restaurantName} - Mese/Anno</p><div className="bg-blue-900/20 border border-blue-500/30 p-5 rounded-2xl shadow-inner"><div className="flex items-start gap-3 mb-4"><Info size={20} className="text-blue-400 shrink-0 mt-0.5" /><div><p className="text-blue-300 text-xs font-black uppercase tracking-wider mb-1">CONFERMA PAGAMENTO</p><p className="text-slate-400 text-xs leading-relaxed">Dopo il bonifico, invia la distinta a <strong>{SUPER_ADMIN_EMAIL}</strong> per l'attivazione immediata.</p></div></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><a href={getPaymentMailto()} className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-xl font-bold text-xs transition-all shadow-lg shadow-blue-600/20"><Send size={14} /> INVIA EMAIL CON DATI</a><button onClick={handleCopyAdminEmail} className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white py-2.5 rounded-xl font-bold text-xs transition-all border border-slate-700">{adminEmailCopied ? <Check size={14} className="text-green-500"/> : <Copy size={14} />} {adminEmailCopied ? 'EMAIL COPIATA' : 'COPIA INDIRIZZO EMAIL'}</button></div></div></div></div></div>
+                                <div className="bg-slate-900 rounded-3xl border border-slate-800 p-6"><h4 className="font-bold text-white mb-6 flex items-center gap-2"><Banknote size={20} className="text-green-500"/> Coordinate Bancarie (Bonifico)</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm"><div><p className="text-slate-500 mb-1">Intestatario</p><p className="text-white font-bold text-lg mb-4">Massimo Castro</p><p className="text-slate-500 mb-1">IBAN</p><div className="flex items-center gap-2 bg-slate-950 p-3 rounded-lg border border-slate-800"><p className="text-white font-mono select-all cursor-text text-xs md:text-sm flex-1">IT73W0623074792000057589384</p><button onClick={handleCopyIban} className="p-2 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors relative" title="Copia IBAN">{ibanCopied ? <Check size={16} className="text-green-500"/> : <Copy size={16}/>}</button></div></div><div><p className="text-slate-500 mb-1">Causale</p><p className="text-white font-bold mb-4">{profileForm.businessName || restaurantName} - Mese/Anno</p><div className="bg-blue-900/20 border border-blue-500/30 p-5 rounded-2xl shadow-inner"><div className="flex items-start gap-3 mb-4"><Info size={20} className="text-blue-400 shrink-0 mt-0.5" /><div><p className="text-blue-300 text-xs font-black uppercase tracking-wider mb-1">CONFERMA PAGAMENTO</p><p className="text-slate-400 text-xs leading-relaxed">Dopo il bonifico, invia la distinta a <strong>{adminContactEmail}</strong> per l'attivazione immediata.</p></div></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><a href={getPaymentMailto()} className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-xl font-bold text-xs transition-all shadow-lg shadow-blue-600/20"><Send size={14} /> INVIA EMAIL CON DATI</a><button onClick={handleCopyAdminEmail} className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white py-2.5 rounded-xl font-bold text-xs transition-all border border-slate-700">{adminEmailCopied ? <Check size={14} className="text-green-500"/> : <Copy size={14} />} {adminEmailCopied ? 'EMAIL COPIATA' : 'COPIA INDIRIZZO EMAIL'}</button></div></div></div></div></div>
                             </div>
                         )}
                         {/* PROFILE TAB (EXPANDED) */}

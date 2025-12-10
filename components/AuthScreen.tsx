@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabase } from '../services/supabase';
+import { supabase, SUPER_ADMIN_EMAIL } from '../services/supabase';
 import { ChefHat, Mail, Lock, ArrowRight, Loader, Eye, EyeOff, AlertTriangle, Database } from 'lucide-react';
 
 const AuthScreen: React.FC = () => {
@@ -31,6 +31,22 @@ const AuthScreen: React.FC = () => {
                 if (error) throw error;
             } else {
                 // REGISTER
+                // 1. Fetch Dynamic Default Cost from Admin Profile
+                let defaultCost = '49.90';
+                try {
+                    const { data: adminProfile } = await supabase
+                        .from('profiles')
+                        .select('settings')
+                        .eq('email', SUPER_ADMIN_EMAIL)
+                        .single();
+                    if (adminProfile?.settings?.globalConfig?.defaultCost) {
+                        defaultCost = adminProfile.settings.globalConfig.defaultCost;
+                    }
+                } catch (e) {
+                    console.log("Using fallback cost");
+                }
+
+                // 2. Sign Up User
                 const { data, error: signUpError } = await supabase.auth.signUp({
                     email,
                     password,
@@ -67,7 +83,7 @@ const AuthScreen: React.FC = () => {
                                  restaurantProfile: {
                                      planType: 'Trial',
                                      subscriptionEndDate: trialEndDate.toISOString(),
-                                     subscriptionCost: '29.90' // Default cost after trial
+                                     subscriptionCost: defaultCost // Use dynamic cost
                                  }
                              }
                          });

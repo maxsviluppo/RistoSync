@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, signOut } from '../services/supabase';
-import { ShieldCheck, Users, Database, LogOut, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon, FileText, MapPin, CreditCard, Mail, MessageCircle, Share2, PhoneCall, Facebook, Instagram, Store, Compass, Wrench, Calendar, DollarSign, Briefcase, Sparkles, Clock, AlertOctagon, UserCheck, Banknote, CalendarCheck } from 'lucide-react';
+import { ShieldCheck, Users, Database, LogOut, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon, FileText, MapPin, CreditCard, Mail, MessageCircle, Share2, PhoneCall, Facebook, Instagram, Store, Compass, Wrench, Calendar, DollarSign, Briefcase, Sparkles, Clock, AlertOctagon, UserCheck, Banknote, CalendarCheck, Settings, Inbox } from 'lucide-react';
 
 interface SuperAdminDashboardProps {
     onEnterApp: () => void;
@@ -19,6 +19,11 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     const [showSqlModal, setShowSqlModal] = useState(false);
     const [showFixModal, setShowFixModal] = useState(false);
     
+    // Global Config State
+    const [globalContactEmail, setGlobalContactEmail] = useState(SUPER_ADMIN_EMAIL);
+    const [globalDefaultCost, setGlobalDefaultCost] = useState('49.90');
+    const [isSavingGlobal, setIsSavingGlobal] = useState(false);
+
     // Edit State
     const [viewingProfile, setViewingProfile] = useState<any | null>(null);
     const [isEditingRegistry, setIsEditingRegistry] = useState(false);
@@ -52,9 +57,52 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
         if (!supabase) return;
         setLoading(true);
         const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
-        if (data) setProfiles(data);
+        if (data) {
+            setProfiles(data);
+            
+            // Extract Global Config from Super Admin Profile
+            const superAdminProfile = data.find(p => p.email === SUPER_ADMIN_EMAIL);
+            if (superAdminProfile && superAdminProfile.settings?.globalConfig) {
+                setGlobalContactEmail(superAdminProfile.settings.globalConfig.contactEmail || SUPER_ADMIN_EMAIL);
+                setGlobalDefaultCost(superAdminProfile.settings.globalConfig.defaultCost || '49.90');
+            }
+        }
         if (error) console.error("Errore recupero profili:", error);
         setLoading(false);
+    };
+
+    const saveGlobalConfig = async () => {
+        if (!supabase) return;
+        setIsSavingGlobal(true);
+        
+        // Find Super Admin ID
+        const adminProfile = profiles.find(p => p.email === SUPER_ADMIN_EMAIL);
+        if (!adminProfile) {
+            alert("Profilo Super Admin non trovato nel DB.");
+            setIsSavingGlobal(false);
+            return;
+        }
+
+        const currentSettings = adminProfile.settings || {};
+        const updatedSettings = {
+            ...currentSettings,
+            globalConfig: {
+                contactEmail: globalContactEmail,
+                defaultCost: globalDefaultCost
+            }
+        };
+
+        const { error } = await supabase
+            .from('profiles')
+            .update({ settings: updatedSettings })
+            .eq('id', adminProfile.id);
+
+        if (error) alert("Errore salvataggio globali: " + error.message);
+        else {
+            // alert("Configurazione globale salvata!");
+            fetchProfiles();
+        }
+        setIsSavingGlobal(false);
     };
 
     const openRegistry = (profile: any) => {
@@ -80,7 +128,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
         });
 
         setSubDate(profileData.subscriptionEndDate || '');
-        setSubCost(profileData.subscriptionCost || '29.90');
+        setSubCost(profileData.subscriptionCost || '49.90');
         setSubPlan(profileData.planType || 'Pro');
 
         // Load Agent Data
@@ -176,9 +224,42 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
     return (
         <div className="min-h-screen bg-slate-900 text-white font-sans p-4 md:p-8">
             <div className="max-w-7xl mx-auto">
-                <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
+                <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
                     <div className="flex items-center gap-4"><div className="p-4 bg-red-600 rounded-2xl shadow-lg shadow-red-600/20"><ShieldCheck size={32} /></div><div><h1 className="text-3xl font-black">SUPER ADMIN</h1><div className="flex items-center gap-2 text-slate-400 text-sm"><User size={14}/> {currentEmail ? (<span>Loggato come: <strong className={isEmailCorrect ? "text-green-400" : "text-red-400"}>{currentEmail}</strong></span>) : 'Verifica utente...'}</div></div></div>
                     <div className="flex gap-3"><button onClick={onEnterApp} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-600/20 transition-all"><Smartphone size={18} /> Entra come Utente</button><button onClick={signOut} className="flex items-center gap-2 text-slate-400 hover:text-white bg-slate-800 px-6 py-3 rounded-xl font-bold border border-slate-700"><LogOut size={18} /> Logout</button></div>
+                </div>
+
+                {/* GLOBAL CONFIGURATION CARD */}
+                <div className="bg-slate-800 rounded-3xl border border-slate-700 p-6 mb-8 shadow-xl relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-6 opacity-5"><Settings size={120} /></div>
+                    <div className="flex items-center gap-3 mb-6 border-b border-slate-700 pb-4 relative z-10">
+                        <div className="p-2 bg-indigo-500/20 rounded-lg text-indigo-400"><Globe size={24}/></div>
+                        <div>
+                            <h2 className="text-xl font-bold text-white">Configurazione Globale</h2>
+                            <p className="text-sm text-slate-400">Impostazioni predefinite per tutti i nuovi clienti e comunicazioni.</p>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                        <div>
+                            <label className="text-xs text-slate-500 uppercase font-bold block mb-2 flex items-center gap-2"><Inbox size={14}/> Email Ricezione Pagamenti & Info</label>
+                            <input type="email" value={globalContactEmail} onChange={(e) => setGlobalContactEmail(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded-xl px-4 py-3 text-white font-medium focus:border-indigo-500 outline-none" placeholder="admin@example.com" />
+                            <p className="text-[10px] text-slate-500 mt-1">Questa email apparirà nei box di pagamento dei clienti.</p>
+                        </div>
+                        <div>
+                            <label className="text-xs text-slate-500 uppercase font-bold block mb-2 flex items-center gap-2"><DollarSign size={14}/> Costo Abbonamento Default</label>
+                            <div className="relative">
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">€</span>
+                                <input type="text" value={globalDefaultCost} onChange={(e) => setGlobalDefaultCost(e.target.value)} className="w-full bg-slate-900 border border-slate-600 rounded-xl pl-8 pr-4 py-3 text-white font-bold focus:border-indigo-500 outline-none" placeholder="49.90" />
+                            </div>
+                            <p className="text-[10px] text-slate-500 mt-1">Prezzo applicato automaticamente alle nuove registrazioni.</p>
+                        </div>
+                    </div>
+                    <div className="flex justify-end mt-6 relative z-10">
+                        <button onClick={saveGlobalConfig} disabled={isSavingGlobal} className="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50">
+                            {isSavingGlobal ? <RefreshCw size={18} className="animate-spin"/> : <Save size={18}/>}
+                            Salva Configurazione
+                        </button>
+                    </div>
                 </div>
 
                 {/* KPI & LIST */}
@@ -329,7 +410,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
                                                     {isEditingRegistry ? (
                                                         <input type="text" value={subCost} onChange={(e) => setSubCost(e.target.value)} className="bg-slate-950 border border-slate-700 text-white p-2 rounded-lg w-full text-xs font-bold text-right outline-none"/>
                                                     ) : (
-                                                        <div className="bg-slate-950 px-3 py-2 rounded-lg border border-slate-800 text-white font-bold text-sm text-right">€ {subCost || '29.90'}</div>
+                                                        <div className="bg-slate-950 px-3 py-2 rounded-lg border border-slate-800 text-white font-bold text-sm text-right">€ {subCost || '49.90'}</div>
                                                     )}
                                                 </div>
                                             </div>
