@@ -100,8 +100,11 @@ export interface OrderItem {
   isAddedLater?: boolean; // New: Tracks items added via modification
   
   // NEW: Tracks which specific sub-items of a Combo are done.
-  // Example: ['pizza_id_1'] means the pizza part is done, but the drink might not be.
+  // Example: ['pizza_id_1'] means the pizza part is done/cooked.
   comboCompletedParts?: string[]; 
+  
+  // NEW: Tracks which specific sub-items have been SERVED to the table.
+  comboServedParts?: string[];
 }
 
 export interface Order {

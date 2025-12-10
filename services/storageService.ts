@@ -196,7 +196,8 @@ export const addOrder = (order: Order) => {
               completed: isSala, // Sala items are automatically "cooked/ready"
               served: false, 
               isAddedLater: false,
-              comboCompletedParts: [] // Init empty array for combos
+              comboCompletedParts: [], // Init empty array for combos cooking
+              comboServedParts: []     // Init empty array for combos serving
           };
       })
   };
@@ -247,7 +248,8 @@ export const updateOrderItems = (orderId: string, newItems: OrderItem[]) => {
                 completed: false, 
                 served: false,
                 isAddedLater: true,
-                comboCompletedParts: existing.comboCompletedParts || [] // Keep progress if any
+                comboCompletedParts: existing.comboCompletedParts || [],
+                comboServedParts: existing.comboServedParts || []
             };
         } else {
             // ADD NEW ITEM: Append to list
@@ -257,7 +259,8 @@ export const updateOrderItems = (orderId: string, newItems: OrderItem[]) => {
                 completed: isSala,
                 served: false,
                 isAddedLater: true,
-                comboCompletedParts: []
+                comboCompletedParts: [],
+                comboServedParts: []
             });
         }
     });
@@ -339,17 +342,42 @@ export const toggleOrderItemCompletion = (orderId: string, itemIndex: number, su
     syncOrderToCloud(updatedOrder);
 };
 
-export const serveItem = (orderId: string, itemIndex: number) => {
+export const serveItem = (orderId: string, itemIndex: number, subItemId?: string) => {
     const orders = getOrders();
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
     const newItems = [...order.items];
-    if (newItems[itemIndex]) {
-        newItems[itemIndex] = { 
-            ...newItems[itemIndex], 
-            served: true 
-        };
+    const targetItem = newItems[itemIndex];
+
+    if (targetItem) {
+        // COMBO LOGIC: Serve Specific Part
+        if (subItemId && targetItem.menuItem.category === Category.MENU_COMPLETO && targetItem.menuItem.comboItems) {
+            const currentServed = targetItem.comboServedParts || [];
+            let newServed = currentServed;
+            
+            if (!currentServed.includes(subItemId)) {
+                newServed = [...currentServed, subItemId];
+            }
+
+            newItems[itemIndex] = { 
+                ...targetItem, 
+                comboServedParts: newServed
+            };
+
+            // Check if ALL parts are served
+            const allPartsServed = targetItem.menuItem.comboItems.every(id => newServed.includes(id));
+            if (allPartsServed) {
+                newItems[itemIndex].served = true;
+            }
+
+        } else {
+            // STANDARD LOGIC
+            newItems[itemIndex] = { 
+                ...targetItem, 
+                served: true 
+            };
+        }
     }
 
     // If all items are served, mark order as DELIVERED
@@ -359,14 +387,12 @@ export const serveItem = (orderId: string, itemIndex: number) => {
         newStatus = OrderStatus.DELIVERED;
     }
 
-    // UPDATE TIMESTAMP TO RESET TIMERS AND MARK COMPLETION TIME
-    // This effectively resets the kitchen timer and the waiter delay counter
-    // for the remaining items/next course.
+    // UPDATE TIMESTAMP TO RESET TIMERS
     const updatedOrder = { 
         ...order, 
         items: newItems, 
         status: newStatus,
-        timestamp: Date.now() // This acts as "Completed At" when status becomes Delivered
+        timestamp: Date.now() 
     };
     
     const newOrders = orders.map(o => o.id === orderId ? updatedOrder : o);

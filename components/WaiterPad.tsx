@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Category, MenuItem, Order, OrderItem, OrderStatus, AppSettings, Department } from '../types';
 import { addOrder, getOrders, getTableCount, saveTableCount, updateOrderItems, getWaiterName, logoutWaiter, getMenuItems, freeTable, updateOrderStatus, getAppSettings, serveItem } from '../services/storageService';
 import { askChefAI } from '../services/geminiService';
-import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen, Bell, ArrowRight, Lock, PlusCircle, Coffee, CheckCircle, Mic, MicOff, AlertOctagon, Flag, UtensilsCrossed, Sandwich, Printer } from 'lucide-react';
+import { ShoppingBag, Send, X, Plus, Minus, Bot, History, Clock, ChevronUp, ChevronDown, Trash2, Search, Utensils, ChefHat, Pizza, CakeSlice, Wine, Edit2, Check, AlertTriangle, Info, LayoutGrid, Users, Settings, Save, User, LogOut, Home, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, DoorOpen, Bell, ArrowRight, Lock, PlusCircle, Coffee, CheckCircle, Mic, MicOff, AlertOctagon, Flag, UtensilsCrossed, Sandwich, Printer, ListPlus, CornerDownRight } from 'lucide-react';
 
 const CATEGORY_ORDER = [Category.ANTIPASTI, Category.PANINI, Category.PIZZE, Category.PRIMI, Category.SECONDI, Category.DOLCI, Category.BEVANDE];
 
@@ -416,8 +416,9 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       }
   };
   
-  const handleServeItem = (orderId: string, itemIndex: number) => {
-      serveItem(orderId, itemIndex);
+  // UPDATED: handleServeItem now accepts subItemId for combo parts
+  const handleServeItem = (orderId: string, itemIndex: number, subItemId?: string) => {
+      serveItem(orderId, itemIndex, subItemId);
       // DO NOT CLOSE MODAL. Keep waiter in flow.
   };
 
@@ -468,6 +469,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
       activeOrder.items.forEach(i => {
           totalItems++;
+          // For simple items
           if (i.served) totalServed++;
           if (i.completed && !i.served) readyToServeCount++;
       });
@@ -476,8 +478,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       if (readyToServeCount > 0) return { status: 'ready', count: readyToServeCount, owner: activeOrder.waiterName, delay: orderDelayMinutes };
       
       // 2. PRIORITY: All Served (Eating) -> NEON ORANGE
-      // If totalItems matches totalServed, they are eating.
-      // NOTE: Even if status is DELIVERED, we treat as occupied.
       if (totalItems > 0 && totalItems === totalServed) {
           return { status: 'eating', count: 0, owner: activeOrder.waiterName, delay: 0 };
       }
@@ -515,6 +515,12 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   
   // Late Flash Logic for Header Icon
   const shouldFlashLate = lateTables.length > 0 && !latesAcknowledged && !tableManagerOpen;
+
+  // Helper to find sub items for combo display
+  const getSubItemsForCombo = (item: OrderItem): MenuItem[] => {
+      if (item.menuItem.category !== Category.MENU_COMPLETO || !item.menuItem.comboItems) return [];
+      return menuItems.filter(m => item.menuItem.comboItems?.includes(m.id));
+  };
 
   return (
     <div className="flex flex-col h-screen bg-slate-900 text-slate-100 max-w-md mx-auto shadow-2xl overflow-hidden relative border-x border-slate-800 font-sans selection:bg-orange-500 selection:text-white">
@@ -717,9 +723,60 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                            <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2 sticky top-0 bg-slate-800/95 backdrop-blur-sm z-10 py-1">In Corso</h4>
                                            <div className="space-y-2">
                                                 {existingOrders[0].items.map((item, idx) => {
-                                                    const isReady = item.completed && !item.served;
                                                     const isServed = item.served;
                                                     const isAddition = item.isAddedLater;
+                                                    
+                                                    // --- COMBO LOGIC FOR WAITER (EXPLOSION) ---
+                                                    if (item.menuItem.category === Category.MENU_COMPLETO) {
+                                                        const subItems = getSubItemsForCombo(item);
+                                                        
+                                                        return (
+                                                            <div key={idx} className="border border-slate-700 rounded-xl bg-slate-900/50 overflow-hidden">
+                                                                <div className="bg-slate-800 px-3 py-2 flex items-center justify-between">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <ListPlus size={12} className="text-pink-500"/>
+                                                                        <span className="text-xs font-bold text-white">{item.quantity}x {item.menuItem.name}</span>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="p-2 space-y-2">
+                                                                    {subItems.map(sub => {
+                                                                        // Check if this specific part is done/ready
+                                                                        // 1. If it's a Sala item (Drink), it's auto-ready (unless specifically not, but logic says yes)
+                                                                        // 2. If it's kitchen, check completedParts
+                                                                        const isSala = appSettings.categoryDestinations[sub.category] === 'Sala';
+                                                                        
+                                                                        // A sub-item is READY if:
+                                                                        // - It's a Sala item (Auto-ready)
+                                                                        // - OR it's in the completedParts array (Kitchen finished it)
+                                                                        const isReady = isSala || item.comboCompletedParts?.includes(sub.id);
+                                                                        
+                                                                        // A sub-item is SERVED if it's in the servedParts array
+                                                                        const isSubServed = item.comboServedParts?.includes(sub.id);
+
+                                                                        return (
+                                                                            <div key={sub.id} className={`flex justify-between items-center pl-2 pr-1 py-1 rounded-lg ${isSubServed ? 'opacity-50' : ''}`}>
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <CornerDownRight size={10} className="text-slate-500"/>
+                                                                                    <span className={`text-xs ${isSubServed ? 'line-through text-slate-500' : 'text-slate-300'}`}>{sub.name}</span>
+                                                                                </div>
+                                                                                
+                                                                                {isSubServed ? (
+                                                                                    <CheckCircle size={14} className="text-slate-600"/>
+                                                                                ) : isReady ? (
+                                                                                    <button onClick={() => handleServeItem(existingOrders[0].id, idx, sub.id)} className="bg-green-600 hover:bg-green-500 text-white text-[8px] font-bold uppercase px-2 py-1 rounded shadow-lg active:scale-95 animate-pulse">SERVI</button>
+                                                                                ) : (
+                                                                                    <span className="text-[8px] font-bold text-orange-500 uppercase tracking-wide">In Prep.</span>
+                                                                                )}
+                                                                            </div>
+                                                                        )
+                                                                    })}
+                                                                </div>
+                                                            </div>
+                                                        )
+                                                    }
+
+                                                    // --- STANDARD ITEM LOGIC ---
+                                                    const isReady = item.completed && !item.served;
                                                     
                                                     // Show served items dimmed to indicate progress
                                                     return (
