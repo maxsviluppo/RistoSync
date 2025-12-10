@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { supabase } from '../services/supabase';
-import { ChefHat, Mail, Lock, ArrowRight, Loader, Eye, EyeOff, AlertTriangle } from 'lucide-react';
+import { ChefHat, Mail, Lock, ArrowRight, Loader, Eye, EyeOff, AlertTriangle, Database } from 'lucide-react';
 
 const AuthScreen: React.FC = () => {
     const [isLogin, setIsLogin] = useState(true);
@@ -84,6 +84,8 @@ const AuthScreen: React.FC = () => {
                 msg = "Utente già registrato. Prova ad accedere.";
             } else if (msg.includes("Rate limit exceeded")) {
                 msg = "Troppe richieste. Rallenta un attimo.";
+            } else if (msg.includes("Database error querying schema")) {
+                msg = "Errore Database: Tabelle non trovate. Hai eseguito lo script SQL iniziale?";
             }
 
             setError(msg);
@@ -132,9 +134,16 @@ const AuthScreen: React.FC = () => {
                     )}
 
                     {!confirmationPending && error && (
-                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl text-sm mb-6 font-bold text-center flex items-center gap-3 justify-center">
-                           <AlertTriangle size={18} className="shrink-0"/>
-                           <span>{error}</span>
+                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl text-sm mb-6 font-bold flex flex-col gap-2 justify-center">
+                           <div className="flex items-center justify-center gap-3">
+                               <AlertTriangle size={18} className="shrink-0"/>
+                               <span>{error}</span>
+                           </div>
+                           {error.includes("Script SQL") && (
+                               <div className="text-xs text-center text-slate-400 mt-2 border-t border-red-500/20 pt-2">
+                                   Se sei l'admin, vai nella Dashboard Supabase &gt; SQL Editor ed esegui lo script di configurazione.
+                               </div>
+                           )}
                         </div>
                     )}
 

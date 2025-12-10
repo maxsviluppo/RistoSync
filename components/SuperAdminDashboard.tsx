@@ -165,6 +165,8 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
 
     const getDemoUserSQL = () => {
         return `-- Crea Utente Demo Reale (Email: demo@ristosync.com / Pass: password123)
+-- Richiede che la tabella public.profiles esista già!
+
 create extension if not exists pgcrypto;
 
 insert into auth.users (id, instance_id, email, encrypted_password, email_confirmed_at, aud, role, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, recovery_token)
@@ -184,6 +186,7 @@ values (
   ''
 ) on conflict (id) do nothing;
 
+-- Inserimento manuale se il trigger non parte
 insert into public.profiles (id, email, restaurant_name, subscription_status)
 values (
   'd0d0d0d0-d0d0-d0d0-d0d0-d0d0d0d0d0d0', 
@@ -249,12 +252,57 @@ add column if not exists image text;`;
         }
     };
 
-    const resetSQL = `-- 1. ABILITA RLS E TRIGGER
-create extension if not exists pgcrypto;
-alter table public.profiles enable row level security;
+    const resetSQL = `-- SCRIPT COMPLETO DI INIZIALIZZAZIONE & FIX
+-- Eseguilo se ottieni "Database error querying schema" o se le tabelle non esistono.
 
--- 2. TRIGGER CREAZIONE AUTOMATICA PROFILO
--- Risolve l'errore "violates row-level security" durante la registrazione
+-- 1. CREAZIONE TABELLE (Se mancano)
+create table if not exists public.profiles (
+  id uuid references auth.users on delete cascade not null primary key,
+  email text,
+  restaurant_name text,
+  subscription_status text default 'active',
+  google_api_key text,
+  settings jsonb,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create table if not exists public.menu_items (
+  id text primary key,
+  user_id uuid references auth.users(id),
+  name text,
+  price numeric,
+  category text,
+  description text,
+  allergens jsonb,
+  image text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+create table if not exists public.orders (
+  id text primary key,
+  user_id uuid references auth.users(id),
+  table_number text,
+  status text,
+  items jsonb,
+  timestamp bigint,
+  waiter_name text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 2. ABILITA RLS
+alter table public.profiles enable row level security;
+alter table public.menu_items enable row level security;
+alter table public.orders enable row level security;
+
+-- 3. PERMESSI SCHEMA (Fondamentale per correggere errori API)
+grant usage on schema public to postgres, anon, authenticated, service_role;
+grant all privileges on all tables in schema public to postgres, anon, authenticated, service_role;
+grant all privileges on all functions in schema public to postgres, anon, authenticated, service_role;
+grant all privileges on all sequences in schema public to postgres, anon, authenticated, service_role;
+
+-- 4. TRIGGER AUTOMATICO UTENTI
+create extension if not exists pgcrypto;
+
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
@@ -265,27 +313,34 @@ begin
 end;
 $$ language plpgsql security definer;
 
--- Collega il trigger alla tabella auth.users
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
 
--- 3. RESET POLICY (SOLO LETTURA/MODIFICA)
-drop policy if exists "Public profiles are viewable by everyone" on public.profiles;
-create policy "Public profiles are viewable by everyone" on public.profiles for select using (true);
+-- 5. POLICIES (Permessi Lettura/Scrittura)
+drop policy if exists "Profiles viewable by everyone" on public.profiles;
+create policy "Profiles viewable by everyone" on public.profiles for select using (true);
 
 drop policy if exists "Users can update own profile" on public.profiles;
 create policy "Users can update own profile" on public.profiles for update using (auth.uid() = id);
 
--- NOTA: Non serve policy INSERT perché ci pensa il Trigger.
+drop policy if exists "Menu viewable by everyone" on public.menu_items;
+create policy "Menu viewable by everyone" on public.menu_items for select using (true);
 
--- 4. PERMESSI SUPER ADMIN
+drop policy if exists "Manage own menu" on public.menu_items;
+create policy "Manage own menu" on public.menu_items for all using (auth.uid() = user_id);
+
+drop policy if exists "Manage own orders" on public.orders;
+create policy "Manage own orders" on public.orders for all using (auth.uid() = user_id);
+
+-- 6. PERMESSI SUPER ADMIN
 drop policy if exists "Super Admin Update All" on public.profiles;
 create policy "Super Admin Update All" on public.profiles for update using ( lower(auth.jwt() ->> 'email') = '${SUPER_ADMIN_EMAIL}' );
 
 drop policy if exists "Super Admin Delete" on public.profiles;
-create policy "Super Admin Delete" on public.profiles for delete using ( lower(auth.jwt() ->> 'email') = '${SUPER_ADMIN_EMAIL}' );`;
+create policy "Super Admin Delete" on public.profiles for delete using ( lower(auth.jwt() ->> 'email') = '${SUPER_ADMIN_EMAIL}' );
+`;
 
     const isEmailCorrect = currentEmail.toLowerCase() === SUPER_ADMIN_EMAIL;
 
@@ -491,7 +546,7 @@ create policy "Super Admin Delete" on public.profiles for delete using ( lower(a
                                                     <PlusCircle size={20} /> Crea Profilo
                                                 </button>
                                                 <div className="bg-slate-950 p-4 rounded-xl border border-slate-700 w-full mt-4 relative group text-left">
-                                                    <div className="mb-2 text-xs text-slate-400 uppercase font-bold">SQL Reset Totale (con Trigger):</div>
+                                                    <div className="mb-2 text-xs text-slate-400 uppercase font-bold flex items-center gap-2"><Database size={12}/> SQL Configurazione Iniziale:</div>
                                                     <pre className="text-left text-xs text-green-400 font-mono whitespace-pre-wrap overflow-x-auto h-20 custom-scroll">
 {resetSQL}
                                                     </pre>
