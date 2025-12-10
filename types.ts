@@ -38,7 +38,10 @@ export interface RestaurantProfile {
   whatsappNumber?: string;
   email?: string;
   website?: string;
-  socials?: SocialLinks; // New Field
+  socials?: SocialLinks;
+  // Subscription Fields
+  subscriptionEndDate?: string; // ISO Date String
+  planType?: 'Trial' | 'Pro' | 'Enterprise';
 }
 
 export interface AppSettings {
