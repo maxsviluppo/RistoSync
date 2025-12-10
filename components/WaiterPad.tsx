@@ -13,14 +13,24 @@ const playWaiterNotification = () => {
         const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
         if (!AudioContext) return;
         const ctx = new AudioContext();
+        // Attempt to resume if suspended (common on mobile)
+        if (ctx.state === 'suspended') ctx.resume();
+
         const now = ctx.currentTime;
         const gain = ctx.createGain();
         gain.connect(ctx.destination);
+        
+        // Bell sound (DRIN)
         const osc1 = ctx.createOscillator(); osc1.type = 'sine'; osc1.frequency.setValueAtTime(880, now); osc1.frequency.exponentialRampToValueAtTime(440, now + 0.15); osc1.connect(gain);
         const osc2 = ctx.createOscillator(); osc2.type = 'triangle'; osc2.frequency.setValueAtTime(554, now + 0.2); osc2.frequency.exponentialRampToValueAtTime(277, now + 0.4); osc2.connect(gain);
         const osc3 = ctx.createOscillator(); osc3.type = 'square'; osc3.frequency.setValueAtTime(880, now + 0.45); osc3.frequency.setValueAtTime(1108, now + 0.55); osc3.connect(gain);
-        gain.gain.setValueAtTime(0.4, now); gain.gain.linearRampToValueAtTime(0, now + 0.8);
-        osc1.start(now); osc1.stop(now + 0.2); osc2.start(now + 0.2); osc2.stop(now + 0.45); osc3.start(now + 0.45); osc3.stop(now + 0.8);
+        
+        gain.gain.setValueAtTime(0.4, now); 
+        gain.gain.linearRampToValueAtTime(0, now + 0.8);
+        
+        osc1.start(now); osc1.stop(now + 0.2); 
+        osc2.start(now + 0.2); osc2.stop(now + 0.45); 
+        osc3.start(now + 0.45); osc3.stop(now + 0.8);
     } catch (e) { console.error("Audio error", e); }
 };
 
@@ -219,7 +229,9 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const [lateTables, setLateTables] = useState<string[]>([]);
   const [latesAcknowledged, setLatesAcknowledged] = useState(false);
 
+  // REFERENCES FOR NOTIFICATION STATE
   const prevItemReadyStateRef = useRef<Record<string, boolean>>({});
+  const seenReadyComboPartsRef = useRef<Set<string>>(new Set()); 
   const isFirstLoad = useRef(true);
 
   const loadData = () => {
@@ -228,11 +240,13 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       const name = getWaiterName();
       if (name) setWaiterName(name);
       
+      const currentMenuItems = getMenuItems();
       setAppSettingsState(getAppSettings()); 
 
-      // NOTIFICATION LOGIC: Check for items that are READY (completed) but NOT SERVED
+      // --- LOGICA NOTIFICHE ---
       let newlyReadyCount = 0;
-      const currentItemReadyState: Record<string, boolean> = {};
+      const currentItemReadyState: Record<string, boolean> = {}; // For standard items
+      const currentReadyComboParts = new Set<string>(); // For Combo sub-items
       const currentLateTables: string[] = [];
 
       allOrders.forEach(order => {
@@ -244,44 +258,41 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
               currentLateTables.push(order.tableNumber);
           }
 
-          // 2. CHECK READY ITEMS
-          if (name && order.waiterName && order.waiterName !== name) return;
+          // NOTA: Abbiamo rimosso il filtro per waiterName qui per garantire che tutti ricevano la notifica 
+          // in modalità team/collaborativa e durante i test. 
+          // if (name && order.waiterName && order.waiterName !== name) return;
 
           order.items.forEach((item, idx) => {
-              // --- STANDARD ITEMS LOGIC ---
-              const mainKey = `${order.id}-${idx}`;
-              currentItemReadyState[mainKey] = item.completed || false;
+              // ==========================================
+              // LOGICA STANDARD (Piatti Singoli)
+              // ==========================================
+              if (item.menuItem.category !== Category.MENU_COMPLETO) {
+                  const mainKey = `${order.id}-${idx}`;
+                  currentItemReadyState[mainKey] = item.completed || false;
 
-              if (!isFirstLoad.current) {
-                   const wasMainReady = prevItemReadyStateRef.current[mainKey] || false;
-                   // Only count as new notification if it's NOT a combo (Combos are handled by sub-items below)
-                   if (item.menuItem.category !== Category.MENU_COMPLETO) {
+                  if (!isFirstLoad.current) {
+                       const wasMainReady = prevItemReadyStateRef.current[mainKey] || false;
                        if (!wasMainReady && item.completed && !item.served) {
                            newlyReadyCount++;
                        }
-                   }
+                  }
               }
+              // ==========================================
+              // LOGICA DEDICATA SOTTO-PIATTI (Combo)
+              // ==========================================
+              else {
+                  // Iteriamo sui componenti completati (salvati dal KDS nel DB)
+                  const completedParts = item.comboCompletedParts || [];
+                  const servedParts = item.comboServedParts || [];
 
-              // --- COMBO ITEMS DETAILED LOGIC (FIXED) ---
-              if (item.menuItem.category === Category.MENU_COMPLETO && item.menuItem.comboItems) {
-                  item.menuItem.comboItems.forEach(subId => {
-                      const subKey = `${order.id}-${idx}-${subId}`;
-                      
-                      // CRITICAL FIX: Explicitly check the `comboCompletedParts` array.
-                      // If a sub-item ID is in this array, it means a kitchen department marked it ready.
-                      // We ignore 'Sala' auto-complete for notification purposes usually, 
-                      // but here we trust `comboCompletedParts` which is populated by KDS toggle.
-                      const isSubReady = item.comboCompletedParts?.includes(subId);
-                      const isSubServed = item.comboServedParts?.includes(subId);
+                  completedParts.forEach(subId => {
+                      // Se è pronto MA NON è stato servito
+                      if (!servedParts.includes(subId)) {
+                          const uniquePartKey = `${order.id}-${idx}-${subId}`;
+                          currentReadyComboParts.add(uniquePartKey);
 
-                      // Store current state
-                      currentItemReadyState[subKey] = isSubReady || false;
-
-                      if (!isFirstLoad.current) {
-                          const wasSubReady = prevItemReadyStateRef.current[subKey] || false;
-                          
-                          // Trigger if it wasn't ready before, is now ready, and hasn't been served
-                          if (!wasSubReady && isSubReady && !isSubServed) {
+                          // Se è una NUOVA entry che non avevamo visto nel ciclo precedente
+                          if (!isFirstLoad.current && !seenReadyComboPartsRef.current.has(uniquePartKey)) {
                               newlyReadyCount++;
                           }
                       }
@@ -293,7 +304,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       // Update Late Tables State
       setLateTables(currentLateTables);
       
-      // Notification Toast
+      // TRIGGER NOTIFICATION
       if (newlyReadyCount > 0) {
           playWaiterNotification();
           const msg = newlyReadyCount === 1 ? `1 PIATTO PRONTO DA SERVIRE` : `${newlyReadyCount} PIATTI PRONTI DA SERVIRE`;
@@ -301,17 +312,17 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
           setTimeout(() => setNotificationToast(null), 8000);
       }
       
-      // Update ref at the END of the cycle
+      // Update Refs for next cycle
       prevItemReadyStateRef.current = currentItemReadyState;
+      seenReadyComboPartsRef.current = currentReadyComboParts; 
       isFirstLoad.current = false;
 
       if (table) {
-          // Include DELIVERED orders in the context of the table so we can see "Eating" status
           const tableOrders = allOrders.filter(o => o.tableNumber === table).sort((a, b) => b.timestamp - a.timestamp);
           setExistingOrders(tableOrders);
       } else { setExistingOrders([]); }
       setTotalTables(getTableCount());
-      setMenuItems(getMenuItems());
+      setMenuItems(currentMenuItems);
   };
 
   useEffect(() => {
