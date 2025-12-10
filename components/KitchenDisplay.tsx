@@ -69,7 +69,7 @@ const playNotificationSound = (type: 'new' | 'ready' | 'alert') => {
 };
 
 // --- RECEIPT GENERATOR ---
-const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, waiter: string, restaurantName: string) => {
+const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, waiter: string, restaurantName: string, allMenuItems: MenuItem[]) => {
     const time = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
     const date = new Date().toLocaleDateString('it-IT');
     
@@ -83,10 +83,11 @@ const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, wa
                 .title { font-size: 18px; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; }
                 .dept { font-size: 24px; font-weight: bold; background: black; color: white; display: inline-block; padding: 2px 10px; margin: 5px 0; }
                 .meta { font-size: 14px; margin: 2px 0; font-weight: bold; }
-                .item { display: flex; margin-bottom: 8px; align-items: baseline; }
+                .item { display: flex; margin-bottom: 4px; align-items: baseline; }
                 .qty { font-weight: bold; width: 30px; font-size: 16px; }
                 .name { flex: 1; font-weight: bold; font-size: 16px; }
-                .notes { display: block; font-size: 12px; margin-left: 30px; font-style: italic; margin-top: 2px; }
+                .notes { display: block; font-size: 12px; margin-left: 30px; font-style: italic; margin-bottom: 4px; }
+                .sub-items { margin-left: 30px; font-size: 12px; margin-bottom: 8px; color: #333; }
                 .footer { border-top: 2px dashed black; margin-top: 15px; padding-top: 10px; text-align: center; font-size: 10px; }
                 .close-btn { display: block; width: 100%; background-color: #ef4444; color: white; text-align: center; padding: 15px 0; font-weight: bold; font-size: 16px; border: none; cursor: pointer; position: fixed; bottom: 0; left: 0; right: 0; text-transform: uppercase; }
                 @media print { .no-print { display: none !important; } }
@@ -94,7 +95,21 @@ const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, wa
         </head>
         <body>
             <div class="header"><div class="title">${restaurantName}</div><div class="dept">${dept}</div><div class="meta">TAVOLO: ${table}</div><div class="meta">Staff: ${waiter}</div><div style="font-size: 12px; margin-top:5px;">${date} - ${time}</div></div>
-            ${items.map(item => `<div class="item"><span class="qty">${item.quantity}</span><span class="name">${item.menuItem.name}</span></div>${item.notes ? `<span class="notes">Note: ${item.notes}</span>` : ''}`).join('')}
+            ${items.map(item => {
+                let subItemsHtml = '';
+                // Resolve sub-items for Menu Combo
+                if (item.menuItem.category === Category.MENU_COMPLETO && item.menuItem.comboItems) {
+                    const subNames = item.menuItem.comboItems.map(id => allMenuItems.find(m => m.id === id)?.name).filter(Boolean);
+                    if (subNames.length > 0) {
+                        subItemsHtml = `<div class="sub-items">${subNames.map(n => `<div>- ${n}</div>`).join('')}</div>`;
+                    }
+                }
+                return `
+                <div class="item"><span class="qty">${item.quantity}</span><span class="name">${item.menuItem.name}</span></div>
+                ${subItemsHtml}
+                ${item.notes ? `<span class="notes">Note: ${item.notes}</span>` : ''}
+                `;
+            }).join('')}
             <div class="footer">RistoSync AI - Copia di Cortesia</div>
             <button class="no-print close-btn" onclick="window.close()">✖ CHIUDI FINESTRA</button>
             <script>window.onload = function() { setTimeout(function(){ window.focus(); window.print(); }, 500); }</script>
@@ -191,7 +206,8 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
     const allOrders = getOrders();
     const sorted = allOrders.sort((a, b) => a.timestamp - b.timestamp);
     // Sync menu items for resolution
-    setAllMenuItems(getMenuItems());
+    const currentMenuItems = getMenuItems();
+    setAllMenuItems(currentMenuItems);
 
     if (!isFirstLoad.current) {
         const prevOrders = previousOrdersRef.current;
@@ -210,7 +226,14 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
             if (appSettings.printEnabled && appSettings.printEnabled[department]) {
                 const itemsForDept = newOrder.items.filter(i => isItemRelevantForDept(i));
                 if (itemsForDept.length > 0) {
-                    const printContent = generateReceiptHtml(itemsForDept, department, newOrder.tableNumber, newOrder.waiterName || 'Staff', appSettings.restaurantProfile?.name || 'Ristorante');
+                    const printContent = generateReceiptHtml(
+                        itemsForDept, 
+                        department, 
+                        newOrder.tableNumber, 
+                        newOrder.waiterName || 'Staff', 
+                        appSettings.restaurantProfile?.name || 'Ristorante',
+                        currentMenuItems // Pass full menu
+                    );
                     setTimeout(() => {
                         showNotification(`🖨️ Stampa Comanda ${department}...`, 'info');
                         const printWindow = window.open('', `AUTO_PRINT_${department}_${Date.now()}`, 'height=600,width=400');

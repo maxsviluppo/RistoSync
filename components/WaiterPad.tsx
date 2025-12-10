@@ -94,7 +94,7 @@ const SwipeableCartItem: React.FC<SwipeableItemProps> = ({ item, index, onEdit, 
 };
 
 // --- RECEIPT GENERATOR ---
-const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, waiter: string, restaurantName: string) => {
+const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, waiter: string, restaurantName: string, allMenuItems: MenuItem[]) => {
     const time = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
     const date = new Date().toLocaleDateString('it-IT');
     const isMaster = dept.includes('Totale') || dept.includes('Cassa');
@@ -112,37 +112,16 @@ const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, wa
                 .title { font-size: 18px; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; }
                 .dept { font-size: 24px; font-weight: bold; background: black; color: white; display: inline-block; padding: 2px 10px; margin: 5px 0; }
                 .meta { font-size: 14px; margin: 2px 0; font-weight: bold; }
-                .item { display: flex; margin-bottom: 8px; align-items: baseline; }
+                .item { display: flex; margin-bottom: 4px; align-items: baseline; }
                 .qty { font-weight: bold; width: 30px; font-size: 16px; }
                 .name { flex: 1; font-weight: bold; font-size: 16px; }
-                .notes { display: block; font-size: 12px; margin-left: 30px; font-style: italic; margin-top: 2px; }
+                .notes { display: block; font-size: 12px; margin-left: 30px; font-style: italic; margin-bottom: 4px; }
+                .sub-items { margin-left: 30px; font-size: 12px; margin-bottom: 8px; color: #333; }
                 .footer { border-top: 2px dashed black; margin-top: 15px; padding-top: 10px; text-align: center; font-size: 10px; }
                 .total { margin-top: 10px; padding-top: 5px; border-top: 1px solid black; font-weight: bold; font-size: 20px; text-align: right; }
                 .price { font-size: 14px; font-weight: normal; margin-left: 10px; }
-                
-                /* NO PRINT UI */
-                @media print {
-                    .no-print { display: none !important; }
-                }
-                .close-btn {
-                    display: block;
-                    width: 100%;
-                    background-color: #ef4444;
-                    color: white;
-                    text-align: center;
-                    padding: 15px 0;
-                    font-weight: bold;
-                    font-size: 16px;
-                    border: none;
-                    cursor: pointer;
-                    position: fixed;
-                    bottom: 0;
-                    left: 0;
-                    right: 0;
-                    text-transform: uppercase;
-                    box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-                }
-                .close-btn:hover { background-color: #dc2626; }
+                @media print { .no-print { display: none !important; } }
+                .close-btn { display: block; width: 100%; background-color: #ef4444; color: white; text-align: center; padding: 15px 0; font-weight: bold; font-size: 16px; border: none; cursor: pointer; position: fixed; bottom: 0; left: 0; right: 0; text-transform: uppercase; }
             </style>
         </head>
         <body>
@@ -153,14 +132,26 @@ const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, wa
                 <div class="meta">Staff: ${waiter}</div>
                 <div style="font-size: 12px; margin-top:5px;">${date} - ${time}</div>
             </div>
-            ${items.map(item => `
+            ${items.map(item => {
+                let subItemsHtml = '';
+                // Resolve sub-items for Menu Combo
+                if (item.menuItem.category === Category.MENU_COMPLETO && item.menuItem.comboItems) {
+                    const subNames = item.menuItem.comboItems.map(id => allMenuItems.find(m => m.id === id)?.name).filter(Boolean);
+                    if (subNames.length > 0) {
+                        subItemsHtml = `<div class="sub-items">${subNames.map(n => `<div>- ${n}</div>`).join('')}</div>`;
+                    }
+                }
+
+                return `
                 <div class="item">
                     <span class="qty">${item.quantity}</span>
                     <span class="name">${item.menuItem.name}</span>
                     ${isMaster ? `<span class="price">€ ${(item.menuItem.price * item.quantity).toFixed(2)}</span>` : ''}
                 </div>
+                ${subItemsHtml}
                 ${item.notes ? `<span class="notes">Note: ${item.notes}</span>` : ''}
-            `).join('')}
+                `;
+            }).join('')}
             
             ${isMaster ? `
             <div class="total">
@@ -172,15 +163,10 @@ const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, wa
                 <br>*** NON FISCALE ***
             </div>
 
-            <!-- BUTTON FOR UI ONLY -->
             <button class="no-print close-btn" onclick="window.close()">✖ CHIUDI FINESTRA</button>
-
             <script>
                 window.onload = function() { 
-                    setTimeout(function(){ 
-                        window.focus(); 
-                        window.print(); 
-                    }, 500); 
+                    setTimeout(function(){ window.focus(); window.print(); }, 500); 
                 }
             </script>
         </body>
@@ -495,7 +481,8 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                         'Cassa / Totale',
                         table,
                         waiterName || 'Staff',
-                        appSettings.restaurantProfile?.name || 'Ristorante'
+                        appSettings.restaurantProfile?.name || 'Ristorante',
+                        menuItems // Pass full menu for resolution
                     );
                     
                     // Open print window - Browser will open "Save as PDF" if no printer connected
@@ -801,17 +788,18 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                                                 </div>
                                                                 <div className="p-2 space-y-2">
                                                                     {subItems.map(sub => {
-                                                                        // Logic:
-                                                                        // 1. Is it a Sala item? (Auto Ready)
-                                                                        // 2. Is it completed by kitchen?
+                                                                        // Check if this specific part is done/ready
+                                                                        // 1. If it's a Sala item (Drink), it's auto-ready (unless specifically not, but logic says yes)
+                                                                        // 2. If it's kitchen, check completedParts
                                                                         const isSala = appSettings.categoryDestinations[sub.category] === 'Sala';
                                                                         
-                                                                        // Ready if Sala OR Kitchen Marked Complete
+                                                                        // A sub-item is READY if:
+                                                                        // - It's a Sala item (Auto-ready)
+                                                                        // - OR it's in the completedParts array (Kitchen finished it)
                                                                         const isReady = isSala || item.comboCompletedParts?.includes(sub.id);
                                                                         
-                                                                        // Served if Parent Item is Served OR Specific Part is Served
-                                                                        // FIX: Force served state if the whole item is served to avoid "ghosts"
-                                                                        const isSubServed = item.served || item.comboServedParts?.includes(sub.id);
+                                                                        // A sub-item is SERVED if it's in the servedParts array
+                                                                        const isSubServed = item.comboServedParts?.includes(sub.id);
 
                                                                         return (
                                                                             <div key={sub.id} className={`flex justify-between items-center pl-2 pr-1 py-1 rounded-lg ${isSubServed ? 'opacity-50' : ''}`}>

@@ -38,7 +38,7 @@ const capitalize = (str: string) => {
 };
 
 // Admin-side Receipt Generator
-const generateAdminReceiptHtml = (items: OrderItem[], table: string, waiter: string, restaurantName: string, dateObj: Date) => {
+const generateAdminReceiptHtml = (items: OrderItem[], table: string, waiter: string, restaurantName: string, dateObj: Date, allMenuItems: MenuItem[]) => {
     const time = dateObj.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
     const date = dateObj.toLocaleDateString('it-IT');
     const total = items.reduce((acc, i) => acc + (i.menuItem.price * i.quantity), 0);
@@ -53,9 +53,10 @@ const generateAdminReceiptHtml = (items: OrderItem[], table: string, waiter: str
                 .title { font-size: 18px; font-weight: bold; text-transform: uppercase; margin-bottom: 5px; }
                 .dept { font-size: 14px; font-weight: bold; margin: 5px 0; }
                 .meta { font-size: 14px; margin: 2px 0; font-weight: bold; }
-                .item { display: flex; margin-bottom: 8px; align-items: baseline; }
+                .item { display: flex; margin-bottom: 4px; align-items: baseline; }
                 .qty { font-weight: bold; width: 30px; font-size: 16px; }
                 .name { flex: 1; font-weight: bold; font-size: 16px; }
+                .sub-items { margin-left: 30px; font-size: 12px; margin-bottom: 8px; color: #333; }
                 .footer { border-top: 2px dashed black; margin-top: 15px; padding-top: 10px; text-align: center; font-size: 10px; }
                 .total { margin-top: 10px; padding-top: 5px; border-top: 1px solid black; font-weight: bold; font-size: 20px; text-align: right; }
                 .price { font-size: 14px; font-weight: normal; margin-left: 10px; }
@@ -71,13 +72,24 @@ const generateAdminReceiptHtml = (items: OrderItem[], table: string, waiter: str
                 <div class="meta">Staff: ${waiter}</div>
                 <div style="font-size: 12px; margin-top:5px;">${date} - ${time}</div>
             </div>
-            ${items.map(item => `
+            ${items.map(item => {
+                let subItemsHtml = '';
+                // Resolve sub-items for Menu Combo
+                if (item.menuItem.category === Category.MENU_COMPLETO && item.menuItem.comboItems) {
+                    const subNames = item.menuItem.comboItems.map(id => allMenuItems.find(m => m.id === id)?.name).filter(Boolean);
+                    if (subNames.length > 0) {
+                        subItemsHtml = `<div class="sub-items">${subNames.map(n => `<div>- ${n}</div>`).join('')}</div>`;
+                    }
+                }
+                return `
                 <div class="item">
                     <span class="qty">${item.quantity}</span>
                     <span class="name">${item.menuItem.name}</span>
                     <span class="price">€ ${(item.menuItem.price * item.quantity).toFixed(2)}</span>
                 </div>
-            `).join('')}
+                ${subItemsHtml}
+                `;
+            }).join('')}
             <div class="total">TOTALE: € ${total.toFixed(2)}</div>
             <div class="footer">RistoSync AI - Archivio Storico<br>*** NON FISCALE ***</div>
             <button class="no-print close-btn" onclick="window.close()">✖ CHIUDI FINESTRA</button>
@@ -505,7 +517,8 @@ Grazie.`);
       const items = order.items;
       const cleanTable = order.tableNumber.replace('_HISTORY', '');
       const dateObj = new Date(order.createdAt || order.timestamp);
-      const printContent = generateAdminReceiptHtml(items, cleanTable, order.waiterName || 'Staff', restaurantName, dateObj);
+      // Pass the current menuItems for name resolution
+      const printContent = generateAdminReceiptHtml(items, cleanTable, order.waiterName || 'Staff', restaurantName, dateObj, menuItems);
       const printWindow = window.open('', `REPRINT_${order.id}`, 'height=600,width=400');
       if (printWindow) { printWindow.document.write(printContent); printWindow.document.close(); }
   };
