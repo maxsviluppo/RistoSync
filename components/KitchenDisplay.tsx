@@ -178,6 +178,8 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
       const subItems = getSubItemsForCombo(item);
       return subItems.some(sub => {
           const dest = sub.specificDepartment || appSettings.categoryDestinations[sub.category];
+          // Special Case for Sala Visibility: Drinks in combos usually go to Sala. 
+          // If department is 'Sala' and item is Drink, return true.
           return dest === department;
       });
   };
@@ -253,7 +255,11 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
     updateOrderStatus(orderId, nextStatus);
   };
 
-  const handleToggleItem = (orderId: string, originalIndex: number) => { toggleOrderItemCompletion(orderId, originalIndex); };
+  // UPDATED: Handle Item Toggle (Partial or Full)
+  const handleToggleItem = (orderId: string, originalIndex: number, subItemId?: string) => { 
+      toggleOrderItemCompletion(orderId, originalIndex, subItemId); 
+  };
+  
   const formatTime = (timestamp: number) => new Date(timestamp).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
   const formatDate = (date: Date) => date.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -360,11 +366,40 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
                       {visibleItems.map(({ item, originalIndex }) => {
                           // COMBO LOGIC: If it's a combo, calculate specific display name for THIS department
                           const isCombo = item.menuItem.category === Category.MENU_COMPLETO;
-                          const subItems = isCombo ? getSubItemsForCombo(item).filter(sub => {
-                              const dest = sub.specificDepartment || appSettings.categoryDestinations[sub.category];
-                              return dest === department;
-                          }) : [];
                           
+                          if (isCombo) {
+                              // SUB-ITEMS SPECIFIC TO DEPT
+                              const subItems = getSubItemsForCombo(item).filter(sub => {
+                                  const dest = sub.specificDepartment || appSettings.categoryDestinations[sub.category];
+                                  return dest === department;
+                              });
+
+                              return (
+                                <li key={`${order.id}-${originalIndex}`} className="flex flex-col border-b border-dashed border-slate-700 pb-3 last:border-0 rounded-lg p-2 bg-slate-800/20">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <p className="text-[10px] font-bold uppercase tracking-wider text-pink-500 flex items-center gap-1"><ListPlus size={10}/> MENU COMBO ({item.menuItem.name})</p>
+                                        <span className={`font-black text-xs px-2 py-0.5 rounded shadow-inner ${item.completed ? 'bg-green-900/30 text-green-400' : 'bg-slate-700 text-white'}`}>x{item.quantity}</span>
+                                    </div>
+                                    <div className="flex flex-col gap-2 pl-2">
+                                        {subItems.map((sub, idx) => {
+                                            const isDone = item.comboCompletedParts?.includes(sub.id);
+                                            return (
+                                                <div key={sub.id} onClick={() => order.status !== OrderStatus.DELIVERED && handleToggleItem(order.id, originalIndex, sub.id)} className={`flex items-center justify-between p-2 rounded-lg cursor-pointer transition-all ${isDone ? 'bg-green-900/20 opacity-60' : 'bg-slate-700/50 hover:bg-slate-700 border border-slate-600'}`}>
+                                                    <div className="flex items-center gap-3">
+                                                        <div className={`pt-0.5 ${isDone ? 'text-green-500' : 'text-slate-400'}`}>{isDone ? <CheckSquare size={20} /> : <Square size={20} />}</div>
+                                                        <span className={`font-black text-xl leading-none ${isDone ? 'text-slate-500 line-through' : 'text-orange-400'}`}>{sub.name}</span>
+                                                    </div>
+                                                </div>
+                                            )
+                                        })}
+                                        {subItems.length === 0 && <p className="text-xs text-slate-500 italic px-2">Nessun elemento per questo reparto.</p>}
+                                    </div>
+                                    {item.notes && <p className="text-red-300 text-xs font-bold mt-2 bg-red-900/20 inline-block px-2 py-1 rounded border border-red-900/30 shadow-sm ml-2">⚠️ {item.notes}</p>}
+                                </li>
+                              );
+                          }
+
+                          // STANDARD ITEM RENDERING
                           return (
                             <li key={`${order.id}-${originalIndex}`} onClick={() => order.status !== OrderStatus.DELIVERED && handleToggleItem(order.id, originalIndex)} className={`flex justify-between items-start border-b border-dashed border-slate-700 pb-3 last:border-0 rounded-lg p-2 transition-colors ${item.completed ? 'bg-green-900/10 opacity-50' : 'hover:bg-slate-800/50 cursor-pointer'}`}>
                               <div className="w-full">
@@ -374,31 +409,15 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
                                       <span className={`font-black text-2xl w-10 h-10 flex items-center justify-center rounded-lg shadow-inner ${item.completed ? 'bg-green-900/30 text-green-400' : 'bg-slate-700 text-white'}`}>{item.quantity}</span>
                                       <div className="flex-1 min-w-0">
                                           <div className="flex items-center gap-2">
-                                              {isCombo ? (<p className="text-[10px] font-bold uppercase tracking-wider mb-0.5 text-pink-500 flex items-center gap-1"><ListPlus size={10}/> MENU COMBO</p>) : (<p className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${isPizzeria ? 'text-red-500' : isPub ? 'text-amber-500' : 'text-orange-500'}`}>{item.menuItem.category}</p>)}
+                                              <p className={`text-[10px] font-bold uppercase tracking-wider mb-0.5 ${isPizzeria ? 'text-red-500' : isPub ? 'text-amber-500' : 'text-orange-500'}`}>{item.menuItem.category}</p>
                                           </div>
                                           
-                                          {/* VISUAL HIERARCHY FOR COMBO */}
-                                          {isCombo && subItems.length > 0 ? (
-                                              <div className="flex flex-col gap-1">
-                                                  {/* The specific item to prepare is highlighted */}
-                                                  {subItems.map((sub, idx) => (
-                                                      <p key={idx} className={`font-black text-3xl leading-none tracking-tight break-words ${item.completed ? 'text-slate-600 line-through' : 'text-orange-400'}`}>
-                                                          {sub.name}
-                                                      </p>
-                                                  ))}
-                                                  {/* The parent combo name is shown smaller for context */}
-                                                  <p className="text-xs text-slate-500 font-bold uppercase">
-                                                      (da {item.menuItem.name})
-                                                  </p>
-                                              </div>
-                                          ) : (
-                                              /* STANDARD ITEM */
-                                              <p className={`font-black text-3xl leading-none tracking-tight break-words ${item.completed ? 'text-slate-600 line-through' : 'bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent'}`}>
-                                                  {item.menuItem.name}
-                                              </p>
-                                          )}
+                                          {/* MAIN NAME DISPLAY */}
+                                          <p className={`font-black text-3xl leading-none tracking-tight break-words ${item.completed ? 'text-slate-600 line-through' : 'bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent'}`}>
+                                              {item.menuItem.name}
+                                          </p>
 
-                                          {item.menuItem.ingredients && !isCombo && <p className="text-[10px] text-slate-500 mt-1 italic">{item.menuItem.ingredients}</p>}
+                                          {item.menuItem.ingredients && <p className="text-[10px] text-slate-500 mt-1 italic">{item.menuItem.ingredients}</p>}
                                           {item.notes && <p className="text-red-300 text-sm font-bold mt-2 bg-red-900/20 inline-block px-3 py-1 rounded border border-red-900/30 shadow-sm">⚠️ {item.notes}</p>}
                                       </div>
                                   </div>

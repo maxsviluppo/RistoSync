@@ -95,9 +95,13 @@ export interface OrderItem {
   menuItem: MenuItem;
   quantity: number;
   notes?: string;
-  completed?: boolean; // Kitchen finished cooking
+  completed?: boolean; // Kitchen finished cooking (Global or Single Item)
   served?: boolean;    // Waiter delivered to table
   isAddedLater?: boolean; // New: Tracks items added via modification
+  
+  // NEW: Tracks which specific sub-items of a Combo are done.
+  // Example: ['pizza_id_1'] means the pizza part is done, but the drink might not be.
+  comboCompletedParts?: string[]; 
 }
 
 export interface Order {

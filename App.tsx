@@ -351,7 +351,7 @@ export default function App() {
               allergens: editingItem.allergens || [], 
               image: editingItem.image,
               comboItems: editingItem.comboItems, // For Menu Completo
-              specificDepartment: editingItem.specificDepartment // For Menu Completo
+              // specificDepartment removed
           }; 
           if (editingItem.id) updateMenuItem(itemToSave); 
           else addMenuItem(itemToSave); 
@@ -794,20 +794,12 @@ Cordiali saluti.`);
                             </div>
                         </div>
 
-                        {/* --- MENU COMPLETO SPECIFIC LOGIC --- */}
+                        {/* --- MENU COMPLETO SPECIFIC LOGIC (NO DEPT SELECTOR) --- */}
                         {editingItem.category === Category.MENU_COMPLETO ? (
                             <div className="bg-slate-950/50 p-4 rounded-xl border border-slate-700/50 space-y-4">
-                                <div>
-                                    <label className="text-xs font-bold text-slate-500 uppercase mb-2 block flex items-center gap-2"><ArrowRightLeft size={12} className="text-blue-400"/> Destinazione Specifica Comanda</label>
-                                    <p className="text-[10px] text-slate-400 mb-2">Se non selezioni nulla, userà la destinazione globale della categoria.</p>
-                                    <div className="grid grid-cols-4 gap-2">
-                                        {(['Cucina', 'Pizzeria', 'Pub', 'Sala'] as Department[]).map(dept => (
-                                            <button key={dept} onClick={() => setEditingItem(prev => ({ ...prev, specificDepartment: prev.specificDepartment === dept ? undefined : dept }))} className={`py-2 px-1 rounded-lg border text-[10px] font-bold uppercase transition-all ${editingItem.specificDepartment === dept ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-500 hover:border-slate-600'}`}>{dept}</button>
-                                        ))}
-                                    </div>
-                                </div>
                                 <div className="max-h-60 overflow-y-auto custom-scroll">
                                     <label className="text-xs font-bold text-slate-500 uppercase mb-2 block flex items-center gap-2"><ListPlus size={12}/> Componi Menu (Seleziona Piatti)</label>
+                                    <p className="text-[10px] text-slate-400 mb-2">I piatti scelti verranno inviati ai rispettivi reparti automaticamente (es. Pizza al Forno, Bibita alla Sala).</p>
                                     <div className="space-y-1">
                                         {menuItems.filter(i => i.category !== Category.MENU_COMPLETO).map(item => {
                                             const isSelected = editingItem.comboItems?.includes(item.id);

@@ -190,11 +190,13 @@ export const addOrder = (order: Order) => {
       items: order.items.map(i => {
           // AUTO-COMPLETE logic for Sala items
           const isSala = settings.categoryDestinations[i.menuItem.category] === 'Sala';
+          
           return { 
               ...i, 
               completed: isSala, // Sala items are automatically "cooked/ready"
               served: false, 
-              isAddedLater: false 
+              isAddedLater: false,
+              comboCompletedParts: [] // Init empty array for combos
           };
       })
   };
@@ -244,7 +246,8 @@ export const updateOrderItems = (orderId: string, newItems: OrderItem[]) => {
                 // If we add quantity, we reset completion so kitchen sees it again
                 completed: false, 
                 served: false,
-                isAddedLater: true
+                isAddedLater: true,
+                comboCompletedParts: existing.comboCompletedParts || [] // Keep progress if any
             };
         } else {
             // ADD NEW ITEM: Append to list
@@ -253,7 +256,8 @@ export const updateOrderItems = (orderId: string, newItems: OrderItem[]) => {
                 ...newItem,
                 completed: isSala,
                 served: false,
-                isAddedLater: true
+                isAddedLater: true,
+                comboCompletedParts: []
             });
         }
     });
@@ -277,22 +281,48 @@ export const updateOrderItems = (orderId: string, newItems: OrderItem[]) => {
     syncOrderToCloud(updatedOrder);
 };
 
-export const toggleOrderItemCompletion = (orderId: string, itemIndex: number) => {
+export const toggleOrderItemCompletion = (orderId: string, itemIndex: number, subItemId?: string) => {
     const orders = getOrders();
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
 
     const newItems = [...order.items];
-    if (newItems[itemIndex]) {
-        newItems[itemIndex] = { 
-            ...newItems[itemIndex], 
-            completed: !newItems[itemIndex].completed 
-        };
+    const targetItem = newItems[itemIndex];
+
+    if (targetItem) {
+        // COMBO LOGIC: If a subItemId is provided, toggle ONLY that part
+        if (subItemId && targetItem.menuItem.category === Category.MENU_COMPLETO && targetItem.menuItem.comboItems) {
+            const currentParts = targetItem.comboCompletedParts || [];
+            let newParts;
+            
+            if (currentParts.includes(subItemId)) {
+                newParts = currentParts.filter(id => id !== subItemId);
+            } else {
+                newParts = [...currentParts, subItemId];
+            }
+            
+            // Update the parts list
+            newItems[itemIndex] = {
+                ...targetItem,
+                comboCompletedParts: newParts
+            };
+
+            // CHECK IF ALL PARTS ARE DONE to mark main item completed
+            const allPartsDone = targetItem.menuItem.comboItems.every(id => newParts.includes(id));
+            newItems[itemIndex].completed = allPartsDone;
+
+        } else {
+            // STANDARD LOGIC: Toggle the whole item
+            newItems[itemIndex] = { 
+                ...targetItem, 
+                completed: !targetItem.completed 
+            };
+        }
     }
 
     // Smart Status Logic for Kitchen (Ready if all cooked)
     const allCooked = newItems.every(i => i.completed);
-    const anyCooked = newItems.some(i => i.completed);
+    const anyCooked = newItems.some(i => i.completed || (i.comboCompletedParts && i.comboCompletedParts.length > 0));
     
     let newStatus = order.status;
     // Don't downgrade from Delivered automatically here
