@@ -9,6 +9,49 @@ const SETTINGS_NOTIFICATIONS_KEY = 'ristosync_settings_notifications';
 const APP_SETTINGS_KEY = 'ristosync_app_settings'; // New Global Settings Key
 const GOOGLE_API_KEY_STORAGE = 'ristosync_google_api_key';
 
+// --- DEMO DATASET ---
+const DEMO_MENU_ITEMS: MenuItem[] = [
+    // ANTIPASTI
+    { id: 'demo_a1', name: 'Tagliere del Contadino', price: 18, category: Category.ANTIPASTI, description: 'Selezione di salumi nostrani, formaggi stagionati, miele di castagno e noci.', allergens: ['Latticini', 'Frutta a guscio'], ingredients: 'Prosciutto crudo, Salame felino, Pecorino, Miele, Noci' },
+    { id: 'demo_a2', name: 'Bruschette Miste', price: 8, category: Category.ANTIPASTI, description: 'Tris di bruschette: pomodoro fresco, patè di olive, crema di carciofi.', allergens: ['Glutine'], ingredients: 'Pane casereccio, Pomodoro, Aglio, Olio EVO, Olive' },
+    { id: 'demo_a3', name: 'Insalata di Mare', price: 14, category: Category.ANTIPASTI, description: 'Molluschi e crostacei freschi marinati al limone e prezzemolo.', allergens: ['Pesce', 'Molluschi'], ingredients: 'Polpo, Calamari, Gamberi, Sedano, Carote' },
+    
+    // PRIMI
+    { id: 'demo_p1', name: 'Spaghetti alla Carbonara', price: 12, category: Category.PRIMI, description: 'La vera ricetta romana con guanciale croccante, uova bio e pecorino.', allergens: ['Glutine', 'Uova', 'Latticini'], ingredients: 'Spaghetti, Guanciale, Tuorlo d\'uovo, Pecorino Romano, Pepe nero' },
+    { id: 'demo_p2', name: 'Tonnarelli Cacio e Pepe', price: 11, category: Category.PRIMI, description: 'Cremosità unica con pecorino romano DOP e pepe nero tostato.', allergens: ['Glutine', 'Latticini'], ingredients: 'Tonnarelli freschi, Pecorino Romano, Pepe nero' },
+    { id: 'demo_p3', name: 'Risotto ai Funghi Porcini', price: 14, category: Category.PRIMI, description: 'Riso Carnaroli mantecato con funghi porcini freschi e prezzemolo.', allergens: ['Latticini'], ingredients: 'Riso Carnaroli, Funghi Porcini, Burro, Parmigiano, Brodo vegetale' },
+    { id: 'demo_p4', name: 'Lasagna alla Bolognese', price: 13, category: Category.PRIMI, description: 'Sfoglia fresca, ragù a lunga cottura e besciamella fatta in casa.', allergens: ['Glutine', 'Latticini', 'Uova', 'Sedano'], ingredients: 'Sfoglia all\'uovo, Carne macinata, Pomodoro, Besciamella' },
+
+    // SECONDI
+    { id: 'demo_s1', name: 'Tagliata di Manzo', price: 22, category: Category.SECONDI, description: 'Controfiletto servito con rucola selvatica e scaglie di grana.', allergens: ['Latticini'], ingredients: 'Manzo, Rucola, Grana Padano, Aceto Balsamico' },
+    { id: 'demo_s2', name: 'Filetto al Pepe Verde', price: 24, category: Category.SECONDI, description: 'Tenero filetto scottato in salsa cremosa al pepe verde.', allergens: ['Latticini', 'Senape'], ingredients: 'Filetto di manzo, Panna fresca, Pepe verde in salamoia, Brandy' },
+    { id: 'demo_s3', name: 'Grigliata Mista di Pesce', price: 26, category: Category.SECONDI, description: 'Gamberoni, calamari e pescato del giorno alla griglia.', allergens: ['Pesce', 'Crostacei'], ingredients: 'Gamberoni, Calamari, Pesce spada, Orata' },
+    { id: 'demo_s4', name: 'Parmigiana di Melanzane', price: 12, category: Category.SECONDI, description: 'Melanzane fritte, pomodoro San Marzano, mozzarella fior di latte e basilico.', allergens: ['Latticini', 'Glutine'], ingredients: 'Melanzane, Salsa di pomodoro, Mozzarella, Parmigiano, Basilico' },
+
+    // PIZZE
+    { id: 'demo_pz1', name: 'Margherita DOP', price: 8, category: Category.PIZZE, description: 'Pomodoro San Marzano, Mozzarella di Bufala, Basilico fresco.', allergens: ['Glutine', 'Latticini'], ingredients: 'Impasto, Pomodoro, Mozzarella di Bufala, Basilico, Olio EVO' },
+    { id: 'demo_pz2', name: 'Diavola', price: 9, category: Category.PIZZE, description: 'Per chi ama il piccante: salame napoli piccante e olio santo.', allergens: ['Glutine', 'Latticini', 'Piccante'], ingredients: 'Impasto, Pomodoro, Mozzarella, Salame Piccante' },
+    { id: 'demo_pz3', name: 'Quattro Formaggi', price: 10, category: Category.PIZZE, description: 'Selezione di formaggi: Gorgonzola, Taleggio, Fontina e Mozzarella.', allergens: ['Glutine', 'Latticini'], ingredients: 'Impasto, Mozzarella, Gorgonzola, Fontina, Parmigiano' },
+    { id: 'demo_pz4', name: 'Vegetariana', price: 9.5, category: Category.PIZZE, description: 'Verdure di stagione grigliate su base rossa.', allergens: ['Glutine', 'Latticini', 'Vegano'], ingredients: 'Impasto, Pomodoro, Mozzarella, Melanzane, Zucchine, Peperoni' },
+
+    // PANINI (PUB)
+    { id: 'demo_pn1', name: 'Classic Burger', price: 12, category: Category.PANINI, description: 'Burger di manzo 180g, lattuga, pomodoro, salsa BBQ. Con patatine.', allergens: ['Glutine', 'Sesamo'], ingredients: 'Bun, Hamburger Manzo, Lattuga, Pomodoro, Salsa BBQ' },
+    { id: 'demo_pn2', name: 'Bacon Cheeseburger', price: 14, category: Category.PANINI, description: 'Doppio cheddar fuso, bacon croccante e cipolla caramellata.', allergens: ['Glutine', 'Latticini', 'Sesamo'], ingredients: 'Bun, Hamburger Manzo, Cheddar, Bacon, Cipolla' },
+    { id: 'demo_pn3', name: 'Club Sandwich', price: 13, category: Category.PANINI, description: 'Triplo strato con pollo, bacon, uovo, lattuga e maionese.', allergens: ['Glutine', 'Uova'], ingredients: 'Pane in cassetta, Pollo grigliato, Bacon, Uovo sodo, Maionese' },
+
+    // DOLCI
+    { id: 'demo_d1', name: 'Tiramisù Classico', price: 6, category: Category.DOLCI, description: 'Fatto in casa con mascarpone fresco e caffè espresso.', allergens: ['Latticini', 'Uova', 'Glutine'], ingredients: 'Savoiardi, Mascarpone, Uova, Caffè, Cacao' },
+    { id: 'demo_d2', name: 'Cheesecake ai Frutti di Bosco', price: 7, category: Category.DOLCI, description: 'Base di biscotto croccante e crema al formaggio fresco.', allergens: ['Latticini', 'Glutine'], ingredients: 'Biscotti digestive, Burro, Formaggio spalmabile, Panna, Frutti di bosco' },
+    { id: 'demo_d3', name: 'Tortino al Cioccolato', price: 7, category: Category.DOLCI, description: 'Cuore caldo fondente servito con gelato alla vaniglia.', allergens: ['Latticini', 'Uova', 'Glutine'], ingredients: 'Cioccolato fondente, Burro, Uova, Farina, Zucchero' },
+
+    // BEVANDE
+    { id: 'demo_b1', name: 'Acqua Naturale 0.75cl', price: 2.5, category: Category.BEVANDE, description: 'Bottiglia in vetro.' },
+    { id: 'demo_b2', name: 'Coca Cola 33cl', price: 3.5, category: Category.BEVANDE, description: 'In vetro.' },
+    { id: 'demo_b3', name: 'Birra Artigianale IPA', price: 6, category: Category.BEVANDE, description: 'Note agrumate e finale amaro persistente.', allergens: ['Glutine'] },
+    { id: 'demo_b4', name: 'Calice Chianti Classico', price: 7, category: Category.BEVANDE, description: 'Rosso fermo, Toscana DOCG.' },
+    { id: 'demo_b5', name: 'Caffè Espresso', price: 1.5, category: Category.BEVANDE, description: 'Miscela 100% Arabica.' }
+];
+
 // --- SYNC ENGINE STATE ---
 let currentUserId: string | null = null;
 let pollingInterval: any = null;
@@ -524,6 +567,47 @@ export const deleteAllMenuItems = async () => {
     if (supabase && currentUserId) {
         await supabase.from('menu_items').delete().eq('user_id', currentUserId);
     }
+};
+
+// --- IMPORT DEMO MENU ---
+export const importDemoMenu = async () => {
+    if (!currentUserId || !supabase) return;
+
+    const demoItemsWithUserId = DEMO_MENU_ITEMS.map(item => ({
+        id: item.id, // Keep demo ID to prevent duplicates if imported multiple times
+        user_id: currentUserId,
+        name: item.name,
+        price: item.price,
+        category: item.category,
+        description: item.description,
+        ingredients: item.ingredients,
+        allergens: item.allergens,
+        image: item.image,
+        combo_items: item.comboItems, 
+        specific_department: item.specificDepartment
+    }));
+
+    // 1. Update Cloud (Bulk Insert)
+    const { error } = await supabase.from('menu_items').upsert(demoItemsWithUserId);
+    
+    if (error) {
+        console.error("Demo Import Error:", error);
+        alert("Errore durante l'importazione demo.");
+        return;
+    }
+
+    // 2. Update Local
+    // We fetch current items, and merge (or just replace if empty, but merging is safer)
+    const currentItems = getMenuItems();
+    // Filter out items that are being replaced (though ID collision handles this naturally in DB, local array needs logic)
+    const newIds = DEMO_MENU_ITEMS.map(d => d.id);
+    const existingFiltered = currentItems.filter(i => !newIds.includes(i.id));
+    
+    const finalMenu = [...existingFiltered, ...DEMO_MENU_ITEMS];
+    localStorage.setItem(MENU_KEY, JSON.stringify(finalMenu));
+    window.dispatchEvent(new Event('local-menu-update'));
+    
+    alert("Menu Demo importato con successo!");
 };
 
 // --- DYNAMIC TABLE COUNT ---
