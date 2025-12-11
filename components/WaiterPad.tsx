@@ -215,13 +215,13 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   };
 
   const handleFreeTable = () => {
-    if (selectedTable && confirm(`Liberare il Tavolo ${selectedTable}? Tutti gli ordini verranno chiusi.`)) {
+    if (selectedTable && confirm(`LIBERA TAVOLO ${selectedTable}: Confermi? Tutte le comande aperte verranno chiuse forzatamente.`)) {
         // AGGRESSIVE FREE - Works even if ownership doesn't match
         freeTable(selectedTable);
         setSelectedTable(null);
         // Force refresh
         setTimeout(loadData, 50);
-        setTimeout(loadData, 200);
+        setTimeout(loadData, 300);
     }
   };
 

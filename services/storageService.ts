@@ -25,7 +25,7 @@ const DEMO_MENU_ITEMS: MenuItem[] = [
 // --- SYNC ENGINE STATE ---
 let currentUserId: string | null = null;
 let pollingInterval: any = null;
-let isSyncing = false; // Prevent overlapping syncs
+let isSyncing = false; 
 let realtimeChannel: any = null;
 let isConnected = false;
 
@@ -34,10 +34,7 @@ const safeLocalStorageSave = (key: string, value: string) => {
     try {
         localStorage.setItem(key, value);
     } catch (e: any) {
-        if (e.name === 'QuotaExceededError' || e.code === 22) {
-             alert("Memoria locale piena! Contatta l'assistenza o cancella la cronologia.");
-             throw e;
-        }
+        console.error("Storage Save Error:", e);
     }
 };
 
@@ -65,10 +62,8 @@ export const saveOrders = (orders: Order[], skipSync = false) => {
 
 export const addOrder = async (order: Order) => {
     const orders = getOrders();
-    // Ensure active waiter
-    if (!order.waiterName) {
-        order.waiterName = getWaiterName() || 'Staff';
-    }
+    // FORCE overwrite waiter name to ensure current user can access it immediately
+    order.waiterName = getWaiterName() || 'Staff';
     orders.push(order);
     saveOrders(orders);
 };
@@ -100,7 +95,8 @@ export const updateOrderItems = async (orderId: string, newItems: OrderItem[]) =
         order.items = [...existingItems, ...itemsToAdd];
         order.timestamp = Date.now();
         
-        // Always force update ownership to current waiter to prevent lockouts
+        // CRITICAL FIX: Update waiter name to current user on edit
+        // This ensures if "Marco" opens it, and "Giulia" adds to it, "Giulia" effectively takes over or at least has access.
         const currentWaiter = getWaiterName();
         if (currentWaiter) {
             order.waiterName = currentWaiter; 
@@ -134,7 +130,6 @@ export const toggleOrderItemCompletion = (orderId: string, itemIndex: number, su
         item.completed = !item.completed;
     }
     
-    // Check if entire order is complete
     const allItemsCompleted = order.items.every(i => i.completed);
 
     if (allItemsCompleted && order.status === OrderStatus.COOKING) {
@@ -172,22 +167,26 @@ export const deleteHistoryByDate = (date: Date) => {
 
 export const freeTable = (tableNumber: string) => {
     const orders = getOrders();
-    let updated = false;
     
-    // Aggressive cleanup: Find ANY order for this table that isn't DELIVERED and kill it.
+    // AGGRESSIVE FIX: 
+    // Find ANY order for this table that is not DELIVERED and force it to DELIVERED.
+    // Ignores ownership, ignores status. Just closes it.
+    let modifications = 0;
     orders.forEach(o => {
         if (o.tableNumber === tableNumber && o.status !== OrderStatus.DELIVERED) {
             o.status = OrderStatus.DELIVERED;
             o.timestamp = Date.now();
-            updated = true;
+            modifications++;
         }
     });
     
-    // Force save even if we didn't find one locally (to sync with cloud later)
-    saveOrders(orders);
-    
-    // Hard UI Trigger
-    window.dispatchEvent(new Event('local-storage-update'));
+    if (modifications > 0) {
+        saveOrders(orders);
+    } else {
+        // Double check: if no order was found but UI shows it, it might be stale state.
+        // We force a save event anyway to refresh UI.
+        window.dispatchEvent(new Event('local-storage-update'));
+    }
 };
 
 // --- MENU MANAGEMENT ---
@@ -259,7 +258,6 @@ export const saveAppSettings = async (settings: AppSettings) => {
     safeLocalStorageSave(APP_SETTINGS_KEY, JSON.stringify(settings));
     window.dispatchEvent(new Event('local-settings-update'));
     
-    // Also save profile to Supabase if connected
     if (settings.restaurantProfile && supabase) {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
@@ -341,10 +339,8 @@ export const initSupabaseSync = async () => {
         currentUserId = session.user.id;
         updateConnectionStatus(true);
 
-        // 1. Initial Pull
         await forceCloudSync();
 
-        // 2. Setup Realtime Subscription
         if (!realtimeChannel) {
             realtimeChannel = supabase
                 .channel('public:data_changes')
@@ -362,7 +358,6 @@ export const initSupabaseSync = async () => {
                 });
         }
 
-        // 3. Fallback Polling (every 30s)
         if (pollingInterval) clearInterval(pollingInterval);
         pollingInterval = setInterval(forceCloudSync, 30000);
 
@@ -437,6 +432,8 @@ export const forceCloudSync = async () => {
             .eq('user_id', currentUserId);
         
         if (cloudOrders && !ordersError) {
+            // MERGE STRATEGY: Cloud prevails, but we don't want to lose local work if cloud is empty/slow.
+            // For now, we overwrite local with cloud to ensure sync consistency.
             const parsedCloudOrders: Order[] = cloudOrders.map(r => ({
                 id: r.id,
                 tableNumber: r.table_number,
@@ -446,8 +443,12 @@ export const forceCloudSync = async () => {
                 createdAt: new Date(r.created_at).getTime(),
                 waiterName: r.waiter_name
             }));
-            safeLocalStorageSave(STORAGE_KEY, JSON.stringify(parsedCloudOrders));
-            window.dispatchEvent(new Event('local-storage-update'));
+            
+            // Only update if we actually got data, to avoid wiping local state on a glitch
+            if (parsedCloudOrders.length > 0 || getOrders().length === 0) {
+                 safeLocalStorageSave(STORAGE_KEY, JSON.stringify(parsedCloudOrders));
+                 window.dispatchEvent(new Event('local-storage-update'));
+            }
         }
 
         const { data: cloudMenu, error: menuError } = await supabase
