@@ -8,9 +8,9 @@ import {
 } from '../services/storageService';
 import { 
   LogOut, Plus, Search, Utensils, CheckCircle, 
-  ChevronLeft, ShoppingCart, Trash2, User, Clock, 
+  ChevronLeft, Trash2, User, Clock, 
   DoorOpen, ChefHat, Pizza, Sandwich, 
-  Wine, CakeSlice, UtensilsCrossed, Send as SendIcon, CheckSquare, Square, BellRing 
+  Wine, CakeSlice, UtensilsCrossed, Send as SendIcon, CheckSquare, Square, BellRing, X 
 } from 'lucide-react';
 
 interface WaiterPadProps {
@@ -53,6 +53,9 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Custom Modal State
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   const waiterName = getWaiterName();
 
@@ -77,15 +80,11 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
     const tableOrders = orders.filter(o => o.tableNumber === tableNum && o.status !== OrderStatus.DELIVERED);
     if (tableOrders.length === 0) return 'free';
     
-    // Logic: 
-    // 1. Ready to Serve (Green) -> At least one item is completed by kitchen but not served
     const hasItemsToServe = tableOrders.some(o => o.items.some(i => i.completed && !i.served));
     if (hasItemsToServe) return 'ready';
 
-    // 2. Cooking (Orange) -> At least one item is not completed
     if (tableOrders.some(o => o.status === OrderStatus.COOKING)) return 'cooking';
     
-    // 3. Occupied (Blue) -> Just seated/pending
     return 'occupied';
   };
 
@@ -135,10 +134,15 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       });
   };
 
-  const sendOrder = () => {
-    if (!selectedTable || cart.length === 0) return;
+  // Triggered by buttons to open modal
+  const requestSendOrder = () => {
+      if (!selectedTable || cart.length === 0) return;
+      setShowConfirmModal(true);
+  };
 
-    if (!confirm(`Inviare ${cart.reduce((a,b)=>a+b.quantity,0)} piatti in cucina per Tavolo ${selectedTable}?`)) return;
+  // Actual execution logic
+  const finalizeOrder = () => {
+    if (!selectedTable || cart.length === 0) return;
 
     if (activeTableOrder) {
       updateOrderItems(activeTableOrder.id, cart);
@@ -154,9 +158,11 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       };
       addOrder(newOrder);
     }
+    
+    // Reset and Close
     setCart([]);
+    setShowConfirmModal(false);
     setView('tables');
-    // alert("Comanda inviata correttamente! 🚀");
   };
 
   const handleFreeTable = () => {
@@ -170,7 +176,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       serveItem(orderId, itemIdx);
   };
 
-  // Filter menu items
   const filteredItems = menuItems.filter(item => {
       const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCategory = item.category === activeCategory;
@@ -178,7 +183,33 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   });
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white flex flex-col font-sans">
+    <div className="min-h-screen bg-slate-900 text-white flex flex-col font-sans relative">
+      
+      {/* CUSTOM CONFIRMATION MODAL */}
+      {showConfirmModal && (
+          <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 animate-fade-in">
+              <div className="bg-slate-900 border border-slate-700 w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-slide-up text-center">
+                  <div className="w-16 h-16 bg-blue-600/20 rounded-full flex items-center justify-center mx-auto mb-4 text-blue-500 animate-pulse">
+                      <SendIcon size={32} className="ml-1"/>
+                  </div>
+                  <h3 className="text-2xl font-black text-white mb-2">Confermi l'ordine?</h3>
+                  <p className="text-slate-400 mb-6">
+                      Stai per inviare <strong>{cart.reduce((a, b) => a + b.quantity, 0)} piatti</strong><br/>
+                      al <strong>Tavolo {selectedTable}</strong>.
+                  </p>
+                  
+                  <div className="flex flex-col gap-3">
+                      <button onClick={finalizeOrder} className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-black text-lg rounded-2xl shadow-lg shadow-blue-600/20 active:scale-95 transition-all flex items-center justify-center gap-2">
+                          <CheckCircle size={20}/> SÌ, INVIA IN CUCINA
+                      </button>
+                      <button onClick={() => setShowConfirmModal(false)} className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-2xl transition-all">
+                          ANNULLA
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* HEADER */}
       <div className="p-4 bg-slate-800 border-b border-slate-700 flex justify-between items-center shadow-lg z-30 relative shrink-0">
         <div className="flex items-center gap-3">
@@ -217,12 +248,8 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                              <p className="text-xs font-bold text-slate-500 uppercase mb-2">Comanda Attuale</p>
                                              <div className="space-y-2">
                                                  {activeTableOrder.items.map((item, idx) => {
-                                                     // Logic for display:
-                                                     // 1. Ready to Serve: Completed by Kitchen AND Not Served
                                                      const isReadyToServe = item.completed && !item.served;
-                                                     // 2. Served: Already served
                                                      const isServed = item.served;
-                                                     
                                                      return (
                                                          <div key={idx} className={`flex justify-between items-center text-sm p-3 rounded-lg border transition-all ${isReadyToServe ? 'bg-green-900/30 border-green-500 shadow-[0_0_15px_rgba(34,197,94,0.2)]' : 'bg-slate-800/50 border-slate-700'}`}>
                                                              <div className="flex gap-3 items-center flex-1">
@@ -233,8 +260,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                                                      {isReadyToServe && <span className="text-[10px] font-black text-green-400 uppercase tracking-wider animate-pulse flex items-center gap-1 mt-1"><BellRing size={10}/> DA SERVIRE</span>}
                                                                  </div>
                                                              </div>
-                                                             
-                                                             {/* ACTION BUTTON */}
                                                              {isReadyToServe ? (
                                                                  <button onClick={() => handleServeItem(activeTableOrder.id, idx)} className="ml-2 bg-green-500 hover:bg-green-400 text-white p-2 rounded-lg shadow-lg active:scale-95 transition-all">
                                                                      <Square size={20} className="fill-current text-green-700"/>
@@ -304,7 +329,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
         {view === 'menu' && (
             <div className="flex flex-col h-full overflow-hidden">
-                {/* FIXED HEADER WRAPPER - NO SCROLL */}
+                {/* FIXED HEADER WRAPPER - STAYS AT TOP */}
                 <div className="shrink-0 bg-slate-900 z-20 shadow-md">
                     {/* Category Nav */}
                     <div className="bg-slate-800 p-2 overflow-x-auto whitespace-nowrap border-b border-slate-700 flex gap-2 no-scrollbar">
@@ -336,7 +361,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
                 {/* SCROLLABLE MENU GRID */}
                 <div className="flex-1 overflow-y-auto p-4 pb-32">
-                    {/* 2x2 GRID LAYOUT */}
                     <div className="grid grid-cols-2 gap-3">
                         {filteredItems.map(item => (
                             <button 
@@ -369,17 +393,17 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                     )}
                 </div>
                 
-                {/* FLOATING CART BAR (RAISED) */}
+                {/* IMPROVED FLOATING CART BAR */}
                 {cart.length > 0 && (
                     <div className="fixed bottom-6 left-4 right-4 z-30 flex gap-3 shadow-2xl animate-slide-up">
                         <button onClick={() => setView('cart')} className="flex-1 bg-green-600 hover:bg-green-500 text-white py-4 rounded-2xl font-black text-lg shadow-lg shadow-green-600/30 flex items-center justify-between px-6 transition-transform active:scale-95">
-                            <div className="flex items-center gap-2"><ShoppingCart size={24}/> <span>RIEPILOGO</span></div>
-                            <div className="flex items-center gap-3">
-                                <span className="bg-green-800 px-3 py-1 rounded-lg text-sm">{cart.reduce((a, b) => a + b.quantity, 0)}</span>
-                                <span>€ {cart.reduce((a, b) => a + (b.menuItem.price * b.quantity), 0).toFixed(2)}</span>
-                            </div>
+                            <span className="tracking-wide">RIEPILOGO</span>
+                            {/* NEW BADGE STYLE */}
+                            <span className="bg-white text-green-600 font-black w-8 h-8 flex items-center justify-center rounded-full text-sm shadow-sm">
+                                {cart.reduce((a, b) => a + b.quantity, 0)}
+                            </span>
                         </button>
-                        <button onClick={sendOrder} className="w-20 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl shadow-lg shadow-orange-500/30 flex items-center justify-center transition-transform active:scale-95 border-2 border-orange-400">
+                        <button onClick={requestSendOrder} className="w-20 bg-orange-500 hover:bg-orange-600 text-white rounded-2xl shadow-lg shadow-orange-500/30 flex items-center justify-center transition-transform active:scale-95 border-2 border-orange-400">
                             <SendIcon size={28} className="ml-1" />
                         </button>
                     </div>
@@ -428,7 +452,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                         <span className="text-slate-400 font-bold uppercase text-xs">Totale Stimato</span>
                         <span className="text-3xl font-black text-white">€ {cart.reduce((a, b) => a + (b.menuItem.price * b.quantity), 0).toFixed(2)}</span>
                     </div>
-                    <button onClick={sendOrder} disabled={cart.length === 0} className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-4 rounded-xl font-black text-xl shadow-lg shadow-blue-600/20 transition-transform active:scale-95 flex items-center justify-center gap-3">
+                    <button onClick={requestSendOrder} disabled={cart.length === 0} className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-4 rounded-xl font-black text-xl shadow-lg shadow-blue-600/20 transition-transform active:scale-95 flex items-center justify-center gap-3">
                          <CheckCircle size={24}/> CONFERMA ORDINE
                     </button>
                 </div>
