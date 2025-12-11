@@ -47,6 +47,7 @@ export interface AgentInfo {
 
 export interface RestaurantProfile {
   name?: string; // Nome Visualizzato (Insegna)
+  description?: string; // Bio/Descrizione pubblica
   tableCount?: number; // Configurable table count
   
   // Dati Fatturazione

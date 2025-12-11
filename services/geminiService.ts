@@ -1,3 +1,4 @@
+
 import { GoogleGenAI } from "@google/genai";
 import { MenuItem } from "../types";
 import { getGoogleApiKey } from "./storageService";
@@ -118,6 +119,34 @@ export const generateDishDescription = async (dishName: string, ingredients: str
         return response.text || "";
     } catch (error) {
         console.error("Description Gen Error:", error);
+        return "";
+    }
+};
+
+export const generateRestaurantDescription = async (restaurantName: string): Promise<string> => {
+    try {
+        const apiKey = getGoogleApiKey() || process.env.API_KEY;
+        if (!apiKey) return "";
+
+        const ai = new GoogleGenAI({ apiKey });
+
+        const prompt = `
+            Sei un esperto copywriter per la ristorazione.
+            Scrivi una "Bio" (descrizione breve) accattivante ed elegante per il ristorante chiamato "${restaurantName}".
+            Massimo 30 parole.
+            Usa un tono invitante che faccia venire fame.
+            Usa 1 o 2 emoji appropriate.
+            Non usare virgolette.
+        `;
+
+        const response = await ai.models.generateContent({
+            model: 'gemini-2.5-flash',
+            contents: prompt,
+        });
+
+        return response.text || "";
+    } catch (error) {
+        console.error("Restaurant Bio Gen Error:", error);
         return "";
     }
 };

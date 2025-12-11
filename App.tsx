@@ -8,7 +8,7 @@ import DigitalMenu from './components/DigitalMenu';
 import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, RefreshCw, Send, Printer, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, FileSpreadsheet, Image as ImageIcon, Upload, FileImage, ExternalLink, CreditCard, Banknote, Briefcase, Clock, Check, ListPlus, ArrowRightLeft, Code2, Cookie, Shield, Wrench, Download, CloudUpload, BookOpen, EyeOff, LayoutGrid, ArrowLeft, PlayCircle, ChevronDown, FileJson, Wallet, Crown, Zap, ShieldCheck as ShieldIcon, Trophy, Timer, LifeBuoy, Minus, Hash } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate, performFactoryReset, deleteAllMenuItems, importDemoMenu } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
-import { askChefAI, generateRestaurantAnalysis, generateDishDescription, generateDishIngredients } from './services/geminiService';
+import { askChefAI, generateRestaurantAnalysis, generateDishDescription, generateDishIngredients, generateRestaurantDescription } from './services/geminiService';
 import { MenuItem, Category, Department, AppSettings, OrderStatus, Order, RestaurantProfile, OrderItem, NotificationSettings } from './types';
 
 const ADMIN_CATEGORY_ORDER = [
@@ -69,6 +69,10 @@ export default function App() {
   const bulkInputRef = useRef<HTMLInputElement>(null);
   const bulkImagesRef = useRef<HTMLInputElement>(null);
   
+  // Profile AI State
+  const [isGeneratingBio, setIsGeneratingBio] = useState(false);
+  const [isListeningBio, setIsListeningBio] = useState(false);
+
   // Analytics State
   const [ordersForAnalytics, setOrdersForAnalytics] = useState<Order[]>([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -381,6 +385,40 @@ export default function App() {
       setIsGeneratingIngr(false);
   };
 
+  // --- PROFILE AI & MIC HANDLERS ---
+  const handleGenerateBio = async () => {
+      if (!profileForm.name) {
+          alert("Inserisci prima il nome del ristorante.");
+          return;
+      }
+      setIsGeneratingBio(true);
+      const bio = await generateRestaurantDescription(profileForm.name);
+      if (bio) setProfileForm(prev => ({ ...prev, description: bio }));
+      setIsGeneratingBio(false);
+  };
+
+  const handleMicBio = () => {
+      if (!('webkitSpeechRecognition' in window)) {
+          alert("Il tuo browser non supporta il riconoscimento vocale. Usa Chrome.");
+          return;
+      }
+      const recognition = new (window as any).webkitSpeechRecognition();
+      recognition.lang = 'it-IT';
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => setIsListeningBio(true);
+      recognition.onend = () => setIsListeningBio(false);
+      recognition.onerror = () => setIsListeningBio(false);
+      recognition.onresult = (event: any) => {
+          const transcript = event.results[0][0].transcript;
+          if (transcript) {
+              setProfileForm(prev => ({ ...prev, description: (prev.description ? prev.description + ' ' : '') + transcript }));
+          }
+      };
+      recognition.start();
+  };
+
   // --- TABLE COUNT MANAGER ---
   const handleUpdateTableCount = async (increment: number) => {
       const current = appSettings.restaurantProfile?.tableCount || 12;
@@ -515,19 +553,70 @@ export default function App() {
                               <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Store className="text-blue-500"/> Dati Pubblici</h3>
                               <p className="text-slate-400 text-sm mb-6">Questi dati appariranno nel Menu Digitale.</p>
                               <div className="space-y-4">
-                                  <div><label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Nome Ristorante</label><input type="text" value={profileForm.name || ''} onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold focus:border-blue-500 outline-none" /></div>
-                                  <div><label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Descrizione (facoltativa)</label><textarea value={profileForm.website || ''} onChange={(e) => setProfileForm({ ...profileForm, website: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:border-blue-500 outline-none h-24 resize-none" placeholder="Breve descrizione del locale..." /></div>
+                                  <div>
+                                      <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Insegna (Nome Ristorante)</label>
+                                      <input type="text" value={profileForm.name || ''} onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold focus:border-blue-500 outline-none" />
+                                  </div>
+                                  <div>
+                                      <div className="flex justify-between items-center mb-1">
+                                          <label className="text-[10px] text-slate-500 uppercase font-bold block">Bio / Descrizione</label>
+                                          <div className="flex gap-2">
+                                              <button onClick={handleGenerateBio} disabled={isGeneratingBio} className="text-[10px] bg-purple-600/20 text-purple-400 hover:bg-purple-600 hover:text-white px-2 py-1 rounded-lg font-bold flex items-center gap-1 transition-colors disabled:opacity-50"><Sparkles size={10}/> {isGeneratingBio ? '...' : 'AI'}</button>
+                                              <button onClick={handleMicBio} disabled={isListeningBio} className={`text-[10px] px-2 py-1 rounded-lg font-bold flex items-center gap-1 transition-colors ${isListeningBio ? 'bg-red-600 text-white animate-pulse' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>{isListeningBio ? <MicOff size={10}/> : <Mic size={10}/>} REC</button>
+                                          </div>
+                                      </div>
+                                      <textarea value={profileForm.description || ''} onChange={(e) => setProfileForm({ ...profileForm, description: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:border-blue-500 outline-none h-24 resize-none" placeholder="Breve descrizione del locale..." />
+                                  </div>
+                                  <div>
+                                      <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Sito Web (Url)</label>
+                                      <div className="flex items-center gap-2 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 focus-within:border-blue-500">
+                                          <Globe size={16} className="text-slate-500"/>
+                                          <input type="text" value={profileForm.website || ''} onChange={(e) => setProfileForm({ ...profileForm, website: e.target.value })} className="w-full bg-transparent text-white text-sm outline-none" placeholder="www.ristorante.com" />
+                                      </div>
+                                  </div>
                               </div>
                           </div>
+                          
                           <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl">
-                              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Briefcase className="text-orange-500"/> Dati Fatturazione (Privati)</h3>
+                              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Briefcase className="text-orange-500"/> Dati Aziendali (Fatturazione)</h3>
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                  <div><label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Ragione Sociale</label><input type="text" value={profileForm.businessName || ''} onChange={(e) => setProfileForm({ ...profileForm, businessName: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white" /></div>
-                                  <div><label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">P.IVA / Codice Fiscale</label><input type="text" value={profileForm.vatNumber || ''} onChange={(e) => setProfileForm({ ...profileForm, vatNumber: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono" /></div>
-                                  <div><label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Email Fatturazione</label><input type="email" value={profileForm.email || ''} onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white" /></div>
-                                  <div><label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Telefono</label><input type="text" value={profileForm.phoneNumber || ''} onChange={(e) => setProfileForm({ ...profileForm, phoneNumber: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white" /></div>
+                                  <div className="md:col-span-2">
+                                      <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Ragione Sociale Completa</label>
+                                      <input type="text" value={profileForm.businessName || ''} onChange={(e) => setProfileForm({ ...profileForm, businessName: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-bold" />
+                                  </div>
+                                  <div>
+                                      <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">P.IVA / Codice Fiscale</label>
+                                      <input type="text" value={profileForm.vatNumber || ''} onChange={(e) => setProfileForm({ ...profileForm, vatNumber: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono" />
+                                  </div>
+                                  <div>
+                                      <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Codice SDI (Destinatario)</label>
+                                      <input type="text" value={profileForm.sdiCode || ''} onChange={(e) => setProfileForm({ ...profileForm, sdiCode: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono uppercase" placeholder="XXXXXXX" />
+                                  </div>
+                                  <div className="md:col-span-2">
+                                      <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Indirizzo Sede Legale</label>
+                                      <input type="text" value={profileForm.address || ''} onChange={(e) => setProfileForm({ ...profileForm, address: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white" />
+                                  </div>
+                                  <div className="md:col-span-2">
+                                      <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Indirizzo PEC</label>
+                                      <input type="email" value={profileForm.pecEmail || ''} onChange={(e) => setProfileForm({ ...profileForm, pecEmail: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono" />
+                                  </div>
                               </div>
                           </div>
+
+                          <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl">
+                              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Phone className="text-green-500"/> Contatti Amministrativi</h3>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div>
+                                      <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Email Amministrazione</label>
+                                      <input type="email" value={profileForm.email || ''} onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white" />
+                                  </div>
+                                  <div>
+                                      <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Telefono / Cellulare</label>
+                                      <input type="text" value={profileForm.phoneNumber || ''} onChange={(e) => setProfileForm({ ...profileForm, phoneNumber: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white" />
+                                  </div>
+                              </div>
+                          </div>
+
                           <div className="flex justify-end"><button onClick={handleSaveAppSettings} className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center gap-2"><Save size={18}/> Salva Profilo</button></div>
                       </div>
                   )}
