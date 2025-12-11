@@ -132,7 +132,7 @@ const OrderTimer: React.FC<{ timestamp: number; status: OrderStatus; onCritical:
         return () => clearInterval(interval);
     }, [timestamp, status, onCritical]);
 
-    if (status === OrderStatus.READY || status === OrderStatus.DELIVERED) return <div className="text-green-400 font-bold text-sm flex items-center gap-1"><CheckCircle size={14}/> Completato</div>;
+    if (status === OrderStatus.READY || status === OrderStatus.DELIVERED) return <div className="text-green-800 bg-green-100 px-2 py-1 rounded font-bold text-xs flex items-center gap-1 border border-green-300"><CheckCircle size={14}/> COMPLETA</div>;
 
     let colorClass = "text-slate-400";
     let bgClass = "bg-slate-700";
@@ -290,7 +290,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
     switch (status) {
       case OrderStatus.PENDING: return 'bg-yellow-100 border-yellow-400 text-yellow-800';
       case OrderStatus.COOKING: return `bg-${themeColor}-100 border-${themeColor}-400 text-${themeColor}-800`;
-      case OrderStatus.READY: return 'bg-green-100 border-green-400 text-green-800';
+      case OrderStatus.READY: return 'bg-green-200 border-green-500 text-green-900 shadow-green-500/20'; // VISIBLE GREEN
       case OrderStatus.DELIVERED: return 'bg-slate-700 border-slate-500 text-slate-300 opacity-80';
       default: return 'bg-gray-100 border-gray-400';
     }
@@ -315,7 +315,11 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
   }, [filteredHistoryOrders, department, appSettings, allMenuItems]); 
 
   const changeDate = (days: number) => { const newDate = new Date(selectedDate); newDate.setDate(newDate.getDate() + days); setSelectedDate(newDate); };
+  
+  // LOGICA DI VISUALIZZAZIONE "ATTIVA"
+  // Le comande READY restano visibili (verdi) finché non diventano DELIVERED (dal cameriere o dal tasto "Servi")
   const displayedOrders = orders.filter(o => viewMode === 'active' && o.status !== OrderStatus.DELIVERED);
+  
   const isAutoPrintActive = appSettings.printEnabled && appSettings.printEnabled[department];
 
   return (
@@ -374,7 +378,9 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
                   <div className={`p-4 border-b border-slate-700/50 flex justify-between items-start bg-slate-800/50`}>
                     <div>
                         <h2 className="text-3xl font-black bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent">Tav. {displayTableNumber}</h2>
-                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold uppercase mt-1 ${getStatusColor(order.status)}`}>{order.status}</span>
+                        <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold uppercase mt-1 ${getStatusColor(order.status)}`}>
+                            {order.status === OrderStatus.READY ? 'COMPLETA' : order.status}
+                        </span>
                         {hasCoordinatedItems && (<div className="mt-2 flex items-center gap-1.5 text-[9px] font-black uppercase text-blue-200 bg-blue-900/60 px-2 py-1.5 rounded-lg border border-blue-500/40 animate-pulse w-max shadow-lg shadow-blue-900/20"><ArrowRightLeft size={12} className="text-blue-400"/><span>SYNC: {otherDeptItems.length} ALTRI</span></div>)}
                     </div>
                     <div className="flex flex-col items-end gap-1.5">
@@ -424,7 +430,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
 
                           // STANDARD ITEM RENDERING
                           return (
-                            <li key={`${order.id}-${originalIndex}`} onClick={() => order.status !== OrderStatus.DELIVERED && handleToggleItem(order.id, originalIndex)} className={`flex justify-between items-start border-b border-dashed border-slate-700 pb-3 last:border-0 rounded-lg p-2 transition-colors ${item.completed ? 'bg-green-900/10 opacity-50' : 'hover:bg-slate-800/50 cursor-pointer'}`}>
+                            <li key={`${order.id}-${originalIndex}`} onClick={() => order.status !== OrderStatus.DELIVERED && handleToggleItem(order.id, originalIndex)} className={`flex justify-between items-start border-b border-dashed border-slate-700 pb-3 last:border-0 rounded-lg p-2 transition-colors ${item.completed ? 'bg-green-900/10 opacity-70' : 'hover:bg-slate-800/50 cursor-pointer'}`}>
                               <div className="w-full">
                                   {item.isAddedLater && order.status !== OrderStatus.DELIVERED && <div className="flex items-center gap-1 mb-1 bg-blue-600 w-max px-2 py-0.5 rounded-md shadow-sm border border-blue-400"><PlusCircle size={10} className="text-white animate-pulse" /><span className="text-[10px] font-black text-white uppercase tracking-wide">AGGIUNTA</span></div>}
                                   <div className="flex gap-4 items-start w-full">
@@ -436,7 +442,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
                                           </div>
                                           
                                           {/* MAIN NAME DISPLAY */}
-                                          <p className={`font-black text-3xl leading-none tracking-tight break-words ${item.completed ? 'text-slate-600 line-through' : 'bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent'}`}>
+                                          <p className={`font-black text-3xl leading-none tracking-tight break-words ${item.completed ? 'text-slate-500 line-through decoration-slate-600 decoration-2' : 'bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent'}`}>
                                               {item.menuItem.name}
                                           </p>
 
@@ -452,7 +458,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
                   </div>
 
                   <button onClick={() => advanceStatus(order.id, order.status)} className={`w-full py-5 text-center font-black text-lg uppercase tracking-wider transition-all flex items-center justify-center gap-2 hover:brightness-110 ${order.status === OrderStatus.READY ? 'bg-green-600 text-white' : `bg-${themeColor}-500 text-white`}`}>
-                      {order.status === OrderStatus.READY ? <><CheckCircle /> SERVI AL TAVOLO</> : <>AVANZA STATO {order.status === OrderStatus.PENDING && '→ PREPARAZIONE'} {order.status === OrderStatus.COOKING && '→ PRONTO'}</>}
+                      {order.status === OrderStatus.READY ? <><CheckCircle /> COMPLETA (ATTENDI RITIRO)</> : <>AVANZA STATO {order.status === OrderStatus.PENDING && '→ PREPARAZIONE'} {order.status === OrderStatus.COOKING && '→ PRONTO'}</>}
                   </button>
                 </div>
               );

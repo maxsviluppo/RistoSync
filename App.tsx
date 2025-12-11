@@ -265,20 +265,34 @@ export default function App() {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
+          const MAX_SIZE = 2 * 1024 * 1024; // 2MB Limit
+          if (file.size > MAX_SIZE) {
+              alert("⚠️ Immagine troppo grande (Max 2MB). Verrà compressa automaticamente.");
+          }
+
           const reader = new FileReader();
           reader.onloadend = () => {
-              // Resize image before saving to avoid LocalStorage quota issues
+              // Resize image before saving to avoid LocalStorage crash
               const img = new Image();
               img.src = reader.result as string;
               img.onload = () => {
                   const canvas = document.createElement('canvas');
-                  const MAX_WIDTH = 800;
-                  const scaleSize = MAX_WIDTH / img.width;
-                  canvas.width = MAX_WIDTH;
-                  canvas.height = img.height * scaleSize;
+                  const MAX_WIDTH = 1024; // Increased quality
+                  let width = img.width;
+                  let height = img.height;
+
+                  if (width > MAX_WIDTH) {
+                      height *= MAX_WIDTH / width;
+                      width = MAX_WIDTH;
+                  }
+
+                  canvas.width = width;
+                  canvas.height = height;
                   const ctx = canvas.getContext('2d');
-                  ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
-                  const resizedBase64 = canvas.toDataURL('image/jpeg', 0.7); // Compress
+                  ctx?.drawImage(img, 0, 0, width, height);
+                  
+                  // Use 0.6 quality to keep file size low even if resolution is decent
+                  const resizedBase64 = canvas.toDataURL('image/jpeg', 0.6); 
                   setEditingItem(prev => ({ ...prev, image: resizedBase64 }));
               };
           };
@@ -484,7 +498,9 @@ export default function App() {
                 <div>
                     <h1 className="text-4xl font-black tracking-tight flex items-center gap-2">
                         Risto<span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-500">Sync</span>
-                        <span className="text-xs bg-slate-800 text-slate-400 px-2 py-1 rounded-md border border-slate-700 font-mono tracking-widest">PRO</span>
+                        <span className="text-xs bg-slate-800 text-slate-400 px-2 py-1 rounded-md border border-slate-700 font-mono tracking-widest uppercase">
+                            {appSettings.restaurantProfile?.planType || 'Pro'}
+                        </span>
                     </h1>
                     <p className="text-slate-400 font-medium text-sm mt-1 flex items-center gap-2">
                         {restaurantName} <span className="w-1 h-1 bg-slate-500 rounded-full"></span> {new Date().toLocaleDateString()}
@@ -783,12 +799,25 @@ export default function App() {
 
                                       <div className="flex items-center gap-4">
                                           <div className="relative w-20 h-20 bg-slate-950 rounded-xl border border-slate-700 flex items-center justify-center overflow-hidden shrink-0 group">
-                                              {editingItem.image ? <img src={editingItem.image} alt="Preview" className="w-full h-full object-cover" /> : <ImageIcon className="text-slate-600" size={24} />}
+                                              {editingItem.image ? (
+                                                  <>
+                                                      <img src={editingItem.image} alt="Preview" className="w-full h-full object-cover" />
+                                                      <button 
+                                                          onClick={(e) => { e.stopPropagation(); setEditingItem(prev => ({ ...prev, image: undefined })); }}
+                                                          className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-20"
+                                                          title="Rimuovi Foto"
+                                                      >
+                                                          <X size={12}/>
+                                                      </button>
+                                                  </>
+                                              ) : (
+                                                  <ImageIcon className="text-slate-600" size={24} />
+                                              )}
                                               <input type="file" ref={fileInputRef} onChange={handleImageUpload} className="hidden" accept="image/*" />
-                                              <div onClick={() => fileInputRef.current?.click()} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity"><Upload className="text-white" size={20}/></div>
+                                              <div onClick={() => fileInputRef.current?.click()} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity z-10"><Upload className="text-white" size={20}/></div>
                                           </div>
                                           <div className="flex-1">
-                                              <p className="text-xs text-slate-500 mb-2">Carica foto del piatto (max 1MB). Formato quadrato consigliato.</p>
+                                              <p className="text-xs text-slate-500 mb-2">Carica foto del piatto (max 2MB). Formato quadrato consigliato.</p>
                                           </div>
                                       </div>
                                   </div>
@@ -831,14 +860,27 @@ export default function App() {
                       <div className="max-w-4xl mx-auto animate-fade-in">
                           <h2 className="text-3xl font-black text-white mb-8">Profilo Ristorante</h2>
                           <div className="bg-slate-900 p-8 rounded-3xl border border-slate-800 shadow-2xl space-y-8">
-                              {/* ANAGRAFICA */}
+                              {/* ANAGRAFICA GENERALE */}
                               <div>
                                   <h3 className="text-sm font-bold text-orange-500 uppercase mb-4 flex items-center gap-2"><Store size={16}/> Dati Generali</h3>
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                       <div><label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Nome Insegna</label><input type="text" value={profileForm.name || ''} onChange={e => setProfileForm({...profileForm, name: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-bold"/></div>
                                       <div><label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Numero Tavoli</label><input type="number" value={profileForm.tableCount || 12} onChange={e => setProfileForm({...profileForm, tableCount: parseInt(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-mono font-bold"/></div>
+                                  </div>
+                              </div>
+
+                              {/* DATI FISCALI & CONTATTI */}
+                              <div>
+                                  <h3 className="text-sm font-bold text-green-500 uppercase mb-4 flex items-center gap-2"><Briefcase size={16}/> Dati Fiscali & Sede</h3>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                       <div><label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Ragione Sociale</label><input type="text" value={profileForm.businessName || ''} onChange={e => setProfileForm({...profileForm, businessName: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white"/></div>
-                                      <div><label className="text-xs text-slate-500 font-bold uppercase mb-1 block">P.IVA</label><input type="text" value={profileForm.vatNumber || ''} onChange={e => setProfileForm({...profileForm, vatNumber: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-mono"/></div>
+                                      <div><label className="text-xs text-slate-500 font-bold uppercase mb-1 block">P.IVA / C.F.</label><input type="text" value={profileForm.vatNumber || ''} onChange={e => setProfileForm({...profileForm, vatNumber: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-mono"/></div>
+                                      <div><label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Indirizzo Sede</label><input type="text" value={profileForm.address || ''} onChange={e => setProfileForm({...profileForm, address: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white"/></div>
+                                      <div><label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Indirizzo Fatturazione</label><input type="text" value={profileForm.billingAddress || ''} onChange={e => setProfileForm({...profileForm, billingAddress: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white"/></div>
+                                      <div><label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Codice SDI</label><input type="text" value={profileForm.sdiCode || ''} onChange={e => setProfileForm({...profileForm, sdiCode: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-mono uppercase"/></div>
+                                      <div><label className="text-xs text-slate-500 font-bold uppercase mb-1 block">PEC Email</label><input type="email" value={profileForm.pecEmail || ''} onChange={e => setProfileForm({...profileForm, pecEmail: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-mono"/></div>
+                                      <div><label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Telefono</label><input type="text" value={profileForm.phoneNumber || ''} onChange={e => setProfileForm({...profileForm, phoneNumber: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white"/></div>
+                                      <div><label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Email Contatto</label><input type="email" value={profileForm.email || ''} onChange={e => setProfileForm({...profileForm, email: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white"/></div>
                                   </div>
                               </div>
                               
