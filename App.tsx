@@ -9,7 +9,7 @@ import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Tra
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate, performFactoryReset, deleteAllMenuItems, importDemoMenu } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { askChefAI, generateRestaurantAnalysis, generateDishDescription, generateDishIngredients, generateRestaurantDescription } from './services/geminiService';
-import { MenuItem, Category, Department, AppSettings, OrderStatus, Order, RestaurantProfile, OrderItem, NotificationSettings } from './types';
+import { MenuItem, Category, Department, AppSettings, OrderStatus, Order, RestaurantProfile, OrderItem, NotificationSettings, SocialLinks } from './types';
 
 const ADMIN_CATEGORY_ORDER = [
     Category.MENU_COMPLETO,
@@ -226,6 +226,16 @@ export default function App() {
 
   const handleAdminAuth = () => {
       if (session) setShowAdmin(true);
+  };
+
+  const handleSocialChange = (network: keyof SocialLinks, value: string) => {
+      setProfileForm(prev => ({
+          ...prev,
+          socials: {
+              ...prev.socials,
+              [network]: value
+          }
+      }));
   };
 
   // --- MENU MANAGEMENT ---
@@ -576,6 +586,37 @@ export default function App() {
                                   </div>
                               </div>
                           </div>
+
+                          <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl">
+                              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Share2 className="text-pink-500"/> Social & Presenza Online</h3>
+                              <p className="text-slate-400 text-sm mb-6">Inserisci i link ai tuoi profili social per mostrarli nel menu digitale.</p>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div className="flex items-center gap-3 bg-slate-950 p-2 rounded-xl border border-slate-700 focus-within:border-blue-500">
+                                      <Instagram className="text-pink-500 ml-2" size={18}/>
+                                      <input type="text" value={profileForm.socials?.instagram || ''} onChange={(e) => handleSocialChange('instagram', e.target.value)} className="bg-transparent outline-none text-white text-sm w-full placeholder-slate-600" placeholder="Link Instagram"/>
+                                  </div>
+                                  <div className="flex items-center gap-3 bg-slate-950 p-2 rounded-xl border border-slate-700 focus-within:border-blue-500">
+                                      <Facebook className="text-blue-600 ml-2" size={18}/>
+                                      <input type="text" value={profileForm.socials?.facebook || ''} onChange={(e) => handleSocialChange('facebook', e.target.value)} className="bg-transparent outline-none text-white text-sm w-full placeholder-slate-600" placeholder="Link Facebook"/>
+                                  </div>
+                                  <div className="flex items-center gap-3 bg-slate-950 p-2 rounded-xl border border-slate-700 focus-within:border-blue-500">
+                                      <Music className="text-white ml-2" size={18}/>
+                                      <input type="text" value={profileForm.socials?.tiktok || ''} onChange={(e) => handleSocialChange('tiktok', e.target.value)} className="bg-transparent outline-none text-white text-sm w-full placeholder-slate-600" placeholder="Link TikTok"/>
+                                  </div>
+                                  <div className="flex items-center gap-3 bg-slate-950 p-2 rounded-xl border border-slate-700 focus-within:border-blue-500">
+                                      <Store className="text-blue-400 ml-2" size={18}/>
+                                      <input type="text" value={profileForm.socials?.google || ''} onChange={(e) => handleSocialChange('google', e.target.value)} className="bg-transparent outline-none text-white text-sm w-full placeholder-slate-600" placeholder="Link Google Business"/>
+                                  </div>
+                                  <div className="flex items-center gap-3 bg-slate-950 p-2 rounded-xl border border-slate-700 focus-within:border-blue-500">
+                                      <Compass className="text-green-500 ml-2" size={18}/>
+                                      <input type="text" value={profileForm.socials?.tripadvisor || ''} onChange={(e) => handleSocialChange('tripadvisor', e.target.value)} className="bg-transparent outline-none text-white text-sm w-full placeholder-slate-600" placeholder="Link TripAdvisor"/>
+                                  </div>
+                                  <div className="flex items-center gap-3 bg-slate-950 p-2 rounded-xl border border-slate-700 focus-within:border-blue-500">
+                                      <UtensilsCrossed className="text-emerald-500 ml-2" size={18}/>
+                                      <input type="text" value={profileForm.socials?.thefork || ''} onChange={(e) => handleSocialChange('thefork', e.target.value)} className="bg-transparent outline-none text-white text-sm w-full placeholder-slate-600" placeholder="Link TheFork"/>
+                                  </div>
+                              </div>
+                          </div>
                           
                           <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl">
                               <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Briefcase className="text-orange-500"/> Dati Aziendali (Fatturazione)</h3>
@@ -613,6 +654,27 @@ export default function App() {
                                   <div>
                                       <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Telefono / Cellulare</label>
                                       <input type="text" value={profileForm.phoneNumber || ''} onChange={(e) => setProfileForm({ ...profileForm, phoneNumber: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white" />
+                                  </div>
+                              </div>
+                          </div>
+
+                          <div className="bg-slate-900 p-6 rounded-2xl border border-red-500/20 shadow-xl">
+                              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Settings className="text-red-500"/> Gestione Account</h3>
+                              <div className="space-y-6">
+                                  <div>
+                                      <label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Email di Login (Account ID)</label>
+                                      <div className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-slate-400 font-mono text-sm flex items-center gap-2">
+                                          <Mail size={14}/>
+                                          {session?.user?.email || 'N/A'}
+                                      </div>
+                                  </div>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                      <button onClick={() => { if(confirm("Sei sicuro di voler ELIMINARE TUTTI I PIATTI dal menu?")) deleteAllMenuItems() }} className="w-full py-3 rounded-xl border border-red-500/50 text-red-400 hover:bg-red-500 hover:text-white font-bold text-sm transition-all flex items-center justify-center gap-2">
+                                          <Trash2 size={16}/> RESET MENU
+                                      </button>
+                                      <button onClick={() => { if(confirm("ATTENZIONE: Questa azione cancellerà TUTTI i dati (Ordini, Menu, Impostazioni). Continuare?")) performFactoryReset() }} className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-900/20">
+                                          <AlertTriangle size={16}/> FACTORY RESET
+                                      </button>
                                   </div>
                               </div>
                           </div>
