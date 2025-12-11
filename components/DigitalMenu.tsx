@@ -177,7 +177,7 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
         if (!link) return null;
         const href = link.startsWith('http') ? link : `https://${link}`;
         return (
-            <a href={href} target="_blank" rel="noopener noreferrer" className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-sm border border-slate-200 hover:scale-110 transition-transform ${colorClass}`} title={label}>
+            <a href={href} target="_blank" rel="noopener noreferrer" className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 hover:scale-110 transition-all ${colorClass}`} title={label}>
                 <Icon size={20} />
             </a>
         );
@@ -230,20 +230,20 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
         </div>
     );
 
-    // MAIN RENDER
+    // MAIN RENDER (DARK MODE)
     return (
         <div 
             id="digital-menu-container"
-            className={`${isPreview ? 'h-full overflow-y-auto relative rounded-[2.5rem] bg-slate-50 scrollbar-hide' : 'min-h-screen bg-slate-50 pb-24'}`}
+            className={`${isPreview ? 'h-full overflow-y-auto relative rounded-[2.5rem] bg-slate-950 scrollbar-hide' : 'min-h-screen bg-slate-950 pb-24 text-white'}`}
         >
             {/* THIN HEADER */}
-            <div className={`bg-slate-900 text-white relative shadow-md z-20 ${isPreview ? 'rounded-b-2xl pt-8 pb-3' : 'pt-4 pb-4 sticky top-0'}`}>
+            <div className={`bg-slate-900 text-white relative shadow-lg z-20 border-b border-slate-800 ${isPreview ? 'rounded-b-2xl pt-8 pb-3' : 'pt-4 pb-4 sticky top-0'}`}>
                 <div className="px-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                        <div className="p-2 rounded-xl bg-orange-500 shadow-lg shadow-orange-500/20">
+                        <div className="p-2 rounded-xl bg-gradient-to-br from-orange-500 to-red-600 shadow-lg shadow-orange-600/20">
                             <ChefHat size={isPreview ? 18 : 22} className="text-white" />
                         </div>
-                        <h1 className={`${isPreview ? 'text-lg' : 'text-xl'} font-bold tracking-tight leading-none truncate max-w-[200px]`}>{restaurantName}</h1>
+                        <h1 className={`${isPreview ? 'text-lg' : 'text-xl'} font-bold tracking-tight leading-none truncate max-w-[200px] text-white`}>{restaurantName}</h1>
                     </div>
                     {/* Optional Status Indicator or Mini Icon */}
                     <div className="flex items-center gap-1.5 bg-slate-800 px-2 py-1 rounded-full border border-slate-700">
@@ -254,19 +254,19 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
             </div>
 
             {/* CATEGORY NAV (STICKY BELOW HEADER) */}
-            <div className={`sticky z-10 bg-slate-50/95 backdrop-blur-md shadow-sm border-b border-slate-200/50 ${isPreview ? 'top-0 py-2' : 'top-[60px] py-3'}`}>
+            <div className={`sticky z-10 bg-slate-950/95 backdrop-blur-md border-b border-slate-800 shadow-sm ${isPreview ? 'top-0 py-2' : 'top-[60px] py-3'}`}>
                 <div className="flex overflow-x-auto gap-2 px-4 no-scrollbar snap-x">
                     {visibleCategories.map(cat => (
                         <button 
                             key={cat} 
                             onClick={() => scrollToCategory(cat)}
-                            className={`flex items-center gap-2 rounded-xl whitespace-nowrap font-bold transition-all snap-center shadow-sm border ${isPreview ? 'px-3 py-1.5 text-[10px]' : 'px-4 py-2 text-xs'} ${activeCategory === cat ? 'bg-slate-900 text-white border-slate-900 shadow-slate-900/20 scale-105' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-100'}`}
+                            className={`flex items-center gap-2 rounded-xl whitespace-nowrap font-bold transition-all snap-center shadow-sm border ${isPreview ? 'px-3 py-1.5 text-[10px]' : 'px-4 py-2 text-xs'} ${activeCategory === cat ? 'bg-orange-600 text-white border-orange-500 shadow-orange-900/30 scale-105' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-white'}`}
                         >
                             {getCategoryIcon(cat, isPreview ? 12 : 14)} {cat}
                         </button>
                     ))}
                     {visibleCategories.length === 0 && (
-                         <div className="w-full text-center text-xs text-slate-400 py-2 italic">Nessuna categoria disponibile</div>
+                         <div className="w-full text-center text-xs text-slate-500 py-2 italic">Nessuna categoria disponibile</div>
                     )}
                 </div>
             </div>
@@ -278,8 +278,8 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
                     return (
                         <div key={cat} id={`cat-${cat}`} className="scroll-mt-36">
                             <div className={`flex items-center gap-2 mb-3 ${isPreview ? 'mt-2' : 'mt-0'}`}>
-                                <h2 className={`${isPreview ? 'text-base' : 'text-lg'} font-black text-slate-800 uppercase tracking-tight`}>{cat}</h2>
-                                <div className="h-px bg-slate-200 flex-1 ml-2"></div>
+                                <h2 className={`${isPreview ? 'text-base' : 'text-lg'} font-black text-white uppercase tracking-tight`}>{cat}</h2>
+                                <div className="h-px bg-slate-800 flex-1 ml-2"></div>
                             </div>
 
                             <div className={`grid ${isPreview ? 'gap-3' : 'gap-4'}`}>
@@ -302,19 +302,19 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
                                     }
 
                                     return (
-                                        <div key={item.id} className={`bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col relative overflow-hidden group ${isPreview ? 'p-3 gap-1.5' : 'p-5 gap-3'}`}>
+                                        <div key={item.id} className={`bg-slate-900 rounded-2xl shadow-lg border border-slate-800 flex flex-col relative overflow-hidden group ${isPreview ? 'p-3 gap-1.5' : 'p-5 gap-3'}`}>
                                             <div className="flex justify-between items-start gap-3">
                                                 <div className="flex-1 min-w-0">
                                                     <div className="flex justify-between items-start">
-                                                        <h3 className={`${isPreview ? 'text-sm' : 'text-base'} font-bold text-slate-900 leading-tight`}>{item.name}</h3>
-                                                        <div className="font-bold text-orange-600 text-sm whitespace-nowrap ml-2">
+                                                        <h3 className={`${isPreview ? 'text-sm' : 'text-base'} font-bold text-white leading-tight`}>{item.name}</h3>
+                                                        <div className="font-bold text-orange-500 text-sm whitespace-nowrap ml-2">
                                                             € {item.price.toFixed(2)}
                                                         </div>
                                                     </div>
                                                     
                                                     {/* 1. INGREDIENTS (New Order) */}
                                                     {item.ingredients && (
-                                                        <p className={`text-slate-600 font-medium italic mt-1 leading-snug ${isPreview ? 'text-[10px]' : 'text-xs'}`}>
+                                                        <p className={`text-slate-400 font-medium italic mt-1 leading-snug ${isPreview ? 'text-[10px]' : 'text-xs'}`}>
                                                             {item.ingredients}
                                                         </p>
                                                     )}
@@ -322,8 +322,8 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
                                                     {/* COMBO CHILDREN LISTING */}
                                                     {isCombo && comboChildren.length > 0 && (
                                                         <div className="mt-2 mb-1">
-                                                            <p className={`text-[9px] font-bold text-slate-400 uppercase mb-1`}>Include:</p>
-                                                            <ul className={`list-disc list-inside text-slate-700 ${isPreview ? 'text-[10px]' : 'text-xs'}`}>
+                                                            <p className={`text-[9px] font-bold text-slate-500 uppercase mb-1`}>Include:</p>
+                                                            <ul className={`list-disc list-inside text-slate-300 ${isPreview ? 'text-[10px]' : 'text-xs'}`}>
                                                                 {comboChildren.map(child => (
                                                                     <li key={child.id}>{child.name}</li>
                                                                 ))}
@@ -332,7 +332,7 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
                                                     )}
 
                                                     {/* 2. DESCRIPTION */}
-                                                    <p className={`text-slate-500 leading-relaxed mt-2 border-t border-dashed border-slate-100 pt-2 ${isPreview ? 'text-[10px]' : 'text-xs'}`}>
+                                                    <p className={`text-slate-500 leading-relaxed mt-2 border-t border-dashed border-slate-800 pt-2 ${isPreview ? 'text-[10px]' : 'text-xs'}`}>
                                                         {item.description || <span className="italic opacity-50">.</span>}
                                                     </p>
                                                     
@@ -342,7 +342,7 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
                                                             {displayAllergens.map(alg => {
                                                                 const Icon = ALLERGENS_ICONS[alg] || Info;
                                                                 return (
-                                                                    <span key={alg} className={`inline-flex items-center gap-1 font-bold uppercase text-slate-500 bg-slate-100 rounded-md ${isPreview ? 'text-[8px] px-1.5 py-0.5' : 'text-[9px] px-2 py-1'}`}>
+                                                                    <span key={alg} className={`inline-flex items-center gap-1 font-bold uppercase text-slate-400 bg-slate-800 border border-slate-700 rounded-md ${isPreview ? 'text-[8px] px-1.5 py-0.5' : 'text-[9px] px-2 py-1'}`}>
                                                                         <Icon size={isPreview ? 8 : 10} className="text-orange-500"/> {alg}
                                                                     </span>
                                                                 )
@@ -353,7 +353,7 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
                                                 
                                                 {/* DISH IMAGE */}
                                                 {item.image && (
-                                                    <div className={`shrink-0 rounded-xl overflow-hidden aspect-square bg-white ${isPreview ? 'w-16' : 'w-24'}`}>
+                                                    <div className={`shrink-0 rounded-xl overflow-hidden aspect-square bg-slate-800 border border-slate-700 ${isPreview ? 'w-16' : 'w-24'}`}>
                                                         <img src={item.image} alt={item.name} className="w-full h-full object-cover"/>
                                                     </div>
                                                 )}
@@ -367,7 +367,7 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
                 })}
 
                 {visibleCategories.length === 0 && (
-                    <div className="text-center py-10 text-slate-400">
+                    <div className="text-center py-10 text-slate-500">
                         <Search size={40} className="mx-auto mb-4 opacity-20"/>
                         <p className="font-bold text-sm">Menu vuoto</p>
                     </div>
@@ -375,26 +375,26 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
             </div>
 
             {/* FOOTER - SOCIAL & LINKS */}
-            <div className={`text-center bg-white rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.05)] border-t border-slate-100 ${isPreview ? 'py-6 mt-4' : 'py-8 mt-8'}`}>
-                 <p className="text-slate-400 text-[10px] font-bold uppercase tracking-widest mb-4">Seguici & Contattaci</p>
+            <div className={`text-center bg-slate-900 rounded-t-[2.5rem] shadow-[0_-10px_40px_rgba(0,0,0,0.2)] border-t border-slate-800 ${isPreview ? 'py-6 mt-4' : 'py-8 mt-8'}`}>
+                 <p className="text-slate-500 text-[10px] font-bold uppercase tracking-widest mb-4">Seguici & Contattaci</p>
                  
                  <div className="flex flex-wrap justify-center gap-3 mb-6 px-6">
-                     <SocialButton link={socials.instagram} icon={Instagram} colorClass="text-pink-600 bg-pink-50" label="Instagram" />
-                     <SocialButton link={socials.facebook} icon={Facebook} colorClass="text-blue-600 bg-blue-50" label="Facebook" />
-                     <SocialButton link={socials.tiktok} icon={Music} colorClass="text-slate-900 bg-slate-100" label="TikTok" />
-                     <SocialButton link={socials.google} icon={Store} colorClass="text-blue-500 bg-blue-50" label="Google Business" />
-                     <SocialButton link={socials.tripadvisor} icon={Compass} colorClass="text-green-600 bg-green-50" label="TripAdvisor" />
-                     <SocialButton link={socials.thefork} icon={UtensilsCrossed} colorClass="text-emerald-600 bg-emerald-50" label="TheFork" />
-                     <SocialButton link={socials.youtube} icon={Youtube} colorClass="text-red-600 bg-red-50" label="YouTube" />
-                     <SocialButton link={socials.linkedin} icon={Linkedin} colorClass="text-blue-700 bg-blue-50" label="LinkedIn" />
+                     <SocialButton link={socials.instagram} icon={Instagram} colorClass="text-pink-500" label="Instagram" />
+                     <SocialButton link={socials.facebook} icon={Facebook} colorClass="text-blue-500" label="Facebook" />
+                     <SocialButton link={socials.tiktok} icon={Music} colorClass="text-white" label="TikTok" />
+                     <SocialButton link={socials.google} icon={Store} colorClass="text-blue-400" label="Google Business" />
+                     <SocialButton link={socials.tripadvisor} icon={Compass} colorClass="text-green-500" label="TripAdvisor" />
+                     <SocialButton link={socials.thefork} icon={UtensilsCrossed} colorClass="text-emerald-500" label="TheFork" />
+                     <SocialButton link={socials.youtube} icon={Youtube} colorClass="text-red-500" label="YouTube" />
+                     <SocialButton link={socials.linkedin} icon={Linkedin} colorClass="text-blue-600" label="LinkedIn" />
                  </div>
 
                  {/* Website Fallback */}
                  {!Object.values(socials).some(v => !!v) && (
-                     <p className="text-xs text-slate-300 italic mb-4">Nessun social collegato</p>
+                     <p className="text-xs text-slate-500 italic mb-4">Nessun social collegato</p>
                  )}
 
-                 <div className="flex items-center justify-center gap-1.5 text-slate-300 font-bold text-[10px]">
+                 <div className="flex items-center justify-center gap-1.5 text-slate-500 font-bold text-[10px]">
                      <ChefHat size={12}/> Powered by RistoSync
                  </div>
             </div>
@@ -404,7 +404,7 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
                 <>
                     <button 
                         onClick={exitMenuMode}
-                        className="fixed bottom-6 left-6 p-3 bg-slate-900 text-white rounded-full z-50 shadow-2xl hover:scale-110 transition-all opacity-50 hover:opacity-100"
+                        className="fixed bottom-6 left-6 p-3 bg-slate-800 border border-slate-700 text-white rounded-full z-50 shadow-2xl hover:scale-110 transition-all opacity-50 hover:opacity-100"
                         title="Esci dal Menu Digitale"
                     >
                         <LogOut size={20}/>
@@ -412,7 +412,7 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
                     {showScrollTop && (
                         <button 
                             onClick={() => window.scrollTo({top: 0, behavior: 'smooth'})}
-                            className="fixed bottom-6 right-6 p-3 bg-orange-500 text-white rounded-full shadow-2xl shadow-orange-500/30 z-50 animate-bounce hover:bg-orange-600 transition-colors"
+                            className="fixed bottom-6 right-6 p-3 bg-orange-600 text-white rounded-full shadow-2xl shadow-orange-500/30 z-50 animate-bounce hover:bg-orange-500 transition-colors"
                         >
                             <ArrowUp size={20}/>
                         </button>

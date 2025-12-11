@@ -37,32 +37,37 @@ let currentUserId: string | null = null;
 let pollingInterval: any = null;
 
 // HELPER: SAFE STORAGE SAVE
-// Handles "QuotaExceededError" by cleaning up old delivered orders locally
+// Handles "QuotaExceededError" silently by cleaning up old data. 
+// We do NOT alert the user because data is safe in Cloud.
 const safeLocalStorageSave = (key: string, value: string) => {
     try {
         localStorage.setItem(key, value);
     } catch (e: any) {
         if (e.name === 'QuotaExceededError' || e.message?.toLowerCase().includes('quota')) {
-            console.warn("⚠️ STORAGE FULL: Cleaning up old local history...");
+            console.warn("⚠️ STORAGE FULL: Cleaning up local cache to free space...");
             
-            // If we are saving orders, try to trim the list
+            // Strategy: Keep ONLY Active Orders locally if space is tight.
+            // History is safe in Supabase.
             if (key === STORAGE_KEY) {
                 try {
                     const orders = JSON.parse(value) as Order[];
-                    // Keep ONLY Active Orders + Delivered from last 6 hours locally to free space
-                    const cutoff = Date.now() - (6 * 60 * 60 * 1000);
-                    const streamlined = orders.filter(o => 
-                        o.status !== OrderStatus.DELIVERED || o.timestamp > cutoff
-                    );
+                    // Aggressive Clean: Remove ALL Delivered orders from local cache
+                    const streamlined = orders.filter(o => o.status !== OrderStatus.DELIVERED);
                     
-                    console.log(`Cleaned ${orders.length - streamlined.length} old orders from local cache.`);
-                    localStorage.setItem(key, JSON.stringify(streamlined));
-                    return; // Success after clean
+                    if (streamlined.length < orders.length) {
+                        try {
+                            localStorage.setItem(key, JSON.stringify(streamlined));
+                            console.log(`✅ Cache cleaned: Removed ${orders.length - streamlined.length} delivered orders.`);
+                            return; 
+                        } catch (retryError) {
+                            console.warn("❌ Cache cleanup didn't free enough space. Skipping local save.");
+                        }
+                    }
                 } catch (cleanError) {
                     console.error("Cleanup failed:", cleanError);
                 }
             }
-            alert("⚠️ MEMORIA DISPOSITIVO PIENA. Impossibile salvare localmente. L'app continuerà a funzionare ma potresti perdere lo storico locale. Ricarica la pagina.");
+            // Silent Fail: Don't annoy user. App relies on Cloud.
         }
     }
 };
@@ -138,8 +143,6 @@ export const initSupabaseSync = async () => {
 const handleSupabaseError = (error: any) => {
     if (!error) return;
     console.error("Supabase Error:", error);
-    // Don't alert on Quota Exceeded during sync, just log it. We don't want to spam the user.
-    // The alert will happen on explicit actions if needed.
     return error;
 }
 
