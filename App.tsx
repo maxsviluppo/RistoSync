@@ -1031,27 +1031,89 @@ export default function App() {
                       </div>
                   )}
 
-                  {/* --- TAB: SUBSCRIPTION (RESTORED) --- */}
+                  {/* --- TAB: SUBSCRIPTION (RESTORED WITH 3 BOXES) --- */}
                   {adminTab === 'subscription' && (
-                      <div className="max-w-4xl mx-auto animate-fade-in">
-                          <h2 className="text-3xl font-black text-white mb-8">Stato Abbonamento</h2>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                              <div className={`p-8 rounded-3xl border relative overflow-hidden ${subscriptionExpired ? 'bg-red-900/20 border-red-500/50' : 'bg-emerald-900/20 border-emerald-500/50'}`}>
-                                  <div className="absolute top-0 right-0 p-6 opacity-10"><CreditCard size={120} className={subscriptionExpired ? 'text-red-500' : 'text-emerald-500'} /></div>
-                                  <div className="relative z-10">
-                                      <p className="text-sm font-bold uppercase tracking-widest mb-2 flex items-center gap-2">{subscriptionExpired ? <AlertTriangle className="text-red-500"/> : <Check className="text-emerald-500"/>} {subscriptionExpired ? 'Abbonamento Scaduto' : 'Abbonamento Attivo'}</p>
-                                      <h3 className="text-4xl font-black text-white mb-1">Piano {appSettings.restaurantProfile?.planType || 'Pro'}</h3>
-                                      <p className="text-slate-400 font-mono text-sm mb-6">Scadenza: {appSettings.restaurantProfile?.subscriptionEndDate ? new Date(appSettings.restaurantProfile.subscriptionEndDate).toLocaleDateString() : 'Illimitato'}</p>
-                                      {daysRemaining !== null && (<div className="bg-slate-900/50 rounded-xl p-4 border border-white/10 backdrop-blur-sm"><p className="text-slate-400 text-xs font-bold uppercase mb-1">Tempo Rimanente</p><p className="text-2xl font-black text-white">{daysRemaining} Giorni</p></div>)}
+                      <div className="max-w-6xl mx-auto animate-fade-in pb-20">
+                          <h2 className="text-3xl font-black text-white mb-8">Il tuo Abbonamento</h2>
+                          
+                          {/* CURRENT STATUS CARD */}
+                          <div className={`p-8 rounded-3xl border relative overflow-hidden mb-12 ${subscriptionExpired ? 'bg-red-900/10 border-red-500/50' : 'bg-emerald-900/10 border-emerald-500/50'}`}>
+                              <div className="absolute top-0 right-0 p-6 opacity-10"><CreditCard size={120} className={subscriptionExpired ? 'text-red-500' : 'text-emerald-500'} /></div>
+                              <div className="relative z-10">
+                                  <p className="text-sm font-bold uppercase tracking-widest mb-2 flex items-center gap-2">{subscriptionExpired ? <AlertTriangle className="text-red-500"/> : <Check className="text-emerald-500"/>} {subscriptionExpired ? 'Abbonamento Scaduto' : 'Abbonamento Attivo'}</p>
+                                  <h3 className="text-4xl font-black text-white mb-1">Piano {appSettings.restaurantProfile?.planType || 'Pro'}</h3>
+                                  <p className="text-slate-400 font-mono text-sm mb-6">Scadenza: {appSettings.restaurantProfile?.subscriptionEndDate ? new Date(appSettings.restaurantProfile.subscriptionEndDate).toLocaleDateString() : 'Illimitato'}</p>
+                                  {daysRemaining !== null && (<div className="bg-slate-900/50 rounded-xl p-4 border border-white/10 backdrop-blur-sm inline-block"><p className="text-slate-400 text-xs font-bold uppercase mb-1">Tempo Rimanente</p><p className="text-2xl font-black text-white">{daysRemaining} Giorni</p></div>)}
+                              </div>
+                          </div>
+
+                          {/* PRICING CARDS (THE 3 BOXES) */}
+                          <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Sparkles className="text-yellow-500"/> Piani Disponibili</h3>
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+                              {/* PLAN 1: MENSILE */}
+                              <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 flex flex-col relative group hover:border-blue-500 transition-all">
+                                  <h4 className="text-lg font-bold text-slate-300 uppercase tracking-widest mb-2">Mensile</h4>
+                                  <div className="text-4xl font-black text-white mb-4">€ 49.90<span className="text-sm text-slate-500 font-medium">/mese</span></div>
+                                  <ul className="space-y-3 mb-8 flex-1 text-sm text-slate-400">
+                                      <li className="flex items-center gap-2"><Check size={16} className="text-blue-500"/> Gestione Comande Illimitata</li>
+                                      <li className="flex items-center gap-2"><Check size={16} className="text-blue-500"/> Menu Digitale QR</li>
+                                      <li className="flex items-center gap-2"><Check size={16} className="text-blue-500"/> 2 Postazioni (Cucina + Sala)</li>
+                                  </ul>
+                                  <button onClick={() => document.getElementById('bank-details')?.scrollIntoView({ behavior: 'smooth' })} className="w-full py-3 bg-slate-800 hover:bg-blue-600 text-white font-bold rounded-xl border border-slate-700 hover:border-blue-500 transition-all">Scegli Mensile</button>
+                              </div>
+
+                              {/* PLAN 2: ANNUALE (BEST SELLER) */}
+                              <div className="bg-slate-800 p-6 rounded-3xl border-2 border-orange-500 flex flex-col relative transform md:-translate-y-4 shadow-2xl shadow-orange-900/20">
+                                  <div className="absolute top-0 right-0 bg-orange-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl uppercase tracking-widest">Più Venduto</div>
+                                  <h4 className="text-lg font-bold text-orange-400 uppercase tracking-widest mb-2">Annuale</h4>
+                                  <div className="text-4xl font-black text-white mb-4">€ 499.00<span className="text-sm text-slate-500 font-medium">/anno</span></div>
+                                  <p className="text-xs text-green-400 font-bold mb-4 bg-green-900/30 px-2 py-1 rounded w-max">Risparmi 2 mesi (99€)</p>
+                                  <ul className="space-y-3 mb-8 flex-1 text-sm text-slate-300">
+                                      <li className="flex items-center gap-2"><Check size={16} className="text-orange-500"/> <strong>Tutto incluso</strong></li>
+                                      <li className="flex items-center gap-2"><Check size={16} className="text-orange-500"/> Supporto Prioritario WhatsApp</li>
+                                      <li className="flex items-center gap-2"><Check size={16} className="text-orange-500"/> AI Menu Intelligence</li>
+                                      <li className="flex items-center gap-2"><Check size={16} className="text-orange-500"/> Setup Iniziale Gratuito</li>
+                                  </ul>
+                                  <button onClick={() => document.getElementById('bank-details')?.scrollIntoView({ behavior: 'smooth' })} className="w-full py-4 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-500 hover:to-red-500 text-white font-bold rounded-xl shadow-lg transition-all transform hover:scale-105 active:scale-95">Attiva Annuale</button>
+                              </div>
+
+                              {/* PLAN 3: LIFETIME / CUSTOM */}
+                              <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 flex flex-col relative group hover:border-purple-500 transition-all">
+                                  <h4 className="text-lg font-bold text-slate-300 uppercase tracking-widest mb-2">A Vita</h4>
+                                  <div className="text-4xl font-black text-white mb-4">€ 1290<span className="text-sm text-slate-500 font-medium">/una tantum</span></div>
+                                  <ul className="space-y-3 mb-8 flex-1 text-sm text-slate-400">
+                                      <li className="flex items-center gap-2"><Check size={16} className="text-purple-500"/> <strong>Licenza a vita</strong></li>
+                                      <li className="flex items-center gap-2"><Check size={16} className="text-purple-500"/> Nessun canone mensile</li>
+                                      <li className="flex items-center gap-2"><Check size={16} className="text-purple-500"/> Aggiornamenti inclusi</li>
+                                  </ul>
+                                  <button onClick={() => document.getElementById('bank-details')?.scrollIntoView({ behavior: 'smooth' })} className="w-full py-3 bg-slate-800 hover:bg-purple-600 text-white font-bold rounded-xl border border-slate-700 hover:border-purple-500 transition-all">Scegli Lifetime</button>
+                              </div>
+                          </div>
+
+                          {/* BANK DETAILS SECTION (RESTORED & IMPROVED) */}
+                          <div id="bank-details" className="bg-slate-900 p-8 rounded-3xl border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-8">
+                              <div className="flex-1">
+                                  <h3 className="text-xl font-bold text-white mb-2 flex items-center gap-2"><RefreshCw className="text-blue-500"/> Dati per il Bonifico</h3>
+                                  <p className="text-slate-400 text-sm mb-6">Per attivare o rinnovare uno dei piani, effettua il bonifico e invia la distinta a <a href={`mailto:${adminContactEmail}`} className="text-blue-400 hover:underline">{adminContactEmail}</a>.</p>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                      <div className="bg-slate-950 p-4 rounded-xl border border-slate-700">
+                                          <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">IBAN</p>
+                                          <p className="font-mono text-white text-lg select-all flex items-center gap-2">{adminIban} <Copy size={14} className="text-slate-500 cursor-pointer hover:text-white" onClick={() => navigator.clipboard.writeText(adminIban)}/></p>
+                                      </div>
+                                      <div className="bg-slate-950 p-4 rounded-xl border border-slate-700">
+                                          <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Intestatario</p>
+                                          <p className="text-white text-lg">{adminHolder}</p>
+                                      </div>
                                   </div>
                               </div>
-                              <div className="bg-slate-900 p-8 rounded-3xl border border-slate-800 flex flex-col justify-center">
-                                  <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><RefreshCw className="text-blue-500"/> Rinnovo Licenza</h3>
-                                  <p className="text-slate-400 text-sm mb-6">Per rinnovare o cambiare piano, effettua un bonifico alle coordinate sottostanti o contatta l'amministrazione.</p>
-                                  <div className="bg-slate-950 p-4 rounded-xl border border-slate-700 space-y-3">
-                                      <div><p className="text-[10px] font-bold text-slate-500 uppercase">IBAN</p><p className="font-mono text-white select-all">{adminIban}</p></div>
-                                      <div><p className="text-[10px] font-bold text-slate-500 uppercase">Intestatario</p><p className="text-white">{adminHolder}</p></div>
-                                  </div>
+                              <div className="p-6 bg-white rounded-2xl shadow-xl flex flex-col items-center justify-center w-full md:w-auto">
+                                   <div className="mb-2 text-center">
+                                       <p className="text-slate-900 font-bold text-xs uppercase tracking-wider mb-1">Pagamento Rapido</p>
+                                       <p className="text-slate-500 text-[10px]">Inquadra con l'app della banca</p>
+                                   </div>
+                                   <div className="w-32 h-32 bg-slate-100 flex items-center justify-center rounded-lg border-2 border-slate-200">
+                                       <QrCode size={48} className="text-slate-400"/>
+                                   </div>
                               </div>
                           </div>
                       </div>
