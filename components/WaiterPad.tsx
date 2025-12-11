@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { 
   Order, OrderStatus, Category, MenuItem, OrderItem 
@@ -10,7 +11,7 @@ import {
   LogOut, Plus, Search, Utensils, CheckCircle, 
   ChevronLeft, Trash2, User, Clock, 
   DoorOpen, ChefHat, Pizza, Sandwich, 
-  Wine, CakeSlice, UtensilsCrossed, Send as SendIcon, CheckSquare, Square, BellRing, X, ArrowLeft, AlertTriangle 
+  Wine, CakeSlice, UtensilsCrossed, Send as SendIcon, CheckSquare, Square, BellRing, X, ArrowLeft, AlertTriangle, Home 
 } from 'lucide-react';
 
 interface WaiterPadProps {
@@ -265,9 +266,12 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
       <div className="p-4 bg-slate-800 border-b border-slate-700 flex justify-between items-center shadow-lg z-30 relative shrink-0">
         <div className="flex items-center gap-3">
+            <button onClick={onExit} className="bg-slate-700 p-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-600 transition-colors border border-slate-600" title="Torna alla Home">
+                <Home size={20} />
+            </button>
             <h1 className="text-xl font-bold flex items-center gap-2"><div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center"><User size={18} className="text-white"/></div> {waiterName || 'Waiter Pad'}</h1>
         </div>
-        <button onClick={handleLogout} className="bg-slate-700 p-2 rounded-full text-slate-300 hover:text-white hover:bg-red-600 transition-colors" title="Cambia Cameriere">
+        <button onClick={handleLogout} className="bg-slate-700 p-2 rounded-xl text-slate-300 hover:text-white hover:bg-red-600 transition-colors border border-slate-600" title="Cambia Cameriere">
             <LogOut size={20} />
         </button>
       </div>
@@ -283,7 +287,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                      <h2 className="text-2xl font-black text-white">Tavolo {selectedTable}</h2>
                                      <p className={`text-xs font-bold uppercase ${activeTableOrder ? 'text-green-400' : 'text-slate-400'}`}>{activeTableOrder ? 'Occupato' : 'Libero'}</p>
                                  </div>
-                                 <button onClick={() => setSelectedTable(null)} className="p-2 bg-slate-700 rounded-full text-slate-400 hover:text-white"><ChevronLeft size={20}/></button>
+                                 <button onClick={() => setSelectedTable(null)} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white border border-slate-700 hover:border-slate-500 transition-colors"><X size={20}/></button>
                              </div>
                              
                              <div className="flex-1 overflow-y-auto p-5 pb-24">
