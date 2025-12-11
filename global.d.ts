@@ -1,11 +1,9 @@
+/// <reference types="vite/client" />
 
-export { };
+interface Window {
+    webkitSpeechRecognition: any;
+}
 
-declare global {
-    interface Window {
-        webkitSpeechRecognition: any;
-    }
-    interface WindowEventMap {
-        'storage-quota-exceeded': CustomEvent;
-    }
+interface WindowEventMap {
+    'storage-quota-exceeded': CustomEvent;
 }

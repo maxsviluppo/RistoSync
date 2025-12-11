@@ -20,11 +20,5 @@ export default defineConfig(({ mode }) => {
         }
       }
     },
-    define: {
-      // Sostituzione sicura della stringa API_KEY durante la build
-      'process.env.API_KEY': JSON.stringify(env.API_KEY || process.env.API_KEY || ''),
-      'process.env.VITE_SUPABASE_URL': JSON.stringify(env.VITE_SUPABASE_URL || process.env.VITE_SUPABASE_URL || ''),
-      'process.env.VITE_SUPABASE_KEY': JSON.stringify(env.VITE_SUPABASE_KEY || process.env.VITE_SUPABASE_KEY || '')
-    }
   };
 });
