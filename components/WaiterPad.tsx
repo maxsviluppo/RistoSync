@@ -576,7 +576,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       <style>{`@keyframes swipe-card { 0%, 100% { transform: translateX(0); } 20%, 30% { transform: translateX(50px); } 50% { transform: translateX(0); } 70%, 80% { transform: translateX(-50px); } } @keyframes swipe-bg { 0%, 100% { background-color: rgb(51, 65, 85); } 20%, 30% { background-color: rgb(249, 115, 22); } 50% { background-color: rgb(51, 65, 85); } 70%, 80% { background-color: rgb(220, 38, 38); } } @keyframes fade-edit { 0%, 50%, 100% { opacity: 0; transform: scale(0.9); } 20%, 30% { opacity: 1; transform: scale(1); } } @keyframes fade-delete { 0%, 50%, 100% { opacity: 0; transform: scale(0.9); } 70%, 80% { opacity: 1; transform: scale(1); } } @keyframes success-pop { 0% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); } 50% { transform: scale(1.03); box-shadow: 0 0 20px rgba(34, 197, 94, 0.4); border-color: rgba(34, 197, 94, 0.8); background-color: rgba(34, 197, 94, 0.1); } 100% { transform: scale(1); box-shadow: 0 0 0 rgba(0,0,0,0); } } @keyframes neon-pulse { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); border-color: rgba(34, 197, 94, 0.8); transform: scale(1); } 50% { box-shadow: 0 0 40px 15px rgba(34, 197, 94, 0.9), inset 0 0 20px rgba(34, 197, 94, 0.5); border-color: #ffffff; transform: scale(1.05); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); border-color: rgba(34, 197, 94, 0.8); transform: scale(1); } } @keyframes red-flash { 0%, 100% { background-color: rgb(51, 65, 85); border-color: rgb(51, 65, 85); } 50% { background-color: rgb(220, 38, 38); border-color: rgb(252, 165, 165); box-shadow: 0 0 15px rgba(220, 38, 38, 0.7); } } .animate-neon-pulse { animation: neon-pulse 1s infinite cubic-bezier(0.4, 0, 0.6, 1); } .animate-red-flash { animation: red-flash 0.8s infinite; } .animate-card-swipe { animation: swipe-card 2.5s ease-in-out; } .animate-bg-color { animation: swipe-bg 2.5s ease-in-out; } .animate-fade-edit { animation: fade-edit 2.5s ease-in-out; } .animate-fade-delete { animation: fade-delete 2.5s ease-in-out; } .animate-success-pop { animation: success-pop 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275); }`}</style>
 
       {/* --- HEADER --- */}
-      <div className="bg-slate-900 pt-5 pb-2 px-5 z-40 flex justify-between items-center sticky top-0 border-b border-white/5 bg-opacity-95 backdrop-blur-sm shadow-md">
+      <div className="bg-slate-900 pt-5 pb-2 px-5 z-40 flex justify-between items-center sticky top-0 border-b border-white/5 bg-opacity-95 backdrop-blur-sm shadow-md h-16 shrink-0">
         <div className="flex items-center gap-3"><div className="w-9 h-9 rounded-xl bg-gradient-to-br from-orange-500 to-orange-600 flex items-center justify-center shadow-lg shadow-orange-500/20 border border-orange-400/30 transform -rotate-3"><Utensils size={18} className="text-white" /></div><div><h1 className="font-bold text-sm tracking-tight text-white leading-none mb-0.5">Risto<span className="text-orange-500">Sync</span></h1><p className="text-[10px] text-slate-400 font-medium">Ciao, {waiterName || 'Staff'}</p></div></div>
         <div className="flex items-center gap-3">
              <button onClick={() => setProfileOpen(true)} className="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all active:scale-95"><User size={18} /></button>
@@ -591,7 +591,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
       {/* --- QUICK INPUT PANEL (TOP FIXED) --- */}
       {editingItemData && (
-          <div className="fixed top-[70px] left-0 right-0 z-50 bg-slate-800/95 backdrop-blur-md border-b border-orange-500/30 shadow-2xl p-4 animate-slide-down">
+          <div className="fixed top-[64px] left-0 right-0 z-50 bg-slate-800/95 backdrop-blur-md border-b border-orange-500/30 shadow-2xl p-4 animate-slide-down">
               <div className="max-w-md mx-auto">
                 <h3 className="font-black text-white text-lg mb-3 text-center flex items-center justify-center gap-2">
                     <span className="text-orange-500">{editingItemData.category}</span>
@@ -601,22 +601,22 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                 
                 <div className="flex items-center justify-between mb-4 bg-slate-900/50 p-2 rounded-xl border border-slate-700">
                       <div className="flex items-center gap-3 flex-1">
-                          <button onClick={() => setEditQty(Math.max(1, editQty - 1))} className="w-10 h-10 flex items-center justify-center bg-slate-700 hover:bg-slate-600 rounded-lg shadow-sm text-white active:scale-95 transition-all"><Minus size={18} /></button>
-                          <span className="font-black text-white w-8 text-center text-2xl">{editQty}</span>
-                          <button onClick={() => setEditQty(editQty + 1)} className="w-10 h-10 flex items-center justify-center bg-slate-700 hover:bg-slate-600 rounded-lg shadow-sm text-white active:scale-95 transition-all"><Plus size={18} /></button>
+                          <button onClick={() => setEditQty(Math.max(1, editQty - 1))} className="w-12 h-12 flex items-center justify-center bg-slate-700 hover:bg-slate-600 rounded-lg shadow-sm text-white active:scale-95 transition-all"><Minus size={20} /></button>
+                          <span className="font-black text-white w-10 text-center text-3xl">{editQty}</span>
+                          <button onClick={() => setEditQty(editQty + 1)} className="w-12 h-12 flex items-center justify-center bg-slate-700 hover:bg-slate-600 rounded-lg shadow-sm text-white active:scale-95 transition-all"><Plus size={20} /></button>
                       </div>
-                      <div className="h-8 w-px bg-slate-700 mx-2"></div>
+                      <div className="h-10 w-px bg-slate-700 mx-3"></div>
                       <div className="flex-1 relative">
-                          <input type="text" value={editNotes} onChange={(e) => setEditNotes(capitalize(e.target.value))} placeholder="Note..." className="w-full bg-transparent border-none text-white text-sm focus:ring-0 placeholder-slate-500 pr-8" />
-                          <button onClick={handleDictation} className={`absolute right-0 top-1/2 -translate-y-1/2 p-1.5 rounded-full ${isListening ? 'bg-red-500 text-white animate-pulse' : 'text-slate-400 hover:text-white'}`}>
-                              {isListening ? <MicOff size={14}/> : <Mic size={14}/>}
+                          <input type="text" value={editNotes} onChange={(e) => setEditNotes(capitalize(e.target.value))} placeholder="Note..." className="w-full bg-transparent border-none text-white text-base focus:ring-0 placeholder-slate-500 pr-8" />
+                          <button onClick={handleDictation} className={`absolute right-0 top-1/2 -translate-y-1/2 p-2 rounded-full ${isListening ? 'bg-red-500 text-white animate-pulse' : 'text-slate-400 hover:text-white'}`}>
+                              {isListening ? <MicOff size={18}/> : <Mic size={18}/>}
                           </button>
                       </div>
                 </div>
 
                 <div className="flex gap-3">
-                    <button onClick={cancelEditing} className="flex-1 py-3 rounded-xl bg-slate-700 text-slate-300 font-bold text-sm hover:bg-slate-600 transition-colors">ANNULLA</button>
-                    <button onClick={() => confirmItem(editingItemData)} className="flex-[2] py-3 rounded-xl bg-orange-500 text-white font-bold text-sm hover:bg-orange-600 shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 active:scale-95 transition-transform"><Check size={18} /> AGGIUNGI ORDINE</button>
+                    <button onClick={cancelEditing} className="flex-1 py-4 rounded-xl bg-slate-700 text-slate-300 font-bold text-sm hover:bg-slate-600 transition-colors">ANNULLA</button>
+                    <button onClick={() => confirmItem(editingItemData)} className="flex-[2] py-4 rounded-xl bg-orange-500 text-white font-bold text-lg hover:bg-orange-600 shadow-lg shadow-orange-500/20 flex items-center justify-center gap-2 active:scale-95 transition-transform"><Check size={24} /> AGGIUNGI</button>
                 </div>
                 <div className="mt-3 text-center"><button onClick={() => openAiFor(editingItemData)} className="text-indigo-400 text-[10px] font-bold uppercase tracking-wide flex items-center justify-center gap-1 hover:text-white"><Bot size={12}/> Info AI</button></div>
               </div>
@@ -624,7 +624,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       )}
 
       {/* --- MENU GRID --- */}
-      <div className={`flex-1 overflow-y-auto pb-48 relative scroll-smooth z-10 no-scrollbar touch-pan-y transition-all ${editingItemId ? 'pt-[220px] opacity-30 pointer-events-none grayscale' : ''}`}>
+      <div className={`flex-1 overflow-y-auto pb-48 relative scroll-smooth z-10 no-scrollbar touch-pan-y transition-all ${editingItemId ? 'opacity-30 pointer-events-none grayscale' : ''}`}>
           <div className="sticky top-0 z-30 pt-2 pb-4 bg-gradient-to-b from-slate-900 via-slate-900/95 to-transparent">
             <div className="flex px-4 gap-3 overflow-x-auto no-scrollbar scroll-smooth snap-x snap-mandatory">
                 {Object.values(Category).map(cat => {
@@ -647,41 +647,41 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                   );
               })}
           </div>
-        <button onClick={() => openAiFor(null)} className={`fixed right-5 w-12 h-12 bg-indigo-600 border border-indigo-400 text-white rounded-full shadow-[0_8px_30px_rgba(79,70,229,0.4)] flex items-center justify-center z-20 transition-all duration-500 hover:scale-110 hover:shadow-indigo-500/60`} style={{ bottom: isCartOpen ? '90vh' : '100px' }}><Bot size={24} /></button>
+        <button onClick={() => openAiFor(null)} className={`fixed right-5 w-14 h-14 bg-indigo-600 border border-indigo-400 text-white rounded-full shadow-[0_8px_30px_rgba(79,70,229,0.4)] flex items-center justify-center z-20 transition-all duration-500 hover:scale-110 hover:shadow-indigo-500/60`} style={{ bottom: isCartOpen ? '90vh' : '110px' }}><Bot size={28} /></button>
       </div>
 
       {/* --- FIXED BOTTOM DOCK & FULL CART --- */}
-      <div className={`fixed bottom-0 left-0 right-0 z-40 bg-slate-800 border-t border-slate-700 transition-all duration-300 ease-out shadow-[0_-10px_40px_-10px_rgba(0,0,0,0.5)] ${isCartOpen ? 'h-[95vh] rounded-t-3xl border-t-white/10' : 'h-[90px]'}`}>
+      <div className={`fixed bottom-0 left-0 right-0 z-40 bg-slate-800 border-t border-slate-700 transition-all duration-300 ease-out shadow-[0_-10px_40px_-10px_rgba(0,0,0,0.5)] flex flex-col ${isCartOpen ? 'top-20 bottom-0 h-auto rounded-t-3xl border-t-white/10' : 'h-[90px]'}`}>
           
-          {/* HEADER / TOGGLE BAR */}
-          <div onClick={toggleCart} className={`h-[90px] flex items-center justify-between px-6 cursor-pointer active:bg-slate-700/50 transition-colors ${isCartOpen ? 'border-b border-white/5' : ''}`}>
+          {/* HEADER / TOGGLE BAR (TALLER SHOULDER) */}
+          <div onClick={toggleCart} className={`h-[90px] min-h-[90px] flex items-center justify-between px-6 cursor-pointer active:bg-slate-700/50 transition-colors ${isCartOpen ? 'border-b border-white/5' : ''}`}>
               <div className="flex items-center gap-4">
-                  <div className={`w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center text-white font-bold relative transition-transform duration-300 ${cartBump ? 'scale-125 bg-orange-500 text-white ring-2 ring-orange-300' : ''}`}>
-                      <ShoppingBag size={22} />
-                      {totalItems > 0 && <span className="absolute -top-1 -right-1 bg-orange-500 text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-slate-800">{totalItems}</span>}
+                  <div className={`w-14 h-14 bg-slate-700 rounded-full flex items-center justify-center text-white font-bold relative transition-transform duration-300 ${cartBump ? 'scale-125 bg-orange-500 text-white ring-2 ring-orange-300' : ''}`}>
+                      <ShoppingBag size={26} />
+                      {totalItems > 0 && <span className="absolute -top-1 -right-1 bg-orange-500 text-[10px] w-6 h-6 rounded-full flex items-center justify-center border-2 border-slate-800 shadow-md">{totalItems}</span>}
                   </div>
                   <div>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{editingOrderId ? 'MODIFICA ORDINE' : 'NUOVO ORDINE'}</p>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-2">
                           <span className="text-xl font-black text-white">TAVOLO</span>
-                          <span className="text-2xl font-black text-orange-500">{table || '?'}</span>
+                          <span className="text-3xl font-black text-orange-500">{table || '?'}</span>
                       </div>
                   </div>
               </div>
-              <div className="bg-slate-700 p-2 rounded-full text-slate-300">
-                  {isCartOpen ? <ChevronDown size={24}/> : <ChevronUp size={24}/>}
+              <div className="bg-slate-700 p-3 rounded-full text-slate-300 shadow-lg">
+                  {isCartOpen ? <ChevronDown size={28}/> : <ChevronUp size={28}/>}
               </div>
           </div>
 
           {/* EXPANDED CONTENT */}
           {isCartOpen && (
-              <div className="flex flex-col h-[calc(100%-90px)]">
-                  <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-4">
+              <div className="flex flex-col flex-1 overflow-hidden bg-slate-900/95 backdrop-blur-xl">
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-4 custom-scroll">
                         {cart.length === 0 ? (
                             <div className="flex flex-col items-center justify-center h-full text-slate-600 gap-4">
                                 <ShoppingBag size={64} className="opacity-20" />
                                 <p className="font-bold text-lg">Il carrello è vuoto</p>
-                                <button onClick={() => setIsCartOpen(false)} className="bg-slate-700 text-white px-6 py-2 rounded-xl text-sm font-bold">Aggiungi Piatti</button>
+                                <button onClick={() => setIsCartOpen(false)} className="bg-slate-700 text-white px-8 py-3 rounded-xl text-base font-bold shadow-lg">Aggiungi Piatti</button>
                             </div>
                         ) : (
                             <>
@@ -690,9 +690,9 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                             </>
                         )}
                   </div>
-                  <div className="p-4 bg-slate-800 border-t border-slate-700 pb-8">
-                       <button onClick={requestSendOrder} disabled={!table || isSending || cart.length === 0} className={`w-full py-5 rounded-2xl font-black text-xl tracking-wide flex items-center justify-center gap-3 shadow-xl transition-all relative overflow-hidden ${(!table || isSending || cart.length === 0) ? 'bg-slate-700 text-slate-500 cursor-not-allowed shadow-none border border-slate-600' : editingOrderId ? 'bg-blue-600 text-white hover:bg-blue-500 hover:scale-[1.01] shadow-blue-500/20' : 'bg-orange-500 text-white hover:bg-orange-600 hover:scale-[1.01] shadow-orange-500/20'}`}>
-                            {isSending ? <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div> : <><Send size={24}/> {editingOrderId ? 'AGGIORNA COMANDA' : 'INVIA IN CUCINA'}</>}
+                  <div className="p-4 bg-slate-800 border-t border-slate-700 pb-8 shrink-0">
+                       <button onClick={requestSendOrder} disabled={!table || isSending || cart.length === 0} className={`w-full py-5 h-20 rounded-2xl font-black text-2xl tracking-wide flex items-center justify-center gap-3 shadow-xl transition-all relative overflow-hidden active:scale-95 ${(!table || isSending || cart.length === 0) ? 'bg-slate-700 text-slate-500 cursor-not-allowed shadow-none border border-slate-600' : editingOrderId ? 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-500/20' : 'bg-orange-500 text-white hover:bg-orange-600 shadow-orange-500/20'}`}>
+                            {isSending ? <div className="animate-spin rounded-full h-8 w-8 border-b-4 border-white"></div> : <><Send size={28}/> {editingOrderId ? 'AGGIORNA' : 'INVIA IN CUCINA'}</>}
                             {!table && !isSending && <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-sm text-red-400 font-bold uppercase backdrop-blur-sm border-2 border-red-500/20 rounded-2xl">SELEZIONA PRIMA UN TAVOLO</div>}
                        </button>
                   </div>
