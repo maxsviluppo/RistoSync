@@ -6,9 +6,20 @@ export default defineConfig(({ mode }) => {
   // Carica le variabili d'ambiente ignorando i prefissi standard se necessario
   // (process as any) serve per evitare errori di tipo in alcuni ambienti Node strict
   const env = loadEnv(mode, (process as any).cwd(), '');
-  
+
   return {
     plugins: [react()],
+    build: {
+      chunkSizeWarningLimit: 1000, // Aumenta il limite a 1MB per evitare l'avviso
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            vendor: ['react', 'react-dom'], // Separa React in un chunk dedicato
+            ui: ['lucide-react'] // Separa le icone se pesanti
+          }
+        }
+      }
+    },
     define: {
       // Sostituzione sicura della stringa API_KEY durante la build
       'process.env.API_KEY': JSON.stringify(env.API_KEY || process.env.API_KEY || ''),
