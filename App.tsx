@@ -498,6 +498,24 @@ export default function App() {
 
   // 5. ROLE SELECTION (HOME)
   if (!role && !showAdmin) {
+    // PREPARE SUB TEXT
+    const planLabel = appSettings.restaurantProfile?.planType || 'Pro';
+    const isFreePlan = planLabel === 'Free' || planLabel === 'Demo';
+    
+    let subText = "Licenza Attiva";
+    let subColor = "text-emerald-400";
+
+    if (subscriptionExpired) {
+        subText = "Abbonamento Scaduto";
+        subColor = "text-red-500 animate-pulse";
+    } else if (daysRemaining !== null) {
+        subText = `${daysRemaining} Giorni Rimasti`;
+        if (daysRemaining <= 5) subColor = "text-orange-400";
+    } else if (isFreePlan) {
+        subText = "Versione Gratuita";
+        subColor = "text-blue-400";
+    }
+
     return (
       <div className="min-h-screen bg-slate-900 text-white p-6 flex flex-col font-sans relative overflow-hidden">
         {/* BACKGROUND EFFECTS */}
@@ -515,11 +533,14 @@ export default function App() {
                     <h1 className="text-4xl font-black tracking-tight flex items-center gap-2">
                         Risto<span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-500">Sync</span>
                         <span className="text-xs bg-slate-800 text-slate-400 px-2 py-1 rounded-md border border-slate-700 font-mono tracking-widest uppercase">
-                            {appSettings.restaurantProfile?.planType || 'Pro'}
+                            {planLabel}
                         </span>
                     </h1>
                     <p className="text-slate-400 font-medium text-sm mt-1 flex items-center gap-2">
                         {restaurantName} <span className="w-1 h-1 bg-slate-500 rounded-full"></span> {new Date().toLocaleDateString()}
+                    </p>
+                    <p className={`text-xs font-bold uppercase tracking-wider mt-1 ${subColor} flex items-center gap-1`}>
+                       {subscriptionExpired ? <AlertTriangle size={10}/> : <Clock size={10}/>} {subText}
                     </p>
                 </div>
             </div>
@@ -544,7 +565,7 @@ export default function App() {
             </div>
         </div>
 
-        {/* SUBSCRIPTION BANNER */}
+        {/* SUBSCRIPTION BANNER (ONLY FOR CRITICAL) */}
         {subscriptionExpired && (
             <div className="relative z-10 mb-8 bg-red-600/10 border border-red-500/30 p-4 rounded-2xl flex items-center justify-between animate-pulse">
                 <div className="flex items-center gap-3 text-red-400 font-bold">
