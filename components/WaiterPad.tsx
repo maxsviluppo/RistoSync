@@ -61,7 +61,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isSending, setIsSending] = useState(false); 
 
-  const prevOrdersRef = useRef<Order[]>([]);
   const waiterName = getWaiterName();
 
   const loadData = () => {
@@ -70,12 +69,11 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
         const fetchedMenu = getMenuItems() || [];
         const fetchedTables = getTableCount() || 12;
         
-        prevOrdersRef.current = fetchedOrders;
         setOrders(fetchedOrders);
         setMenuItems(fetchedMenu);
         setTableCount(fetchedTables);
     } catch (e) {
-        console.error("Critical Error loading WaiterPad data:", e);
+        console.error("Error loading WaiterPad data:", e);
     }
   };
 
@@ -84,8 +82,8 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
     const handleStorage = () => loadData();
     window.addEventListener('local-storage-update', handleStorage);
     window.addEventListener('local-menu-update', handleStorage);
-    // Refresh rapid to catch delays
-    const interval = setInterval(loadData, 2000); 
+    // Fast polling to update UI instantly
+    const interval = setInterval(loadData, 1000); 
     return () => {
       window.removeEventListener('local-storage-update', handleStorage);
       window.removeEventListener('local-menu-update', handleStorage);
@@ -105,6 +103,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
     const elapsedMinutes = (Date.now() - tableOrder.timestamp) / 60000;
     const isCritical = elapsedMinutes >= THRESHOLD_CRITICAL_MINUTES && tableOrder.status !== OrderStatus.READY;
 
+    // Determine Status
     const allItemsServed = (tableOrder.items || []).every(item => item.served);
     if (allItemsServed) return { status: 'completed', owner: tableOrder.waiterName, isCritical: false };
 
@@ -121,7 +120,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
     : null;
 
   const handleTableClick = (tableNum: string) => {
-    // Open immediately, no locks
+    // UNCONDITIONAL ACCESS - NO LOCKS
     setSelectedTable(tableNum);
     setCart([]);
     setView('tables');
@@ -174,17 +173,17 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
         if (cart.length === 0) return;
         setIsSending(true);
 
-        // Fetch fresh orders to be safe
+        // Fetch fresh orders to be absolutely sure
         const currentOrders = getOrders();
         const currentActiveOrder = currentOrders.find(o => o.tableNumber === selectedTable && o.status !== OrderStatus.DELIVERED);
 
         if (currentActiveOrder) {
-          // Add to existing order
-          // Simply update waiter name to current user to show who touched it last
-          currentActiveOrder.waiterName = waiterName || currentActiveOrder.waiterName || 'Staff';
+          // UPDATE EXISTING
+          // FORCE OWNERSHIP to current waiter to allow editing
+          currentActiveOrder.waiterName = waiterName || 'Staff'; 
           await updateOrderItems(currentActiveOrder.id, cart);
         } else {
-          // New Order
+          // CREATE NEW
           const randomSuffix = Math.random().toString(36).substring(2, 8);
           const newId = `order_${Date.now()}_${randomSuffix}`;
           
@@ -216,16 +215,19 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   };
 
   const handleFreeTable = () => {
-    if (selectedTable && confirm(`Liberare il Tavolo ${selectedTable}?`)) {
+    if (selectedTable && confirm(`Liberare il Tavolo ${selectedTable}? Tutti gli ordini verranno chiusi.`)) {
+        // AGGRESSIVE FREE - Works even if ownership doesn't match
         freeTable(selectedTable);
         setSelectedTable(null);
-        setTimeout(loadData, 100);
+        // Force refresh
+        setTimeout(loadData, 50);
+        setTimeout(loadData, 200);
     }
   };
 
   const handleServeItem = (orderId: string, itemIdx: number) => {
       serveItem(orderId, itemIdx);
-      // Optimistic local update
+      // Optimistic local update for speed
       const updatedOrders = [...orders];
       const order = updatedOrders.find(o => o.id === orderId);
       if (order && order.items[itemIdx]) {
@@ -368,7 +370,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                  {activeTableOrder && (
                                      <button onClick={handleFreeTable} className="flex-1 bg-orange-500 border-2 border-orange-400 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-[0_0_20px_rgba(249,115,22,0.4)] hover:bg-orange-600 transition-all flex flex-col items-center justify-center gap-2 hover:scale-[1.02]">
                                          <DoorOpen size={20} className="mb-1" />
-                                         <span className="text-[10px] leading-tight">Libera Tavolo</span>
+                                         <span className="text-[10px] leading-tight">LIBERA TAVOLO</span>
                                      </button>
                                  )}
                              </div>

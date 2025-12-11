@@ -65,7 +65,7 @@ export const saveOrders = (orders: Order[], skipSync = false) => {
 
 export const addOrder = async (order: Order) => {
     const orders = getOrders();
-    // Validate Waiter Name on Creation
+    // Ensure active waiter
     if (!order.waiterName) {
         order.waiterName = getWaiterName() || 'Staff';
     }
@@ -100,10 +100,10 @@ export const updateOrderItems = async (orderId: string, newItems: OrderItem[]) =
         order.items = [...existingItems, ...itemsToAdd];
         order.timestamp = Date.now();
         
-        // Ensure waiter name is consistent if updated by current user
+        // Always force update ownership to current waiter to prevent lockouts
         const currentWaiter = getWaiterName();
-        if (currentWaiter && order.waiterName !== currentWaiter) {
-            order.waiterName = currentWaiter; // Transfer ownership logic
+        if (currentWaiter) {
+            order.waiterName = currentWaiter; 
         }
 
         // Reopen order if needed
@@ -153,14 +153,12 @@ export const serveItem = (orderId: string, itemIndex: number) => {
     const order = orders.find(o => o.id === orderId);
     if (!order || !order.items[itemIndex]) return;
 
-    // Toggle served state or force true? Usually force true.
     order.items[itemIndex].served = true;
     
-    // Check if ALL items are served
     const allServed = order.items.every(i => i.served);
     if (allServed) {
          order.status = OrderStatus.DELIVERED;
-         order.timestamp = Date.now(); // Update timestamp for the "Green then Vanish" logic
+         order.timestamp = Date.now(); 
     }
 
     saveOrders(orders);
@@ -175,7 +173,8 @@ export const deleteHistoryByDate = (date: Date) => {
 export const freeTable = (tableNumber: string) => {
     const orders = getOrders();
     let updated = false;
-    // Iterate all orders for this table (might be multiples if buggy, clear all)
+    
+    // Aggressive cleanup: Find ANY order for this table that isn't DELIVERED and kill it.
     orders.forEach(o => {
         if (o.tableNumber === tableNumber && o.status !== OrderStatus.DELIVERED) {
             o.status = OrderStatus.DELIVERED;
@@ -183,12 +182,12 @@ export const freeTable = (tableNumber: string) => {
             updated = true;
         }
     });
-    if (updated) {
-        saveOrders(orders);
-    } else {
-        // Fallback: If no order found but UI thinks there is one, force a UI refresh event
-        window.dispatchEvent(new Event('local-storage-update'));
-    }
+    
+    // Force save even if we didn't find one locally (to sync with cloud later)
+    saveOrders(orders);
+    
+    // Hard UI Trigger
+    window.dispatchEvent(new Event('local-storage-update'));
 };
 
 // --- MENU MANAGEMENT ---
