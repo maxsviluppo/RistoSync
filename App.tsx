@@ -4,7 +4,7 @@ import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import DigitalMenu from './components/DigitalMenu';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, RefreshCw, Send, Printer, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, FileSpreadsheet, Image as ImageIcon, Upload, FileImage, ExternalLink, CreditCard, Banknote, Briefcase, Clock, Check, ListPlus, ArrowRightLeft, Code2, Cookie, Shield, Wrench, Download, CloudUpload, BookOpen, EyeOff, LayoutGrid, ArrowLeft, PlayCircle, ChevronDown, FileJson, Wallet, Crown, Zap, ShieldCheck as ShieldIcon, Trophy, Timer } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, RefreshCw, Send, Printer, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, FileSpreadsheet, Image as ImageIcon, Upload, FileImage, ExternalLink, CreditCard, Banknote, Briefcase, Clock, Check, ListPlus, ArrowRightLeft, Code2, Cookie, Shield, Wrench, Download, CloudUpload, BookOpen, EyeOff, LayoutGrid, ArrowLeft, PlayCircle, ChevronDown, FileJson, Wallet, Crown, Zap, ShieldCheck as ShieldIcon, Trophy, Timer, LifeBuoy } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate, performFactoryReset, deleteAllMenuItems, importDemoMenu } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { askChefAI, generateRestaurantAnalysis, generateDishDescription, generateDishIngredients } from './services/geminiService';
@@ -997,6 +997,32 @@ export default function App() {
                       </div>
                   )}
 
+                  {/* --- TAB: SUBSCRIPTION (RESTORED) --- */}
+                  {adminTab === 'subscription' && (
+                      <div className="max-w-4xl mx-auto animate-fade-in">
+                          <h2 className="text-3xl font-black text-white mb-8">Stato Abbonamento</h2>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              <div className={`p-8 rounded-3xl border relative overflow-hidden ${subscriptionExpired ? 'bg-red-900/20 border-red-500/50' : 'bg-emerald-900/20 border-emerald-500/50'}`}>
+                                  <div className="absolute top-0 right-0 p-6 opacity-10"><CreditCard size={120} className={subscriptionExpired ? 'text-red-500' : 'text-emerald-500'} /></div>
+                                  <div className="relative z-10">
+                                      <p className="text-sm font-bold uppercase tracking-widest mb-2 flex items-center gap-2">{subscriptionExpired ? <AlertTriangle className="text-red-500"/> : <Check className="text-emerald-500"/>} {subscriptionExpired ? 'Abbonamento Scaduto' : 'Abbonamento Attivo'}</p>
+                                      <h3 className="text-4xl font-black text-white mb-1">Piano {appSettings.restaurantProfile?.planType || 'Pro'}</h3>
+                                      <p className="text-slate-400 font-mono text-sm mb-6">Scadenza: {appSettings.restaurantProfile?.subscriptionEndDate ? new Date(appSettings.restaurantProfile.subscriptionEndDate).toLocaleDateString() : 'Illimitato'}</p>
+                                      {daysRemaining !== null && (<div className="bg-slate-900/50 rounded-xl p-4 border border-white/10 backdrop-blur-sm"><p className="text-slate-400 text-xs font-bold uppercase mb-1">Tempo Rimanente</p><p className="text-2xl font-black text-white">{daysRemaining} Giorni</p></div>)}
+                                  </div>
+                              </div>
+                              <div className="bg-slate-900 p-8 rounded-3xl border border-slate-800 flex flex-col justify-center">
+                                  <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><RefreshCw className="text-blue-500"/> Rinnovo Licenza</h3>
+                                  <p className="text-slate-400 text-sm mb-6">Per rinnovare o cambiare piano, effettua un bonifico alle coordinate sottostanti o contatta l'amministrazione.</p>
+                                  <div className="bg-slate-950 p-4 rounded-xl border border-slate-700 space-y-3">
+                                      <div><p className="text-[10px] font-bold text-slate-500 uppercase">IBAN</p><p className="font-mono text-white select-all">{adminIban}</p></div>
+                                      <div><p className="text-[10px] font-bold text-slate-500 uppercase">Intestatario</p><p className="text-white">{adminHolder}</p></div>
+                                  </div>
+                              </div>
+                          </div>
+                      </div>
+                  )}
+
                   {/* --- TAB: SHARE / QR (RESTORED & ENHANCED) --- */}
                   {adminTab === 'share' && (
                       <div className="flex flex-col xl:flex-row gap-8 pb-20 animate-fade-in">
@@ -1107,6 +1133,19 @@ export default function App() {
                       </div>
                   )}
                   
+                  {/* --- TAB: INFO & SUPPORT (RESTORED) --- */}
+                  {adminTab === 'info' && (
+                      <div className="max-w-2xl mx-auto space-y-8 animate-fade-in pb-20 text-center">
+                          <div className="w-24 h-24 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-6 shadow-2xl border border-slate-700"><LifeBuoy size={48} className="text-blue-500" /></div>
+                          <div><h2 className="text-3xl font-black text-white mb-2">Supporto Clienti</h2><p className="text-slate-400">Hai bisogno di aiuto? Contattaci direttamente.</p></div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-left">
+                              <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 hover:border-slate-600 transition-colors"><Mail className="text-orange-500 mb-4" size={32} /><p className="text-xs font-bold text-slate-500 uppercase mb-1">Email Supporto</p><a href={`mailto:${adminContactEmail}`} className="text-lg font-bold text-white hover:underline">{adminContactEmail}</a></div>
+                              <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 hover:border-slate-600 transition-colors"><PhoneCall className="text-green-500 mb-4" size={32} /><p className="text-xs font-bold text-slate-500 uppercase mb-1">Telefono / WhatsApp</p><a href={`tel:${adminPhone}`} className="text-lg font-bold text-white hover:underline">{adminPhone}</a></div>
+                          </div>
+                          <div className="bg-slate-900/50 p-6 rounded-2xl border border-slate-800 text-left"><h3 className="text-sm font-bold text-white uppercase mb-4 flex items-center gap-2"><ShieldCheck size={16}/> Informazioni Legali & Privacy</h3><div className="space-y-2 text-xs text-slate-400"><p>RistoSync AI è un software SaaS per la gestione della ristorazione.</p><p>Versione: 2.5.0 (Stable)</p><div className="flex gap-4 mt-4 pt-4 border-t border-slate-800"><button className="text-blue-400 hover:underline">Termini di Servizio</button><button className="text-blue-400 hover:underline">Privacy Policy</button></div></div></div>
+                      </div>
+                  )}
+
                   {/* --- TAB: PROFILE (RESTORED) --- */}
                   {adminTab === 'profile' && (
                       <div className="max-w-4xl mx-auto animate-fade-in">
