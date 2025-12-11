@@ -283,6 +283,8 @@ export default function App() {
       }
   }, [showAdmin]); 
 
+  // --- HANDLERS ---
+
   const handleSettingsUpdate = () => {
       const updated = getAppSettings();
       setAppSettingsState(updated);
@@ -319,7 +321,7 @@ export default function App() {
       if (newProfile.name) { setRestaurantName(newProfile.name); } 
       alert("Profilo aggiornato con successo!"); 
   };
-
+  
   const handleWaiterLogin = (e: React.FormEvent) => {
       e.preventDefault();
       if(waiterNameInput.trim()) {
@@ -329,17 +331,75 @@ export default function App() {
       }
   };
 
-  if (publicMenuId) {
-      return <DigitalMenu restaurantId={publicMenuId} />;
-  }
+  // MENU MANAGER HANDLERS
+  const handleSaveItem = () => {
+      if (!editingItem.name || !editingItem.price) { alert("Nome e Prezzo obbligatori."); return; }
+      if (isEditingItem) { updateMenuItem(editingItem as MenuItem); } 
+      else { addMenuItem({ ...editingItem, id: Date.now().toString() } as MenuItem); }
+      setMenuItems(getMenuItems()); setEditingItem({}); setIsEditingItem(false);
+  };
+  const handleDeleteItem = () => {
+      if (itemToDelete) { deleteMenuItem(itemToDelete.id); setMenuItems(getMenuItems()); setItemToDelete(null); }
+  };
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          const reader = new FileReader();
+          reader.onloadend = () => { setEditingItem(prev => ({ ...prev, image: reader.result as string })); };
+          reader.readAsDataURL(file);
+      }
+  };
+  const toggleAllergen = (alg: string) => {
+      setEditingItem(prev => {
+          const current = prev.allergens || [];
+          return { ...prev, allergens: current.includes(alg) ? current.filter(a => a !== alg) : [...current, alg] };
+      });
+  };
 
-  if (loadingSession) {
-      return <div className="min-h-screen bg-slate-900 flex items-center justify-center"><Loader className="animate-spin text-orange-500" size={48} /></div>;
-  }
+  // SHARE HANDLERS
+  const digitalMenuLink = session?.user?.id ? `${window.location.origin}?menu=${session.user.id}` : '';
+  const qrCodeUrl = digitalMenuLink ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(digitalMenuLink)}` : '';
+  const copyToClipboard = () => { navigator.clipboard.writeText(digitalMenuLink); alert("Link copiato!"); };
 
-  if (!session) {
-      return <AuthScreen />;
-  }
+  // AI HANDLERS
+  const handleSaveApiKey = async () => { await saveGoogleApiKey(apiKeyInput); alert("Chiave API salvata!"); };
+  const handleGenerateDesc = async () => {
+      if (!editingItem.name) { alert("Inserisci prima il nome del piatto."); return; }
+      setIsGeneratingDesc(true);
+      const desc = await generateDishDescription(editingItem.name, editingItem.ingredients || '');
+      if (desc) setEditingItem(prev => ({ ...prev, description: desc }));
+      setIsGeneratingDesc(false);
+  };
+  const handleGenerateIngr = async () => {
+      if (!editingItem.name) { alert("Inserisci prima il nome del piatto."); return; }
+      setIsGeneratingIngr(true);
+      const ingr = await generateDishIngredients(editingItem.name);
+      if (ingr) setEditingItem(prev => ({ ...prev, ingredients: ingr }));
+      setIsGeneratingIngr(false);
+  };
+
+  // NOTIFICATION HANDLERS
+  const handleDestinationChange = (cat: Category, dept: Department) => {
+      const newDestinations = { ...tempDestinations, [cat]: dept };
+      setTempDestinations(newDestinations);
+      setHasUnsavedDestinations(true);
+  };
+  const handlePrintToggle = (key: string) => {
+      const newSettings = { ...tempPrintSettings, [key]: !tempPrintSettings[key] };
+      setTempPrintSettings(newSettings);
+      setHasUnsavedDestinations(true);
+  };
+  const saveDestinations = async () => {
+      const newSettings = { ...appSettings, categoryDestinations: tempDestinations, printEnabled: tempPrintSettings };
+      await saveAppSettings(newSettings);
+      setAppSettingsState(newSettings);
+      setHasUnsavedDestinations(false);
+      alert("Configurazione Reparti salvata!");
+  };
+
+  if (publicMenuId) { return <DigitalMenu restaurantId={publicMenuId} />; }
+  if (loadingSession) { return <div className="min-h-screen bg-slate-900 flex items-center justify-center"><Loader className="animate-spin text-orange-500" size={48} /></div>; }
+  if (!session) { return <AuthScreen />; }
 
   return (
     <div className="min-h-screen bg-slate-900 font-sans text-white">
@@ -373,7 +433,96 @@ export default function App() {
                     {/* CONTENT AREA */}
                     <div className="flex-1 overflow-y-auto bg-slate-950 p-8 custom-scroll relative">
                         
-                        {/* PROFILE TAB */}
+                        {/* 1. MENU MANAGER TAB */}
+                        {adminTab === 'menu' && (
+                            <div className="animate-fade-in pb-20">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h3 className="text-xl font-bold text-white flex items-center gap-2"><Utensils className="text-orange-500"/> Gestione Menu</h3>
+                                    <div className="flex gap-2">
+                                        <button onClick={importDemoMenu} className="px-4 py-2 bg-slate-800 text-slate-300 hover:text-white rounded-xl text-xs font-bold border border-slate-700">Importa Demo</button>
+                                        <button onClick={() => { setEditingItem({}); setIsEditingItem(false); }} className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg"><Plus size={18}/> Nuovo Piatto</button>
+                                    </div>
+                                </div>
+                                {/* EDIT FORM */}
+                                { (isEditingItem || Object.keys(editingItem).length > 0) && (
+                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 mb-8 animate-slide-up shadow-xl">
+                                        <div className="flex justify-between items-center mb-4"><h4 className="font-bold text-lg">{isEditingItem ? 'Modifica Piatto' : 'Nuovo Piatto'}</h4><button onClick={() => { setEditingItem({}); setIsEditingItem(false); }} className="text-slate-500 hover:text-white"><X size={20}/></button></div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div className="md:col-span-2 flex gap-4 items-start">
+                                                <div className="w-24 h-24 bg-slate-800 rounded-xl border border-slate-700 flex items-center justify-center relative overflow-hidden group shrink-0">
+                                                    {editingItem.image ? <img src={editingItem.image} className="w-full h-full object-cover"/> : <ImageIcon size={24} className="text-slate-500"/>}
+                                                    <input type="file" ref={fileInputRef} onChange={handleImageUpload} className="hidden" accept="image/*"/>
+                                                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" onClick={() => fileInputRef.current?.click()}><Upload size={20} className="text-white"/></div>
+                                                </div>
+                                                <div className="flex-1 space-y-4">
+                                                    <input type="text" placeholder="Nome Piatto" value={editingItem.name || ''} onChange={e => setEditingItem({ ...editingItem, name: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-bold"/>
+                                                    <div className="flex gap-2">
+                                                        <select value={editingItem.category || Category.ANTIPASTI} onChange={e => setEditingItem({ ...editingItem, category: e.target.value as Category })} className="bg-slate-950 border border-slate-700 rounded-xl p-3 text-white flex-1">{Object.values(Category).map(c => <option key={c} value={c}>{c}</option>)}</select>
+                                                        <input type="number" placeholder="Prezzo" value={editingItem.price || ''} onChange={e => setEditingItem({ ...editingItem, price: parseFloat(e.target.value) })} className="w-24 bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-bold text-right"/>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <label className="text-xs font-bold text-slate-500 uppercase mb-1 flex justify-between">Ingredienti {isGeneratingIngr && <span className="text-orange-400 animate-pulse">Generazione...</span>} {!isGeneratingIngr && <button onClick={handleGenerateIngr} className="text-orange-400 hover:text-orange-300 flex items-center gap-1"><Sparkles size={10}/> AI Generate</button>}</label>
+                                                <input type="text" placeholder="Es. Pomodoro, Mozzarella, Basilico" value={editingItem.ingredients || ''} onChange={e => setEditingItem({ ...editingItem, ingredients: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm"/>
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <label className="text-xs font-bold text-slate-500 uppercase mb-1 flex justify-between">Descrizione {isGeneratingDesc && <span className="text-blue-400 animate-pulse">Scrittura...</span>} {!isGeneratingDesc && <button onClick={handleGenerateDesc} className="text-blue-400 hover:text-blue-300 flex items-center gap-1"><Sparkles size={10}/> AI Generate</button>}</label>
+                                                <textarea placeholder="Descrizione accattivante per il menu..." value={editingItem.description || ''} onChange={e => setEditingItem({ ...editingItem, description: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm h-20"/>
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Allergeni</label>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {ALLERGENS_CONFIG.map(alg => (
+                                                        <button key={alg.id} onClick={() => toggleAllergen(alg.id)} className={`px-3 py-1.5 rounded-lg border text-xs font-bold flex items-center gap-2 transition-all ${editingItem.allergens?.includes(alg.id) ? 'bg-orange-500/20 border-orange-500 text-orange-400' : 'bg-slate-950 border-slate-700 text-slate-400 hover:border-slate-500'}`}>
+                                                            <alg.icon size={12}/> {alg.label}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button onClick={handleSaveItem} className="w-full mt-6 bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-xl shadow-lg">SALVA PIATTO</button>
+                                    </div>
+                                )}
+                                {/* MENU LIST */}
+                                <div className="space-y-6">
+                                    {ADMIN_CATEGORY_ORDER.map(cat => {
+                                        const items = menuItems.filter(i => i.category === cat);
+                                        if (items.length === 0) return null;
+                                        return (
+                                            <div key={cat} className="bg-slate-900/50 rounded-2xl p-4 border border-slate-800">
+                                                <h4 className="text-slate-400 font-bold uppercase text-xs mb-3 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-orange-500"></div> {cat}</h4>
+                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                                                    {items.map(item => (
+                                                        <div key={item.id} className="bg-slate-900 p-3 rounded-xl border border-slate-700 flex justify-between items-center group hover:border-slate-600 transition-colors">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center overflow-hidden">{item.image ? <img src={item.image} className="w-full h-full object-cover"/> : <Utensils size={16} className="text-slate-600"/>}</div>
+                                                                <div><div className="font-bold text-sm">{item.name}</div><div className="text-xs text-slate-500">€ {item.price.toFixed(2)}</div></div>
+                                                            </div>
+                                                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                                <button onClick={() => { setEditingItem(item); setIsEditingItem(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="p-2 bg-blue-600/20 text-blue-400 rounded-lg hover:bg-blue-600 hover:text-white"><Edit2 size={14}/></button>
+                                                                <button onClick={() => setItemToDelete(item)} className="p-2 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600 hover:text-white"><Trash2 size={14}/></button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                                {itemToDelete && (
+                                    <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4">
+                                        <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-sm text-center">
+                                            <h3 className="text-xl font-bold text-white mb-2">Eliminare {itemToDelete.name}?</h3>
+                                            <p className="text-slate-400 text-sm mb-6">L'azione è irreversibile.</p>
+                                            <div className="flex gap-3"><button onClick={() => setItemToDelete(null)} className="flex-1 py-3 bg-slate-800 rounded-xl font-bold">Annulla</button><button onClick={handleDeleteItem} className="flex-1 py-3 bg-red-600 hover:bg-red-500 rounded-xl font-bold text-white">Elimina</button></div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* 2. PROFILE TAB (Existing Code) */}
                         {adminTab === 'profile' && (
                             <div className="max-w-2xl mx-auto pb-20 animate-fade-in">
                                 <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Store className="text-slate-400"/> Dati Attività & Configurazione</h3>
@@ -424,12 +573,170 @@ export default function App() {
                             </div>
                         )}
 
-                        {/* OTHER TABS OMITTED FOR BREVITY - PREVIOUS LOGIC SHOULD BE RESTORED IF NEEDED */}
-                        {/* Placeholder for other tabs to ensure compile */}
-                        {adminTab !== 'profile' && (
-                            <div className="flex flex-col items-center justify-center h-full text-slate-500">
-                                <Wrench size={48} className="mb-4 opacity-50"/>
-                                <p>Sezione {adminTab} in manutenzione (Ripristinare codice completo se necessario)</p>
+                        {/* 3. NOTIFICATION & DEPARTMENTS TAB */}
+                        {adminTab === 'notif' && (
+                            <div className="max-w-2xl mx-auto space-y-8 pb-20 animate-fade-in">
+                                {/* DEPARTMENTS CONFIG */}
+                                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                                    <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><ArrowRightLeft className="text-purple-500"/> Smistamento Reparti</h3>
+                                    <p className="text-slate-400 text-sm mb-6">Decidi in quale monitor inviare gli ordini per ogni categoria.</p>
+                                    <div className="space-y-4">
+                                        {ADMIN_CATEGORY_ORDER.map(cat => (
+                                            <div key={cat} className="flex items-center justify-between p-3 bg-slate-950 rounded-xl border border-slate-800">
+                                                <span className="font-bold text-sm text-slate-300">{cat}</span>
+                                                <select 
+                                                    value={tempDestinations[cat] || 'Cucina'} 
+                                                    onChange={(e) => {
+                                                        const newDest = { ...tempDestinations, [cat]: e.target.value as Department };
+                                                        setTempDestinations(newDest);
+                                                        setHasUnsavedDestinations(true);
+                                                    }}
+                                                    className="bg-slate-800 text-white text-xs font-bold py-2 px-3 rounded-lg border border-slate-700 outline-none"
+                                                >
+                                                    <option value="Cucina">Cucina</option>
+                                                    <option value="Pizzeria">Pizzeria</option>
+                                                    <option value="Pub">Pub / Bar</option>
+                                                    <option value="Sala">Sala (Auto)</option>
+                                                </select>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                {/* PRINT CONFIG */}
+                                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                                    <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Printer className="text-blue-500"/> Stampa Scontrini (Beta)</h3>
+                                    <div className="space-y-3">
+                                        {Object.keys(tempPrintSettings).map(key => (
+                                            <div key={key} className="flex items-center justify-between p-3 bg-slate-950 rounded-xl border border-slate-800">
+                                                <span className="font-bold text-sm text-slate-300">Stampa in {key}</span>
+                                                <button 
+                                                    onClick={() => {
+                                                        const newSettings = { ...tempPrintSettings, [key]: !tempPrintSettings[key] };
+                                                        setTempPrintSettings(newSettings);
+                                                        setHasUnsavedDestinations(true);
+                                                    }}
+                                                    className={`w-12 h-6 rounded-full p-1 transition-colors ${tempPrintSettings[key] ? 'bg-green-600' : 'bg-slate-700'}`}
+                                                >
+                                                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${tempPrintSettings[key] ? 'translate-x-6' : ''}`}></div>
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                {hasUnsavedDestinations && (
+                                    <div className="sticky bottom-6"><button onClick={async () => {
+                                        const newSettings = { ...appSettings, categoryDestinations: tempDestinations, printEnabled: tempPrintSettings };
+                                        await saveAppSettings(newSettings);
+                                        setAppSettingsState(newSettings);
+                                        setHasUnsavedDestinations(false);
+                                        alert("Configurazione salvata!");
+                                    }} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 rounded-xl shadow-lg animate-bounce flex items-center justify-center gap-2"><Save size={20}/> SALVA MODIFICHE</button></div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* 4. ANALYTICS TAB */}
+                        {adminTab === 'analytics' && (
+                            <div className="space-y-6 pb-20 animate-fade-in">
+                                <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                                    <div><h3 className="text-xl font-bold text-white">Report Giornaliero</h3><p className="text-slate-400 text-sm">Analisi incassi e performance.</p></div>
+                                    <div className="flex items-center bg-slate-950 rounded-xl p-1 border border-slate-700">
+                                        <button onClick={() => setSelectedDate(d => { const n = new Date(d); n.setDate(n.getDate()-1); return n; })} className="p-3 hover:bg-slate-800 rounded-lg"><ChevronLeft/></button>
+                                        <div className="px-6 font-bold text-white flex items-center gap-2"><Calendar size={18} className="text-emerald-500"/> {selectedDate.toLocaleDateString()}</div>
+                                        <button onClick={() => setSelectedDate(d => { const n = new Date(d); n.setDate(n.getDate()+1); return n; })} className="p-3 hover:bg-slate-800 rounded-lg"><ChevronRight/></button>
+                                    </div>
+                                </div>
+                                {/* STATS CARDS */}
+                                {(() => {
+                                    const dailyOrders = ordersForAnalytics.filter(o => {
+                                        const d = new Date(o.createdAt || o.timestamp);
+                                        return d.getDate() === selectedDate.getDate() && d.getMonth() === selectedDate.getMonth() && d.getFullYear() === selectedDate.getFullYear() && o.status === OrderStatus.DELIVERED;
+                                    });
+                                    const revenue = dailyOrders.reduce((acc, o) => acc + o.items.reduce((sum, i) => sum + (i.menuItem.price * i.quantity), 0), 0);
+                                    const totalDishes = dailyOrders.reduce((acc, o) => acc + o.items.reduce((sum, i) => sum + i.quantity, 0), 0);
+                                    const avgOrder = dailyOrders.length ? (revenue / dailyOrders.length) : 0;
+                                    
+                                    return (
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 relative overflow-hidden"><div className="absolute top-0 right-0 p-4 opacity-10"><DollarSign size={80} className="text-emerald-500"/></div><p className="text-slate-400 text-xs font-bold uppercase mb-2">Incasso Totale</p><p className="text-4xl font-black text-white">€ {revenue.toFixed(2)}</p></div>
+                                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 relative overflow-hidden"><div className="absolute top-0 right-0 p-4 opacity-10"><Receipt size={80} className="text-blue-500"/></div><p className="text-slate-400 text-xs font-bold uppercase mb-2">Scontrini Emessi</p><p className="text-4xl font-black text-white">{dailyOrders.length}</p></div>
+                                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 relative overflow-hidden"><div className="absolute top-0 right-0 p-4 opacity-10"><TrendingUp size={80} className="text-purple-500"/></div><p className="text-slate-400 text-xs font-bold uppercase mb-2">Scontrino Medio</p><p className="text-4xl font-black text-white">€ {avgOrder.toFixed(2)}</p></div>
+                                            
+                                            <div className="col-span-full bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                                                <div className="flex justify-between items-center mb-4"><h4 className="font-bold flex items-center gap-2"><Sparkles className="text-pink-500"/> Analisi AI Manager</h4><button onClick={async () => { setIsAnalyzing(true); const res = await generateRestaurantAnalysis({ totalRevenue: revenue, totalItems: totalDishes, topDishes: [], avgWait: 25 }, selectedDate.toLocaleDateString()); setAiAnalysisResult(res); setIsAnalyzing(false); }} className="px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-lg text-xs font-bold shadow-lg flex items-center gap-2">{isAnalyzing ? <Loader className="animate-spin" size={14}/> : <Bot size={14}/>} Genera Analisi</button></div>
+                                                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-sm leading-relaxed text-slate-300 min-h-[80px]">{aiAnalysisResult || 'Clicca su "Genera Analisi" per ricevere consigli dal tuo AI Manager.'}</div>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        )}
+
+                        {/* 5. AI INTELLIGENCE TAB */}
+                        {adminTab === 'ai' && (
+                            <div className="max-w-xl mx-auto space-y-8 pb-20 animate-fade-in text-center">
+                                <div className="w-20 h-20 bg-pink-500/20 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse"><Sparkles size={40} className="text-pink-500"/></div>
+                                <h3 className="text-2xl font-black text-white">Gemini AI Intelligence</h3>
+                                <p className="text-slate-400">Inserisci la tua API Key di Google Gemini per abilitare:<br/>- Generazione descrizioni piatti<br/>- Analisi incassi giornaliera<br/>- Chat Assistant per i camerieri</p>
+                                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 text-left">
+                                    <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Google Gemini API Key</label>
+                                    <div className="flex gap-2">
+                                        <div className="relative flex-1">
+                                            <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
+                                            <input type="password" value={apiKeyInput} onChange={e => setApiKeyInput(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-10 pr-4 text-white font-mono" placeholder="AIza..."/>
+                                        </div>
+                                        <button onClick={async () => { await saveGoogleApiKey(apiKeyInput); alert("Key Salvata!"); }} className="bg-pink-600 hover:bg-pink-500 text-white px-6 rounded-xl font-bold shadow-lg">Salva</button>
+                                    </div>
+                                    <p className="text-[10px] text-slate-500 mt-4">La chiave viene salvata nel database sicuro di RistoSync. Non condividerla con nessuno.</p>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 6. SHARE / QR CODE TAB */}
+                        {adminTab === 'share' && (
+                            <div className="max-w-md mx-auto text-center space-y-8 pb-20 animate-fade-in">
+                                <div><h3 className="text-2xl font-black text-white mb-2">Menu Digitale</h3><p className="text-slate-400 text-sm">Fai scansionare questo QR Code ai clienti.</p></div>
+                                <div className="bg-white p-6 rounded-3xl shadow-2xl inline-block mx-auto">
+                                    {qrCodeUrl ? <img src={qrCodeUrl} alt="Menu QR" className="w-64 h-64 mix-blend-multiply"/> : <div className="w-64 h-64 flex items-center justify-center bg-slate-100 text-slate-400 text-xs">QR non disponibile</div>}
+                                </div>
+                                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 text-left space-y-4">
+                                    <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Link Pubblico</label><div className="flex gap-2"><input type="text" value={digitalMenuLink} readOnly className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-slate-400 text-xs font-mono"/><button onClick={copyToClipboard} className="p-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl border border-slate-700"><Copy size={16}/></button></div></div>
+                                    <button onClick={() => window.open(digitalMenuLink, '_blank')} className="w-full py-4 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2"><ExternalLink size={20}/> APRI MENU DIGITALE</button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 7. SUBSCRIPTION TAB (Basic Info) */}
+                        {adminTab === 'subscription' && (
+                            <div className="max-w-2xl mx-auto space-y-6 pb-20 animate-fade-in">
+                                <div className="bg-gradient-to-br from-green-900/50 to-slate-900 p-8 rounded-3xl border border-green-500/30 text-center relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-6 opacity-10"><CreditCard size={120} className="text-green-500"/></div>
+                                    <p className="text-green-400 font-bold uppercase tracking-widest text-xs mb-2">Il tuo piano</p>
+                                    <h3 className="text-4xl font-black text-white mb-4">{appSettings.restaurantProfile?.planType || 'Pro'}</h3>
+                                    <p className="text-slate-300 mb-8">Scadenza: <span className="text-white font-bold">{appSettings.restaurantProfile?.subscriptionEndDate ? new Date(appSettings.restaurantProfile.subscriptionEndDate).toLocaleDateString() : 'Illimitata'}</span></p>
+                                    <div className="inline-flex items-center gap-2 bg-slate-900/50 px-4 py-2 rounded-lg border border-white/10 text-sm"><Info size={14}/> Per rinnovare contatta l'amministrazione.</div>
+                                </div>
+                                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                                    <h4 className="font-bold text-white mb-4">Metodi di Pagamento</h4>
+                                    <p className="text-sm text-slate-400 mb-4">Effettua il bonifico alle seguenti coordinate:</p>
+                                    <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2 font-mono text-sm">
+                                        <div className="flex justify-between"><span className="text-slate-500">IBAN:</span> <span className="text-white">{adminIban}</span></div>
+                                        <div className="flex justify-between"><span className="text-slate-500">Beneficiario:</span> <span className="text-white">{adminHolder}</span></div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* 8. INFO TAB */}
+                        {adminTab === 'info' && (
+                            <div className="max-w-xl mx-auto text-center space-y-8 pb-20 animate-fade-in">
+                                <div className="w-24 h-24 bg-slate-800 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-xl"><ChefHat size={48} className="text-orange-500"/></div>
+                                <div><h3 className="text-3xl font-black text-white">RistoSync AI</h3><p className="text-slate-400 mt-2">Versione 2.5.0 (Cloud Sync)</p></div>
+                                <div className="grid grid-cols-2 gap-4 text-left">
+                                    <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800"><h4 className="font-bold text-white mb-2">Supporto Tecnico</h4><p className="text-sm text-slate-400">{adminContactEmail}</p><p className="text-sm text-slate-400 mt-1">{adminPhone}</p></div>
+                                    <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800"><h4 className="font-bold text-white mb-2">Link Utili</h4><a href="#" className="text-sm text-blue-400 hover:underline block">Manuale Utente</a><a href="#" className="text-sm text-blue-400 hover:underline block mt-1">Termini di Servizio</a></div>
+                                </div>
+                                <div className="pt-8 border-t border-slate-800"><button onClick={() => setShowDeleteAllMenuModal(true)} className="text-red-500 hover:text-red-400 text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 mx-auto"><Trash2 size={14}/> Reset Totale Menu</button></div>
                             </div>
                         )}
                     </div>
@@ -440,6 +747,10 @@ export default function App() {
         {/* ROLE SELECTION */}
         {!role && !showAdmin && !isSuspended && !subscriptionExpired && (
             <div className="flex flex-col items-center justify-center min-h-screen p-6 relative overflow-hidden">
+                <style>{`
+                  @keyframes float { 0% { transform: translateY(0px) rotate(0deg); } 50% { transform: translateY(-15px) rotate(5deg); } 100% { transform: translateY(0px) rotate(0deg); } }
+                  .animate-float { animation: float 6s ease-in-out infinite; }
+                `}</style>
                 <div className="absolute top-0 left-0 w-full h-full bg-[url('https://images.unsplash.com/photo-1514362545857-3bc165497db5?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80')] bg-cover bg-center opacity-10 blur-xl"></div>
                 
                 {/* SETTINGS BUTTON TOP RIGHT */}
@@ -448,16 +759,21 @@ export default function App() {
                 </button>
 
                 <div className="relative z-10 text-center mb-10">
-                    <h1 className="text-5xl font-black text-white mb-2 tracking-tight">Risto<span className="text-orange-500">Sync</span></h1>
-                    <p className="text-xl text-slate-400 font-medium">{restaurantName}</p>
-                    <div className="mt-4 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-bold uppercase tracking-wider">
+                    {/* ANIMATED FLOATING ICON */}
+                    <div className="w-24 h-24 bg-gradient-to-br from-orange-400 to-orange-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-orange-500/30 animate-float transform rotate-3">
+                        <ChefHat size={48} className="text-white drop-shadow-md" />
+                    </div>
+                    
+                    <h1 className="text-6xl font-black text-white mb-2 tracking-tight drop-shadow-lg">Risto<span className="text-orange-500">Sync</span></h1>
+                    <p className="text-xl text-slate-300 font-medium tracking-wide">{restaurantName}</p>
+                    <div className="mt-6 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-bold uppercase tracking-wider backdrop-blur-sm">
                         <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div> Sistema Operativo
                     </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl relative z-10">
                     {/* KITCHEN BUTTON */}
-                    <button onClick={() => setRole('kitchen')} className="group relative overflow-hidden rounded-3xl bg-slate-800 border border-slate-700 p-8 hover:border-orange-500 transition-all duration-300 hover:shadow-[0_0_40px_rgba(249,115,22,0.15)] flex flex-col items-center gap-4 text-center">
+                    <button onClick={() => setRole('kitchen')} className="group relative overflow-hidden rounded-3xl bg-slate-800/80 backdrop-blur-md border border-slate-700 p-8 hover:border-orange-500 transition-all duration-300 hover:shadow-[0_0_40px_rgba(249,115,22,0.15)] flex flex-col items-center gap-4 text-center hover:-translate-y-1">
                         <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                         <div className="w-24 h-24 bg-slate-900 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform border border-slate-700 group-hover:border-orange-500/50 shadow-xl">
                             <ChefHat size={48} className="text-orange-500" />
@@ -469,7 +785,7 @@ export default function App() {
                     </button>
 
                     {/* WAITER BUTTON */}
-                    <button onClick={() => { if(getWaiterName()){ setRole('waiter'); } else { setShowLogin(true); } }} className="group relative overflow-hidden rounded-3xl bg-slate-800 border border-slate-700 p-8 hover:border-blue-500 transition-all duration-300 hover:shadow-[0_0_40px_rgba(59,130,246,0.15)] flex flex-col items-center gap-4 text-center">
+                    <button onClick={() => { if(getWaiterName()){ setRole('waiter'); } else { setShowLogin(true); } }} className="group relative overflow-hidden rounded-3xl bg-slate-800/80 backdrop-blur-md border border-slate-700 p-8 hover:border-blue-500 transition-all duration-300 hover:shadow-[0_0_40px_rgba(59,130,246,0.15)] flex flex-col items-center gap-4 text-center hover:-translate-y-1">
                         <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                         <div className="w-24 h-24 bg-slate-900 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform border border-slate-700 group-hover:border-blue-500/50 shadow-xl">
                             <Smartphone size={48} className="text-blue-500" />
@@ -481,7 +797,7 @@ export default function App() {
                     </button>
 
                     {/* PIZZERIA BUTTON */}
-                    <button onClick={() => setRole('pizzeria')} className="group relative overflow-hidden rounded-3xl bg-slate-800 border border-slate-700 p-8 hover:border-red-500 transition-all duration-300 hover:shadow-[0_0_40px_rgba(239,68,68,0.15)] flex flex-col items-center gap-4 text-center md:col-span-2 lg:col-span-1">
+                    <button onClick={() => setRole('pizzeria')} className="group relative overflow-hidden rounded-3xl bg-slate-800/80 backdrop-blur-md border border-slate-700 p-8 hover:border-red-500 transition-all duration-300 hover:shadow-[0_0_40px_rgba(239,68,68,0.15)] flex flex-col items-center gap-4 text-center md:col-span-2 lg:col-span-1 hover:-translate-y-1">
                         <div className="absolute inset-0 bg-gradient-to-br from-red-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                         <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform border border-slate-700 group-hover:border-red-500/50 shadow-xl">
                             <Pizza size={40} className="text-red-500" />
@@ -492,7 +808,7 @@ export default function App() {
                     </button>
 
                     {/* PUB BUTTON */}
-                    <button onClick={() => setRole('pub')} className="group relative overflow-hidden rounded-3xl bg-slate-800 border border-slate-700 p-8 hover:border-amber-500 transition-all duration-300 hover:shadow-[0_0_40px_rgba(245,158,11,0.15)] flex flex-col items-center gap-4 text-center md:col-span-2 lg:col-span-1">
+                    <button onClick={() => setRole('pub')} className="group relative overflow-hidden rounded-3xl bg-slate-800/80 backdrop-blur-md border border-slate-700 p-8 hover:border-amber-500 transition-all duration-300 hover:shadow-[0_0_40px_rgba(245,158,11,0.15)] flex flex-col items-center gap-4 text-center md:col-span-2 lg:col-span-1 hover:-translate-y-1">
                         <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                         <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform border border-slate-700 group-hover:border-amber-500/50 shadow-xl">
                             <Sandwich size={40} className="text-amber-500" />
@@ -527,6 +843,19 @@ export default function App() {
                         <input type="text" value={waiterNameInput} onChange={(e) => setWaiterNameInput(e.target.value)} placeholder="Nome Cameriere" className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-white text-center font-bold text-lg mb-4 focus:border-blue-500 outline-none transition-colors" autoFocus />
                         <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-600/20 active:scale-95 transition-all">INIZIA TURNO</button>
                     </form>
+                </div>
+            </div>
+        )}
+
+        {/* DELETE ALL CONFIRMATION MODAL */}
+        {showDeleteAllMenuModal && (
+            <div className="fixed inset-0 z-[70] bg-black/90 flex items-center justify-center p-6 animate-fade-in">
+                <div className="bg-slate-900 border border-red-600 rounded-3xl p-8 w-full max-w-sm text-center shadow-2xl shadow-red-900/50">
+                    <AlertTriangle size={48} className="text-red-500 mx-auto mb-4"/>
+                    <h3 className="text-2xl font-black text-white mb-2">Reset Totale Menu?</h3>
+                    <p className="text-slate-400 mb-6">Stai per cancellare TUTTI i piatti dal menu. Questa azione non può essere annullata.</p>
+                    <button onClick={async () => { await deleteAllMenuItems(); setMenuItems([]); setShowDeleteAllMenuModal(false); alert("Menu resettato."); }} className="w-full py-4 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl mb-3">CONFERMA RESET</button>
+                    <button onClick={() => setShowDeleteAllMenuModal(false)} className="w-full py-4 bg-slate-800 text-slate-400 font-bold rounded-xl">Annulla</button>
                 </div>
             </div>
         )}
