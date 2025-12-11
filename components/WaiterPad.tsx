@@ -190,10 +190,11 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
         setTimeout(() => loadData(), 100);
         
     } catch (error: any) {
-        // This catch block might not even be hit given the change in storageService,
-        // but just in case of catastrophic failure in local storage logic:
         console.error("Errore invio ordine:", error);
-        alert(`Errore locale: ${error.message}`);
+        // Alert is handled in storageService for QuotaExceeded, but fallback here
+        if (!error.message?.includes('quota')) {
+             alert(`Si è verificato un errore: ${error.message}`);
+        }
         setShowConfirmModal(false);
     } finally {
         setIsSending(false);

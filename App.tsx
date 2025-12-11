@@ -4,7 +4,7 @@ import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import DigitalMenu from './components/DigitalMenu';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, RefreshCw, Send, Printer, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, FileSpreadsheet, Image as ImageIcon, Upload, FileImage, ExternalLink, CreditCard, Banknote, Briefcase, Clock, Check, ListPlus, ArrowRightLeft, Code2, Cookie, Shield, Wrench, Download, CloudUpload, BookOpen, EyeOff, LayoutGrid, ArrowLeft, PlayCircle, ChevronDown, FileJson, Wallet, Crown, Zap, ShieldCheck as ShieldIcon } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, RefreshCw, Send, Printer, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, FileSpreadsheet, Image as ImageIcon, Upload, FileImage, ExternalLink, CreditCard, Banknote, Briefcase, Clock, Check, ListPlus, ArrowRightLeft, Code2, Cookie, Shield, Wrench, Download, CloudUpload, BookOpen, EyeOff, LayoutGrid, ArrowLeft, PlayCircle, ChevronDown, FileJson, Wallet, Crown, Zap, ShieldCheck as ShieldIcon, Trophy, Timer } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate, performFactoryReset, deleteAllMenuItems, importDemoMenu } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { askChefAI, generateRestaurantAnalysis, generateDishDescription, generateDishIngredients } from './services/geminiService';
@@ -65,9 +65,9 @@ export default function App() {
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false); 
   const [isGeneratingIngr, setIsGeneratingIngr] = useState(false);
   const [showDeleteAllMenuModal, setShowDeleteAllMenuModal] = useState(false);
-  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bulkInputRef = useRef<HTMLInputElement>(null);
+  const bulkImagesRef = useRef<HTMLInputElement>(null); // New Ref for Bulk Images
   
   // Analytics State
   const [ordersForAnalytics, setOrdersForAnalytics] = useState<Order[]>([]);
@@ -124,9 +124,13 @@ export default function App() {
                       return true;
                   }
                   if (expiry) {
-                      const days = Math.ceil((new Date(expiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                      const expiryDate = new Date(expiry);
+                      expiryDate.setHours(23, 59, 59, 999);
+                      const now = new Date();
+                      const diffTime = expiryDate.getTime() - now.getTime();
+                      const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                       setDaysRemaining(days);
-                      if (days < 0 && user.email !== SUPER_ADMIN_EMAIL) {
+                      if (diffTime < 0 && user.email !== SUPER_ADMIN_EMAIL) {
                           setSubscriptionExpired(true); return false; 
                       }
                   }
@@ -271,11 +275,6 @@ export default function App() {
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (file) {
-          const MAX_SIZE = 2 * 1024 * 1024; // 2MB Limit
-          if (file.size > MAX_SIZE) {
-              alert("⚠️ Immagine troppo grande (Max 2MB). Verrà compressa automaticamente.");
-          }
-
           const reader = new FileReader();
           reader.onloadend = () => {
               const img = new Image();
@@ -301,6 +300,69 @@ export default function App() {
               };
           };
           reader.readAsDataURL(file);
+      }
+  };
+
+  // --- NUOVA FUNZIONE IMPORT FOTO MASSIVO ---
+  const handleBulkImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (!e.target.files || e.target.files.length === 0) return;
+      const files = Array.from(e.target.files) as File[];
+      let updatedCount = 0;
+      const currentMenu = getMenuItems(); // Get fresh
+      let hasUpdates = false;
+
+      // Create a map for faster lookup: "carbonara" -> itemIndex
+      const menuMap = new Map();
+      currentMenu.forEach((item, index) => {
+          menuMap.set(item.name.toLowerCase().trim().replace(/[-_]/g, ' '), index);
+      });
+
+      for (const file of files) {
+          // Normalize filename: "Carbonara.jpg" -> "carbonara"
+          const cleanName = file.name.split('.')[0].toLowerCase().trim().replace(/[-_]/g, ' ');
+          
+          if (menuMap.has(cleanName)) {
+              const index = menuMap.get(cleanName);
+              
+              // Process Image
+              const reader = new FileReader();
+              await new Promise((resolve) => {
+                  reader.onload = (evt) => {
+                      const img = new Image();
+                      img.src = evt.target?.result as string;
+                      img.onload = () => {
+                          const canvas = document.createElement('canvas');
+                          const MAX_WIDTH = 800;
+                          let width = img.width;
+                          let height = img.height;
+                          if (width > MAX_WIDTH) {
+                              height *= MAX_WIDTH / width;
+                              width = MAX_WIDTH;
+                          }
+                          canvas.width = width;
+                          canvas.height = height;
+                          const ctx = canvas.getContext('2d');
+                          ctx?.drawImage(img, 0, 0, width, height);
+                          const resizedBase64 = canvas.toDataURL('image/jpeg', 0.6);
+                          
+                          // Update Item
+                          currentMenu[index].image = resizedBase64;
+                          updateMenuItem(currentMenu[index]); // This handles Cloud Sync internally per item
+                          updatedCount++;
+                          hasUpdates = true;
+                          resolve(null);
+                      }
+                  };
+                  reader.readAsDataURL(file);
+              });
+          }
+      }
+
+      if (hasUpdates) {
+          setMenuItems(getMenuItems()); // Refresh state
+          alert(`✅ Completato! Associate ${updatedCount} immagini ai piatti.`);
+      } else {
+          alert("⚠️ Nessuna immagine corrispondeva ai nomi dei piatti nel menu.");
       }
   };
 
@@ -367,14 +429,14 @@ export default function App() {
   };
 
   const handleDeleteAllMenu = async () => {
-      if (confirm("SEI SICURO? Cancellerai TUTTO il menu. Questa azione non è reversibile.")) {
+      if (confirm("🔴 ATTENZIONE: Stai per eliminare TUTTI i piatti dal menu.\n\nQuesta azione non è reversibile. Confermi?")) {
           await deleteAllMenuItems();
           setMenuItems([]);
           setShowDeleteAllMenuModal(false);
       }
   };
 
-  // --- ANALYTICS ---
+  // --- ANALYTICS METRICS ---
   const handleGenerateAnalysis = async () => {
       if (ordersForAnalytics.length === 0) {
           setAiAnalysisResult("Nessun dato disponibile per questa data.");
@@ -392,6 +454,30 @@ export default function App() {
       setIsAnalyzing(false);
   };
   
+  // Calculate Analytics Data
+  const analyticsData = useMemo(() => {
+      const dailyOrders = ordersForAnalytics.filter(o => {
+          const d = new Date(o.createdAt || o.timestamp);
+          return d.getDate() === selectedDate.getDate() && d.getMonth() === selectedDate.getMonth() && d.getFullYear() === selectedDate.getFullYear() && o.status === OrderStatus.DELIVERED;
+      });
+
+      const revenue = dailyOrders.reduce((acc, o) => acc + o.items.reduce((sum, i) => sum + (i.menuItem.price * i.quantity), 0), 0);
+      const totalDishes = dailyOrders.reduce((acc, o) => acc + o.items.reduce((sum, i) => sum + i.quantity, 0), 0);
+      const avgOrder = dailyOrders.length ? (revenue / dailyOrders.length) : 0;
+
+      // TOP ITEMS
+      const itemCounts: Record<string, number> = {};
+      dailyOrders.forEach(o => o.items.forEach(i => { itemCounts[i.menuItem.name] = (itemCounts[i.menuItem.name] || 0) + i.quantity; }));
+      const topItems = Object.entries(itemCounts).sort((a, b) => b[1] - a[1]).slice(0, 3);
+
+      // PEAK HOUR
+      const hourCounts: Record<number, number> = {};
+      dailyOrders.forEach(o => { const h = new Date(o.createdAt || o.timestamp).getHours(); hourCounts[h] = (hourCounts[h] || 0) + 1; });
+      const peakHour = Object.entries(hourCounts).sort((a, b) => b[1] - a[1])[0];
+
+      return { revenue, totalDishes, avgOrder, topItems, peakHour };
+  }, [ordersForAnalytics, selectedDate]);
+
   // --- SETTINGS & SHARE ---
   const handleSaveNotifSettings = () => {
       saveNotificationSettings(notifSettings);
@@ -448,7 +534,15 @@ export default function App() {
 
   const digitalMenuLink = session?.user?.id ? `${window.location.origin}?menu=${session.user.id}` : '';
   const qrCodeUrl = digitalMenuLink ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(digitalMenuLink)}` : '';
+  
   const copyToClipboard = () => { navigator.clipboard.writeText(digitalMenuLink); alert("Link copiato!"); };
+  const shareLink = () => {
+      if (navigator.share) {
+          navigator.share({ title: restaurantName, text: 'Guarda il nostro menu!', url: digitalMenuLink }).catch(console.error);
+      } else {
+          copyToClipboard();
+      }
+  };
 
   // RENDER LOGIC
 
@@ -733,27 +827,32 @@ export default function App() {
                                   <p className="text-slate-400">Aggiungi, modifica o rimuovi piatti dal tuo menu digitale.</p>
                               </div>
                               <div className="flex gap-3">
-                                  <button onClick={handlePrintQR} className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 border border-slate-700 transition-colors"><QrCode size={18}/> Stampa QR</button>
-                                  {/* Toggle Edit Form Button */}
-                                  <button onClick={() => { setEditingItem({}); setIsEditingItem(!isEditingItem); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-transform active:scale-95 ${isEditingItem ? 'bg-slate-700 text-white' : 'bg-orange-600 hover:bg-orange-500 text-white shadow-orange-600/20'}`}>
-                                      {isEditingItem ? <X size={20}/> : <Plus size={20}/>} {isEditingItem ? 'Chiudi' : 'Nuovo Piatto'}
+                                  {/* NEW DISH BUTTON RESTORED TO PROMINENT POSITION */}
+                                  <button onClick={() => { setEditingItem({}); setIsEditingItem(!isEditingItem); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-transform active:scale-95 ${isEditingItem ? 'bg-slate-700 text-white' : 'bg-green-600 hover:bg-green-500 text-white shadow-green-600/20'}`}>
+                                      {isEditingItem ? <X size={20}/> : <Plus size={20}/>} {isEditingItem ? 'Chiudi Editor' : 'NUOVO PIATTO'}
                                   </button>
                               </div>
                           </div>
                           
                           {/* QUICK ACTIONS ROW */}
-                          <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 flex gap-4 mb-8 overflow-x-auto no-scrollbar">
-                              <button onClick={() => bulkInputRef.current?.click()} className="flex items-center gap-2 bg-blue-600/20 text-blue-400 px-4 py-2 rounded-lg font-bold hover:bg-blue-600/30 transition-colors whitespace-nowrap"><Upload size={16}/> Importa JSON</button>
+                          <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 flex gap-4 mb-8 overflow-x-auto no-scrollbar items-center">
+                              <button onClick={() => bulkInputRef.current?.click()} className="flex items-center gap-2 bg-blue-600/20 text-blue-400 px-4 py-2 rounded-lg font-bold hover:bg-blue-600/30 transition-colors whitespace-nowrap text-xs"><Upload size={16}/> Importa JSON</button>
                               <input type="file" ref={bulkInputRef} onChange={handleBulkImport} accept=".json" className="hidden" />
-                              <button onClick={exportMenu} className="flex items-center gap-2 bg-green-600/20 text-green-400 px-4 py-2 rounded-lg font-bold hover:bg-green-600/30 transition-colors whitespace-nowrap"><Download size={16}/> Esporta JSON</button>
-                              <button onClick={importDemoMenu} className="flex items-center gap-2 bg-purple-600/20 text-purple-400 px-4 py-2 rounded-lg font-bold hover:bg-purple-600/30 transition-colors whitespace-nowrap"><Sparkles size={16}/> Carica Menu Demo</button>
-                              <button onClick={() => setShowDeleteAllMenuModal(true)} className="flex items-center gap-2 bg-red-600/20 text-red-400 px-4 py-2 rounded-lg font-bold hover:bg-red-600/30 transition-colors whitespace-nowrap ml-auto"><Trash2 size={16}/> Svuota Menu</button>
+                              
+                              <button onClick={() => bulkImagesRef.current?.click()} className="flex items-center gap-2 bg-pink-600/20 text-pink-400 px-4 py-2 rounded-lg font-bold hover:bg-pink-600/30 transition-colors whitespace-nowrap text-xs"><ImageIcon size={16}/> Importa Foto Massiva</button>
+                              <input type="file" ref={bulkImagesRef} onChange={handleBulkImageUpload} accept="image/*" multiple className="hidden" />
+
+                              <button onClick={exportMenu} className="flex items-center gap-2 bg-teal-600/20 text-teal-400 px-4 py-2 rounded-lg font-bold hover:bg-teal-600/30 transition-colors whitespace-nowrap text-xs"><Download size={16}/> Esporta JSON</button>
+                              
+                              <div className="flex-1"></div>
+                              
+                              <button onClick={() => setShowDeleteAllMenuModal(true)} className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-red-500 transition-colors whitespace-nowrap shadow-lg shadow-red-900/20 text-xs"><Trash2 size={16}/> ELIMINA TUTTO</button>
                           </div>
 
                           {/* EDITOR FORM (COMPACT & COLLAPSIBLE) */}
                           {(isEditingItem || Object.keys(editingItem).length > 0) && (
                               <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-2xl mb-10 relative overflow-hidden animate-slide-up">
-                                  <h3 className="font-bold text-white mb-4 flex items-center gap-2 text-lg"><Edit2 size={18}/> {editingItem.id ? 'Modifica Piatto' : 'Nuovo Piatto'}</h3>
+                                  <h3 className="font-bold text-white mb-4 flex items-center gap-2 text-lg"><Edit2 size={18}/> {editingItem.id ? 'Modifica Piatto' : 'Crea Nuovo Piatto'}</h3>
                                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                       {/* Column 1: Image & Basic Info */}
                                       <div className="space-y-4">
@@ -898,17 +997,23 @@ export default function App() {
                       </div>
                   )}
 
-                  {/* --- TAB: SHARE / QR (RESTORED) --- */}
+                  {/* --- TAB: SHARE / QR (RESTORED & ENHANCED) --- */}
                   {adminTab === 'share' && (
                       <div className="flex flex-col xl:flex-row gap-8 pb-20 animate-fade-in">
                           <div className="flex-1 space-y-8">
-                              <div><h3 className="text-2xl font-black text-white mb-2">Menu Digitale</h3><p className="text-slate-400 text-sm">Fai scansionare questo QR Code ai clienti.</p></div>
+                              <div><h3 className="text-2xl font-black text-white mb-2">Menu Digitale</h3><p className="text-slate-400 text-sm">Il tuo menu accessibile ovunque.</p></div>
                               <div className="bg-white p-6 rounded-3xl shadow-2xl inline-block mx-auto xl:mx-0">
                                   {qrCodeUrl ? <img src={qrCodeUrl} alt="Menu QR" className="w-64 h-64 mix-blend-multiply"/> : <div className="w-64 h-64 flex items-center justify-center bg-slate-100 text-slate-400 text-xs">QR non disponibile</div>}
                               </div>
                               <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 text-left space-y-4">
                                   <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Link Pubblico</label><div className="flex gap-2"><input type="text" value={digitalMenuLink} readOnly className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-slate-400 text-xs font-mono"/><button onClick={copyToClipboard} className="p-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl border border-slate-700"><Copy size={16}/></button></div></div>
-                                  <button onClick={() => window.open(digitalMenuLink, '_blank')} className="w-full py-4 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2"><ExternalLink size={20}/> APRI MENU DIGITALE</button>
+                                  
+                                  <div className="grid grid-cols-2 gap-3">
+                                      <button onClick={shareLink} className="py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2"><Share2 size={18}/> Condividi</button>
+                                      <button onClick={handlePrintQR} className="py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl border border-slate-700 flex items-center justify-center gap-2"><Printer size={18}/> Stampa QR</button>
+                                  </div>
+                                  
+                                  <button onClick={() => window.open(digitalMenuLink, '_blank')} className="w-full py-4 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2"><ExternalLink size={20}/> ANTEPRIMA LIVE</button>
                               </div>
                           </div>
                           <div className="flex-shrink-0 flex justify-center xl:justify-start">
@@ -942,7 +1047,7 @@ export default function App() {
                       </div>
                   )}
 
-                  {/* --- TAB: ANALYTICS (RESTORED) --- */}
+                  {/* --- TAB: ANALYTICS (ENHANCED) --- */}
                   {adminTab === 'analytics' && (
                       <div className="space-y-6 pb-20 animate-fade-in">
                           <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-slate-900 p-6 rounded-2xl border border-slate-800">
@@ -954,18 +1059,44 @@ export default function App() {
                               </div>
                           </div>
                           {(() => {
-                              const dailyOrders = ordersForAnalytics.filter(o => {
-                                  const d = new Date(o.createdAt || o.timestamp);
-                                  return d.getDate() === selectedDate.getDate() && d.getMonth() === selectedDate.getMonth() && d.getFullYear() === selectedDate.getFullYear() && o.status === OrderStatus.DELIVERED;
-                              });
-                              const revenue = dailyOrders.reduce((acc, o) => acc + o.items.reduce((sum, i) => sum + (i.menuItem.price * i.quantity), 0), 0);
-                              const totalDishes = dailyOrders.reduce((acc, o) => acc + o.items.reduce((sum, i) => sum + i.quantity, 0), 0);
-                              const avgOrder = dailyOrders.length ? (revenue / dailyOrders.length) : 0;
+                              const { revenue, totalDishes, avgOrder, topItems, peakHour } = analyticsData;
                               return (
                                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                      {/* METRIC CARDS */}
                                       <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 relative overflow-hidden"><div className="absolute top-0 right-0 p-4 opacity-10"><DollarSign size={80} className="text-emerald-500"/></div><p className="text-slate-400 text-xs font-bold uppercase mb-2">Incasso Totale</p><p className="text-4xl font-black text-white">€ {revenue.toFixed(2)}</p></div>
-                                      <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 relative overflow-hidden"><div className="absolute top-0 right-0 p-4 opacity-10"><Receipt size={80} className="text-blue-500"/></div><p className="text-slate-400 text-xs font-bold uppercase mb-2">Scontrini Emessi</p><p className="text-4xl font-black text-white">{dailyOrders.length}</p></div>
+                                      <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 relative overflow-hidden"><div className="absolute top-0 right-0 p-4 opacity-10"><Receipt size={80} className="text-blue-500"/></div><p className="text-slate-400 text-xs font-bold uppercase mb-2">Scontrini Emessi</p><p className="text-4xl font-black text-white">{totalDishes}</p></div>
                                       <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 relative overflow-hidden"><div className="absolute top-0 right-0 p-4 opacity-10"><TrendingUp size={80} className="text-purple-500"/></div><p className="text-slate-400 text-xs font-bold uppercase mb-2">Scontrino Medio</p><p className="text-4xl font-black text-white">€ {avgOrder.toFixed(2)}</p></div>
+                                      
+                                      {/* NEW METRICS: TOP ITEMS & PEAK HOUR */}
+                                      <div className="md:col-span-2 bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                                          <h4 className="text-sm font-bold text-white uppercase mb-4 flex items-center gap-2"><Trophy className="text-yellow-500"/> Piatti più Venduti</h4>
+                                          <div className="space-y-3">
+                                              {topItems.map(([name, count], i) => (
+                                                  <div key={i} className="flex items-center justify-between bg-slate-950 p-3 rounded-xl border border-slate-800">
+                                                      <div className="flex items-center gap-3">
+                                                          <span className={`w-6 h-6 flex items-center justify-center rounded font-bold text-xs ${i===0 ? 'bg-yellow-500 text-black' : 'bg-slate-800 text-slate-400'}`}>#{i+1}</span>
+                                                          <span className="font-bold text-white">{name}</span>
+                                                      </div>
+                                                      <span className="font-mono text-sm text-slate-400">{count} ordini</span>
+                                                  </div>
+                                              ))}
+                                              {topItems.length === 0 && <p className="text-slate-500 text-sm italic">Nessun dato.</p>}
+                                          </div>
+                                      </div>
+
+                                      <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                                          <h4 className="text-sm font-bold text-white uppercase mb-4 flex items-center gap-2"><Timer className="text-orange-500"/> Orario di Punta</h4>
+                                          <div className="flex items-center justify-center h-32">
+                                              {peakHour ? (
+                                                  <div className="text-center">
+                                                      <p className="text-5xl font-black text-white">{peakHour[0]}:00</p>
+                                                      <p className="text-slate-400 text-xs mt-2 uppercase font-bold">{peakHour[1]} Ordini registrati</p>
+                                                  </div>
+                                              ) : <p className="text-slate-500 text-sm italic">Nessun dato.</p>}
+                                          </div>
+                                      </div>
+
+                                      {/* AI ANALYSIS */}
                                       <div className="col-span-full bg-slate-900 p-6 rounded-2xl border border-slate-800">
                                           <div className="flex justify-between items-center mb-4"><h4 className="font-bold flex items-center gap-2"><Sparkles className="text-pink-500"/> Analisi AI Manager</h4><button onClick={handleGenerateAnalysis} className="px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-lg text-xs font-bold shadow-lg flex items-center gap-2">{isAnalyzing ? <Loader className="animate-spin" size={14}/> : <Bot size={14}/>} Genera Analisi</button></div>
                                           <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-sm leading-relaxed text-slate-300 min-h-[80px]">{aiAnalysisResult || 'Clicca su "Genera Analisi" per ricevere consigli dal tuo AI Manager.'}</div>

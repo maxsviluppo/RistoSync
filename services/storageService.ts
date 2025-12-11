@@ -36,6 +36,37 @@ const DEMO_MENU_ITEMS: MenuItem[] = [
 let currentUserId: string | null = null;
 let pollingInterval: any = null;
 
+// HELPER: SAFE STORAGE SAVE
+// Handles "QuotaExceededError" by cleaning up old delivered orders locally
+const safeLocalStorageSave = (key: string, value: string) => {
+    try {
+        localStorage.setItem(key, value);
+    } catch (e: any) {
+        if (e.name === 'QuotaExceededError' || e.message?.toLowerCase().includes('quota')) {
+            console.warn("⚠️ STORAGE FULL: Cleaning up old local history...");
+            
+            // If we are saving orders, try to trim the list
+            if (key === STORAGE_KEY) {
+                try {
+                    const orders = JSON.parse(value) as Order[];
+                    // Keep ONLY Active Orders + Delivered from last 6 hours locally to free space
+                    const cutoff = Date.now() - (6 * 60 * 60 * 1000);
+                    const streamlined = orders.filter(o => 
+                        o.status !== OrderStatus.DELIVERED || o.timestamp > cutoff
+                    );
+                    
+                    console.log(`Cleaned ${orders.length - streamlined.length} old orders from local cache.`);
+                    localStorage.setItem(key, JSON.stringify(streamlined));
+                    return; // Success after clean
+                } catch (cleanError) {
+                    console.error("Cleanup failed:", cleanError);
+                }
+            }
+            alert("⚠️ MEMORIA DISPOSITIVO PIENA. Impossibile salvare localmente. L'app continuerà a funzionare ma potresti perdere lo storico locale. Ricarica la pagina.");
+        }
+    }
+};
+
 // Initialize Realtime Subscription
 export const initSupabaseSync = async () => {
     if (!supabase) return;
@@ -53,7 +84,7 @@ export const initSupabaseSync = async () => {
         // 2. Sync Profile Settings (API KEY)
         const { data: profile } = await supabase.from('profiles').select('google_api_key').eq('id', currentUserId).single();
         if (profile?.google_api_key) {
-            localStorage.setItem(GOOGLE_API_KEY_STORAGE, profile.google_api_key);
+            safeLocalStorageSave(GOOGLE_API_KEY_STORAGE, profile.google_api_key);
         }
 
         // 3. Realtime Subscription (Robust Mode)
@@ -85,7 +116,7 @@ export const initSupabaseSync = async () => {
                 filter: `id=eq.${currentUserId}`
             }, (payload) => {
                 if (payload.new.settings) {
-                    localStorage.setItem(APP_SETTINGS_KEY, JSON.stringify(payload.new.settings));
+                    safeLocalStorageSave(APP_SETTINGS_KEY, JSON.stringify(payload.new.settings));
                     window.dispatchEvent(new Event('local-settings-update'));
                 }
             })
@@ -114,10 +145,16 @@ const handleSupabaseError = (error: any) => {
 
 const fetchFromCloud = async () => {
     if (!supabase || !currentUserId) return;
+    
+    // OPTIMIZATION: Only fetch Active orders OR items created in last 48 hours to save bandwidth/storage
+    const twoDaysAgo = new Date();
+    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+    
     const { data, error } = await supabase
         .from('orders')
         .select('*')
-        .eq('user_id', currentUserId);
+        .eq('user_id', currentUserId)
+        .or(`status.neq.${OrderStatus.DELIVERED},created_at.gt.${twoDaysAgo.toISOString()}`);
 
     if (error) {
         handleSupabaseError(error);
@@ -136,9 +173,8 @@ const fetchFromCloud = async () => {
         waiterName: row.waiter_name
     }));
 
-    // Update Local Cache - Only update if newer or different to prevent overwrite of local pending changes
-    // Simplified: Just update for now
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(appOrders));
+    // Update Local Cache using Safe Save
+    safeLocalStorageSave(STORAGE_KEY, JSON.stringify(appOrders));
     window.dispatchEvent(new Event('local-storage-update'));
 };
 
@@ -166,7 +202,7 @@ const fetchFromCloudMenu = async () => {
              specificDepartment: row.specific_department
          }));
 
-         localStorage.setItem(MENU_KEY, JSON.stringify(appMenuItems));
+         safeLocalStorageSave(MENU_KEY, JSON.stringify(appMenuItems));
          window.dispatchEvent(new Event('local-menu-update'));
     }
 };
@@ -175,7 +211,7 @@ const fetchSettingsFromCloud = async () => {
     if (!supabase || !currentUserId) return;
     const { data, error } = await supabase.from('profiles').select('settings').eq('id', currentUserId).single();
     if (!error && data?.settings) {
-        localStorage.setItem(APP_SETTINGS_KEY, JSON.stringify(data.settings));
+        safeLocalStorageSave(APP_SETTINGS_KEY, JSON.stringify(data.settings));
         window.dispatchEvent(new Event('local-settings-update'));
     }
 };
@@ -187,7 +223,7 @@ export const getOrders = (): Order[] => {
 };
 
 const saveLocallyAndNotify = (orders: Order[]) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(orders));
+    safeLocalStorageSave(STORAGE_KEY, JSON.stringify(orders));
     window.dispatchEvent(new Event('local-storage-update'));
 };
 
@@ -510,7 +546,7 @@ export const importDemoMenu = async () => {
     const newIds = DEMO_MENU_ITEMS.map(d => d.id);
     const existingFiltered = currentItems.filter(i => !newIds.includes(i.id));
     const finalMenu = [...existingFiltered, ...DEMO_MENU_ITEMS];
-    localStorage.setItem(MENU_KEY, JSON.stringify(finalMenu));
+    safeLocalStorageSave(MENU_KEY, JSON.stringify(finalMenu));
     window.dispatchEvent(new Event('local-menu-update'));
     alert("Menu Demo importato con successo!");
 };
@@ -521,7 +557,7 @@ export const getTableCount = (): number => {
 };
 
 export const saveTableCount = (count: number) => {
-    localStorage.setItem(TABLES_COUNT_KEY, count.toString());
+    safeLocalStorageSave(TABLES_COUNT_KEY, count.toString());
     window.dispatchEvent(new Event('local-storage-update'));
 };
 
@@ -567,15 +603,8 @@ const syncMenuToCloud = async (item: MenuItem, isDelete = false) => {
 };
 
 export const saveMenuItems = (items: MenuItem[]) => {
-    try {
-        localStorage.setItem(MENU_KEY, JSON.stringify(items));
-        window.dispatchEvent(new Event('local-menu-update'));
-    } catch (e) {
-        // CATCH LOCALSTORAGE QUOTA EXCEEDED
-        alert("⚠️ ERRORE MEMORIA: Impossibile salvare il menu. Le immagini sono troppo grandi. Prova a rimuovere alcune foto o usarne di più piccole.");
-        console.error("Storage limit reached", e);
-        throw e; // Re-throw to stop UI execution if needed
-    }
+    safeLocalStorageSave(MENU_KEY, JSON.stringify(items));
+    window.dispatchEvent(new Event('local-menu-update'));
 };
 
 export const addMenuItem = (item: MenuItem) => {
@@ -665,7 +694,7 @@ export const getAppSettings = (): AppSettings => {
 };
 
 export const saveAppSettings = async (settings: AppSettings) => {
-    localStorage.setItem(APP_SETTINGS_KEY, JSON.stringify(settings));
+    safeLocalStorageSave(APP_SETTINGS_KEY, JSON.stringify(settings));
     window.dispatchEvent(new Event('local-settings-update'));
     window.dispatchEvent(new Event('local-storage-update')); 
 
