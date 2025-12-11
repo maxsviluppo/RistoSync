@@ -207,11 +207,13 @@ const saveLocallyAndNotify = (orders: Order[]) => {
 };
 
 // HELPER: Sync individual order to Cloud
+// UPDATED: Now returns the error if any
 const syncOrderToCloud = async (order: Order, isDelete = false) => {
-    if (!supabase || !currentUserId) return;
+    if (!supabase || !currentUserId) return null;
     
     if (isDelete) {
-        await supabase.from('orders').delete().eq('id', order.id);
+        const { error } = await supabase.from('orders').delete().eq('id', order.id);
+        return error;
     } else {
         const payload = {
             id: order.id,
@@ -221,11 +223,10 @@ const syncOrderToCloud = async (order: Order, isDelete = false) => {
             items: order.items,
             timestamp: order.timestamp,
             waiter_name: order.waiterName
-            // Note: we don't sync createdAt manually as column is auto-generated, 
-            // but for updates it's fine.
         };
         const { error } = await supabase.from('orders').upsert(payload);
         if (error) console.error("Cloud Sync Error", error);
+        return error;
     }
 };
 
@@ -233,35 +234,36 @@ export const saveOrders = (orders: Order[]) => {
   saveLocallyAndNotify(orders);
 };
 
-export const addOrder = (order: Order) => {
+// UPDATED: Async to propagate errors
+export const addOrder = async (order: Order) => {
   const orders = getOrders();
-  const settings = getAppSettings(); // Get settings (will use default if null)
+  const settings = getAppSettings(); 
   const now = Date.now();
 
   const cleanOrder: Order = {
       ...order,
       timestamp: now,
-      createdAt: now, // Explicitly set creation time
+      createdAt: now, 
       items: order.items.map(i => {
-          // AUTO-COMPLETE logic for Sala items
-          // Use safe access to categoryDestinations
           const dest = settings.categoryDestinations ? settings.categoryDestinations[i.menuItem.category] : 'Cucina';
           const isSala = dest === 'Sala';
           
           return { 
               ...i, 
-              completed: isSala, // Sala items are automatically "cooked/ready"
+              completed: isSala, 
               served: false, 
               isAddedLater: false,
-              comboCompletedParts: [], // Init empty array for combos cooking
-              comboServedParts: []     // Init empty array for combos serving
+              comboCompletedParts: [],
+              comboServedParts: []
           };
       })
   };
   const newOrders = [...orders, cleanOrder];
   
   saveLocallyAndNotify(newOrders);
-  syncOrderToCloud(cleanOrder); // Trigger Cloud Sync
+  // CRITICAL: Await and throw if error to alert user in UI
+  const error = await syncOrderToCloud(cleanOrder);
+  if (error) throw error; 
 };
 
 export const updateOrderStatus = (orderId: string, status: OrderStatus) => {
@@ -276,32 +278,26 @@ export const updateOrderStatus = (orderId: string, status: OrderStatus) => {
   syncOrderToCloud(updatedOrder);
 };
 
-export const updateOrderItems = (orderId: string, newItems: OrderItem[]) => {
+// UPDATED: Async to propagate errors
+export const updateOrderItems = async (orderId: string, newItems: OrderItem[]) => {
     const orders = getOrders();
     const order = orders.find(o => o.id === orderId);
     const settings = getAppSettings();
     if (!order) return;
 
-    // CRITICAL FIX: MERGE LOGIC instead of Replace
-    // We start with the existing items
     const mergedItems = [...order.items];
 
     newItems.forEach(newItem => {
-        // Check if this item (same ID and same Notes) already exists in the order
         const existingIndex = mergedItems.findIndex(old => 
             old.menuItem.id === newItem.menuItem.id && 
             (old.notes || '') === (newItem.notes || '')
         );
 
         if (existingIndex >= 0) {
-            // UPDATE EXISTING: Add Quantity
             const existing = mergedItems[existingIndex];
-            const isQuantityIncreased = newItem.quantity > 0; // In this context (adding), it's always > 0
-            
             mergedItems[existingIndex] = {
                 ...existing,
                 quantity: existing.quantity + newItem.quantity,
-                // If we add quantity, we reset completion so kitchen sees it again
                 completed: false, 
                 served: false,
                 isAddedLater: true,
@@ -309,7 +305,6 @@ export const updateOrderItems = (orderId: string, newItems: OrderItem[]) => {
                 comboServedParts: existing.comboServedParts || []
             };
         } else {
-            // ADD NEW ITEM: Append to list
             const dest = settings.categoryDestinations ? settings.categoryDestinations[newItem.menuItem.category] : 'Cucina';
             const isSala = dest === 'Sala';
             
@@ -324,23 +319,22 @@ export const updateOrderItems = (orderId: string, newItems: OrderItem[]) => {
         }
     });
 
-    // RE-ACTIVATE ORDER if it was DELIVERED/SERVED or READY
     let newStatus = order.status;
     if (order.status === OrderStatus.DELIVERED || order.status === OrderStatus.READY) {
         newStatus = OrderStatus.PENDING; 
     }
 
-    // Update Order with MERGED items
     const updatedOrder = { 
         ...order, 
         items: mergedItems, 
-        timestamp: Date.now(), // Bump timestamp to bring to top
+        timestamp: Date.now(), 
         status: newStatus 
     };
     const newOrders = orders.map(o => o.id === orderId ? updatedOrder : o);
 
     saveLocallyAndNotify(newOrders);
-    syncOrderToCloud(updatedOrder);
+    const error = await syncOrderToCloud(updatedOrder);
+    if (error) throw error;
 };
 
 export const toggleOrderItemCompletion = (orderId: string, itemIndex: number, subItemId?: string) => {
@@ -492,10 +486,6 @@ export const deleteHistoryByDate = async (targetDate: Date) => {
     saveLocallyAndNotify(ordersToKeep);
 
     if (supabase && currentUserId) {
-        // Calculate timestamps for range query to be safe (or just delete delivered orders locally identified)
-        // For simplicity and safety with filtered local list, we iterate orders that WERE deleted locally
-        // But better: use a SQL range delete.
-        
         const startOfDay = new Date(targetDate); startOfDay.setHours(0,0,0,0);
         const endOfDay = new Date(targetDate); endOfDay.setHours(23,59,59,999);
         
@@ -510,20 +500,14 @@ export const deleteHistoryByDate = async (targetDate: Date) => {
 
 export const freeTable = async (tableNumber: string) => {
     const orders = getOrders();
-    // Instead of deleting, we ARCHIVE them by:
-    // 1. Ensuring status is DELIVERED (so they appear in history)
-    // 2. Renaming the table number locally to something unique so WaiterPad sees table as free
-    
     const tableOrders = orders.filter(o => o.tableNumber === tableNumber);
     const otherOrders = orders.filter(o => o.tableNumber !== tableNumber);
     
     const archivedOrders = tableOrders.map(o => ({
         ...o,
         status: OrderStatus.DELIVERED,
-        // Append suffix to hide from Active Table view in WaiterPad (which searches strict equality)
-        // But Kitchen History can still parse it
         tableNumber: `${o.tableNumber}_HISTORY`,
-        timestamp: Date.now() // Update exit time
+        timestamp: Date.now() 
     }));
 
     const newOrders = [...otherOrders, ...archivedOrders];
@@ -531,58 +515,38 @@ export const freeTable = async (tableNumber: string) => {
     saveLocallyAndNotify(newOrders);
 
     if (supabase && currentUserId) {
-        // Update in cloud instead of deleting
         for (const o of archivedOrders) {
             await syncOrderToCloud(o);
         }
     }
 };
 
-// --- FACTORY RESET (DANGER ZONE) ---
 export const performFactoryReset = async () => {
-    // 1. Clear Local Data (Orders & Menu)
     localStorage.setItem(STORAGE_KEY, '[]');
     localStorage.setItem(MENU_KEY, '[]');
-    // Note: We deliberately do NOT clear:
-    // - APP_SETTINGS_KEY (Printer configs, destinations)
-    // - GOOGLE_API_KEY_STORAGE
-    // - WAITER_KEY (Session convenience)
-    // - TABLES_COUNT_KEY (Layout)
-    
-    // Notify Local Listeners
     window.dispatchEvent(new Event('local-storage-update'));
     window.dispatchEvent(new Event('local-menu-update'));
 
-    // 2. Clear Cloud Data
     if (supabase && currentUserId) {
-        // Delete all Orders
         await supabase.from('orders').delete().eq('user_id', currentUserId);
-        
-        // Delete all Menu Items
         await supabase.from('menu_items').delete().eq('user_id', currentUserId);
-        
-        // We do NOT delete from 'profiles' to keep API keys and Settings
     }
 };
 
-// --- MENU DELETION (BULK) ---
 export const deleteAllMenuItems = async () => {
-    // 1. Clear Local Menu
     localStorage.setItem(MENU_KEY, '[]');
     window.dispatchEvent(new Event('local-menu-update'));
 
-    // 2. Clear Cloud Menu Items
     if (supabase && currentUserId) {
         await supabase.from('menu_items').delete().eq('user_id', currentUserId);
     }
 };
 
-// --- IMPORT DEMO MENU ---
 export const importDemoMenu = async () => {
     if (!currentUserId || !supabase) return;
 
     const demoItemsWithUserId = DEMO_MENU_ITEMS.map(item => ({
-        id: item.id, // Keep demo ID to prevent duplicates if imported multiple times
+        id: item.id,
         user_id: currentUserId,
         name: item.name,
         price: item.price,
@@ -595,7 +559,6 @@ export const importDemoMenu = async () => {
         specific_department: item.specificDepartment
     }));
 
-    // 1. Update Cloud (Bulk Insert)
     const { error } = await supabase.from('menu_items').upsert(demoItemsWithUserId);
     
     if (error) {
@@ -604,10 +567,7 @@ export const importDemoMenu = async () => {
         return;
     }
 
-    // 2. Update Local
-    // We fetch current items, and merge (or just replace if empty, but merging is safer)
     const currentItems = getMenuItems();
-    // Filter out items that are being replaced (though ID collision handles this naturally in DB, local array needs logic)
     const newIds = DEMO_MENU_ITEMS.map(d => d.id);
     const existingFiltered = currentItems.filter(i => !newIds.includes(i.id));
     
@@ -618,20 +578,16 @@ export const importDemoMenu = async () => {
     alert("Menu Demo importato con successo!");
 };
 
-// --- DYNAMIC TABLE COUNT ---
 export const getTableCount = (): number => {
     const settings = getAppSettings();
     return settings.restaurantProfile?.tableCount || 12;
 };
 
 export const saveTableCount = (count: number) => {
-    // This is handled via saveAppSettings in App.tsx to ensure cloud sync
-    // We update local cache immediately for reactivity if needed
     localStorage.setItem(TABLES_COUNT_KEY, count.toString());
     window.dispatchEvent(new Event('local-storage-update'));
 };
 
-// --- WAITER SESSION ---
 export const getWaiterName = (): string | null => {
     return localStorage.getItem(WAITER_KEY);
 };
@@ -644,15 +600,11 @@ export const logoutWaiter = () => {
     localStorage.removeItem(WAITER_KEY);
 };
 
-// --- MENU MANAGEMENT (CLOUD) ---
 export const getMenuItems = (): MenuItem[] => {
     const data = localStorage.getItem(MENU_KEY);
     if (data) {
         return JSON.parse(data);
     } else {
-        // CHANGED: Do NOT return default items. Start with empty to avoid data mixing appearance.
-        // localStorage.setItem(MENU_KEY, JSON.stringify(DEFAULT_MENU_ITEMS));
-        // return DEFAULT_MENU_ITEMS;
         return [];
     }
 };
@@ -662,7 +614,6 @@ const syncMenuToCloud = async (item: MenuItem, isDelete = false) => {
     if (isDelete) {
         await supabase.from('menu_items').delete().eq('id', item.id);
     } else {
-         // MAP CAMELCASE TO SNAKE_CASE FOR DB
          const payload = {
             id: item.id,
             user_id: currentUserId,
@@ -673,7 +624,6 @@ const syncMenuToCloud = async (item: MenuItem, isDelete = false) => {
             ingredients: item.ingredients,
             allergens: item.allergens,
             image: item.image,
-            // CRITICAL: SAVE COMBO FIELDS
             combo_items: item.comboItems, 
             specific_department: item.specificDepartment
         };
@@ -708,29 +658,24 @@ export const deleteMenuItem = (id: string) => {
     if (itemToDelete) syncMenuToCloud(itemToDelete, true);
 };
 
-// --- API KEY MANAGEMENT ---
 export const getGoogleApiKey = (): string | null => {
     return localStorage.getItem(GOOGLE_API_KEY_STORAGE);
 };
 
 export const saveGoogleApiKey = async (apiKey: string) => {
     localStorage.setItem(GOOGLE_API_KEY_STORAGE, apiKey);
-    
-    // Sync to Cloud Profile
     if (supabase && currentUserId) {
         const { error } = await supabase
             .from('profiles')
             .update({ google_api_key: apiKey })
             .eq('id', currentUserId);
-            
         if (error) console.error("Failed to save API Key to cloud", error);
     }
 };
 
-// --- APP SETTINGS (DESTINATIONS) ---
 const DEFAULT_SETTINGS: AppSettings = {
     categoryDestinations: {
-        [Category.MENU_COMPLETO]: 'Cucina', // Default for Combo
+        [Category.MENU_COMPLETO]: 'Cucina',
         [Category.ANTIPASTI]: 'Cucina',
         [Category.PANINI]: 'Pub', 
         [Category.PIZZE]: 'Pizzeria', 
@@ -739,13 +684,12 @@ const DEFAULT_SETTINGS: AppSettings = {
         [Category.DOLCI]: 'Cucina',
         [Category.BEVANDE]: 'Sala'
     },
-    // DEFAULT PRINT SETTINGS (Disabled by default)
     printEnabled: {
         'Cucina': false,
         'Pizzeria': false,
         'Pub': false,
         'Sala': false,
-        'Cassa': false // NEW: Default to false
+        'Cassa': false
     },
     restaurantProfile: {
         tableCount: 12
@@ -755,10 +699,8 @@ const DEFAULT_SETTINGS: AppSettings = {
 export const getAppSettings = (): AppSettings => {
     const data = localStorage.getItem(APP_SETTINGS_KEY);
     if (!data) return DEFAULT_SETTINGS;
-    
     try {
         const parsed = JSON.parse(data);
-        // Robustness: Merge with defaults to ensure all structure exists if user has old data
         return {
             ...DEFAULT_SETTINGS,
             ...parsed,
@@ -781,24 +723,19 @@ export const getAppSettings = (): AppSettings => {
 };
 
 export const saveAppSettings = async (settings: AppSettings) => {
-    // 1. Save Local
     localStorage.setItem(APP_SETTINGS_KEY, JSON.stringify(settings));
     window.dispatchEvent(new Event('local-settings-update'));
-    // Trigger local storage update for WaiterPad to pick up new table count immediately
     window.dispatchEvent(new Event('local-storage-update')); 
 
-    // 2. Sync to Cloud Profile
     if (supabase && currentUserId) {
         const { error } = await supabase
             .from('profiles')
-            .update({ settings: settings }) // Saves entire JSON object
+            .update({ settings: settings })
             .eq('id', currentUserId);
-
         if (error) console.error("Failed to save App Settings to cloud", error);
     }
 };
 
-// --- SETTINGS (LOCAL NOTIFICATIONS) ---
 export interface NotificationSettings {
     kitchenSound: boolean;
     waiterSound: boolean;

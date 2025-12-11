@@ -56,6 +56,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   
   // Custom Modal State
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [isSending, setIsSending] = useState(false); // NEW: Sending State
 
   const waiterName = getWaiterName();
 
@@ -157,12 +158,13 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
     try {
         if (!selectedTable) return;
         if (cart.length === 0) return;
+        setIsSending(true);
 
         const currentOrders = getOrders();
         const currentActiveOrder = currentOrders.find(o => o.tableNumber === selectedTable && o.status !== OrderStatus.DELIVERED);
 
         if (currentActiveOrder) {
-          updateOrderItems(currentActiveOrder.id, cart);
+          await updateOrderItems(currentActiveOrder.id, cart);
         } else {
           // MORE ROBUST ID GENERATION TO PREVENT COLLISIONS
           const randomSuffix = Math.random().toString(36).substring(2, 8);
@@ -177,7 +179,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
             createdAt: Date.now(),
             waiterName: waiterName || 'Staff'
           };
-          addOrder(newOrder);
+          await addOrder(newOrder);
         }
         
         setCart([]);
@@ -190,10 +192,19 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
             loadData();
         }, 100);
         
-    } catch (error) {
+    } catch (error: any) {
         console.error("Errore invio ordine:", error);
-        alert("Errore di connessione. Se il problema persiste, contatta l'assistenza.");
+        // Better error message parsing
+        let msg = "Errore di connessione. Se il problema persiste, contatta l'assistenza.";
+        if (error.message && error.message.includes('row level security')) {
+            msg = "ERRORE PERMESSI DB: Contatta il Super Admin per il fix.";
+        } else if (error.message) {
+            msg = `Errore DB: ${error.message}`;
+        }
+        alert(msg);
         setShowConfirmModal(false);
+    } finally {
+        setIsSending(false);
     }
   };
 
@@ -248,10 +259,10 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                   </p>
                   
                   <div className="flex flex-col gap-3">
-                      <button onClick={finalizeOrder} className="w-full py-4 bg-blue-600 hover:bg-blue-500 text-white font-black text-lg rounded-2xl shadow-lg shadow-blue-600/20 active:scale-95 transition-all flex items-center justify-center gap-2">
-                          <CheckCircle size={20}/> SÌ, INVIA IN CUCINA
+                      <button onClick={finalizeOrder} disabled={isSending} className="w-full py-4 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-black text-lg rounded-2xl shadow-lg shadow-blue-600/20 active:scale-95 transition-all flex items-center justify-center gap-2">
+                          {isSending ? 'INVIO IN CORSO...' : <><CheckCircle size={20}/> SÌ, INVIA IN CUCINA</>}
                       </button>
-                      <button onClick={() => setShowConfirmModal(false)} className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-2xl transition-all">
+                      <button onClick={() => setShowConfirmModal(false)} disabled={isSending} className="w-full py-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-2xl transition-all">
                           ANNULLA
                       </button>
                   </div>
