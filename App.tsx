@@ -4,7 +4,7 @@ import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import DigitalMenu from './components/DigitalMenu';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, RefreshCw, Send, Printer, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, FileSpreadsheet, Image as ImageIcon, Upload, FileImage, ExternalLink, CreditCard, Banknote, Briefcase, Clock, Check, ListPlus, ArrowRightLeft, Code2, Cookie, Shield, Wrench, Download, CloudUpload, BookOpen } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, RefreshCw, Send, Printer, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, FileSpreadsheet, Image as ImageIcon, Upload, FileImage, ExternalLink, CreditCard, Banknote, Briefcase, Clock, Check, ListPlus, ArrowRightLeft, Code2, Cookie, Shield, Wrench, Download, CloudUpload, BookOpen, EyeOff } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate, performFactoryReset, deleteAllMenuItems, importDemoMenu } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { askChefAI, generateRestaurantAnalysis, generateDishDescription, generateDishIngredients } from './services/geminiService';
@@ -116,6 +116,12 @@ export default function App() {
   const [showLogin, setShowLogin] = useState(false);
   const [waiterNameInput, setWaiterNameInput] = useState('');
   
+  // PASSWORD RECOVERY STATE
+  const [showPasswordUpdateModal, setShowPasswordUpdateModal] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [passwordUpdateLoading, setPasswordUpdateLoading] = useState(false);
+
   // Restaurant Info
   const [restaurantName, setRestaurantName] = useState('Ristorante');
 
@@ -253,7 +259,12 @@ export default function App() {
               } finally { setLoadingSession(false); }
           });
 
-          const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+          const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+              // DETECT PASSWORD RECOVERY
+              if (event === 'PASSWORD_RECOVERY') {
+                  setShowPasswordUpdateModal(true);
+              }
+
               if (session) {
                   checkUserStatus(session.user);
                   setSession(session);
@@ -384,6 +395,25 @@ export default function App() {
   const handleExitApp = () => setRole(null);
   const handleReactivationRequest = async () => { if (!supabase || !session) return; try { const originalName = session.user.user_metadata?.restaurant_name || "Richiesta Sblocco"; await supabase.from('profiles').insert({ id: session.user.id, email: session.user.email, restaurant_name: `${originalName} (RICHIESTA)`, subscription_status: 'banned' }); alert("Richiesta inviata!"); window.location.reload(); } catch (e: any) { alert("Errore: " + e.message); } };
   
+  const handlePasswordUpdate = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!supabase) return;
+      setPasswordUpdateLoading(true);
+      try {
+          const { error } = await supabase.auth.updateUser({ password: newPassword });
+          if (error) throw error;
+          alert("Password aggiornata con successo!");
+          setShowPasswordUpdateModal(false);
+          setNewPassword('');
+          // Refresh session
+          window.location.reload(); 
+      } catch (err: any) {
+          alert("Errore aggiornamento password: " + err.message);
+      } finally {
+          setPasswordUpdateLoading(false);
+      }
+  };
+
   const handleForceSyncMenu = async () => {
       if(!supabase || !session?.user?.id) {
           alert("Errore di connessione.");
@@ -659,6 +689,54 @@ Grazie.`);
                   {subscriptionExpired && (<div className="mb-6 bg-slate-950 p-4 rounded-xl border border-slate-800 text-left"><p className="text-xs text-slate-500 uppercase font-bold mb-2">Come riattivare:</p><ul className="text-sm text-slate-300 space-y-2"><li>1. Effettua il pagamento del canone.</li><li>2. Invia la distinta al supporto ({adminContactEmail}).</li><li>3. Il servizio verrà riattivato entro 24h.</li></ul></div>)}
                   {accountDeleted && <button onClick={handleReactivationRequest} className="w-full bg-green-600 text-white px-6 py-3 rounded-xl font-bold">Richiedi Riattivazione</button>}
                   <button onClick={signOut} className="w-full bg-slate-800 text-white px-6 py-3 rounded-xl font-bold mt-4 border border-slate-700 hover:bg-slate-700 transition-colors">Esci</button>
+              </div>
+          </div>
+      );
+  }
+
+  // --- PASSWORD RECOVERY MODAL ---
+  if (showPasswordUpdateModal) {
+      return (
+          <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+              <div className="bg-slate-900 border border-indigo-500/30 rounded-3xl p-8 w-full max-w-md shadow-2xl animate-slide-up">
+                  <div className="text-center mb-6">
+                      <div className="w-16 h-16 bg-indigo-500/10 rounded-full flex items-center justify-center mx-auto mb-4 text-indigo-500 border border-indigo-500/20">
+                          <Key size={32} />
+                      </div>
+                      <h2 className="text-2xl font-bold text-white">Imposta Nuova Password</h2>
+                      <p className="text-slate-400 text-sm mt-2">Inserisci la tua nuova password per accedere.</p>
+                  </div>
+                  
+                  <form onSubmit={handlePasswordUpdate} className="space-y-4">
+                      <div className="relative">
+                          <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
+                          <input 
+                              type={showNewPassword ? "text" : "password"}
+                              placeholder="Nuova Password"
+                              value={newPassword}
+                              onChange={e => setNewPassword(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-800 rounded-xl py-4 pl-12 pr-12 text-white outline-none focus:border-indigo-500 transition-colors"
+                              required
+                              minLength={6}
+                          />
+                          <button 
+                              type="button"
+                              onClick={() => setShowNewPassword(!showNewPassword)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors p-2 z-10"
+                              tabIndex={-1}
+                          >
+                              {showNewPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
+                          </button>
+                      </div>
+                      
+                      <button 
+                          type="submit" 
+                          disabled={passwordUpdateLoading}
+                          className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-indigo-600/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                      >
+                          {passwordUpdateLoading ? <Loader className="animate-spin" /> : 'Aggiorna Password'} 
+                      </button>
+                  </form>
               </div>
           </div>
       );

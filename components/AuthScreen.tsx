@@ -1,21 +1,24 @@
 import React, { useState } from 'react';
 import { supabase, SUPER_ADMIN_EMAIL } from '../services/supabase';
-import { ChefHat, Mail, Lock, ArrowRight, Loader, Eye, EyeOff, AlertTriangle, Database } from 'lucide-react';
+import { ChefHat, Mail, Lock, ArrowRight, Loader, Eye, EyeOff, AlertTriangle, ArrowLeft, Send } from 'lucide-react';
 
 const AuthScreen: React.FC = () => {
     const [isLogin, setIsLogin] = useState(true);
+    const [isRecovery, setIsRecovery] = useState(false); // New state for recovery mode
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [showPassword, setShowPassword] = useState(false);
     const [restaurantName, setRestaurantName] = useState('');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [successMsg, setSuccessMsg] = useState<string | null>(null);
     const [confirmationPending, setConfirmationPending] = useState(false);
 
     const handleAuth = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         setError(null);
+        setSuccessMsg(null);
         setConfirmationPending(false);
         
         if (!supabase) {
@@ -25,7 +28,14 @@ const AuthScreen: React.FC = () => {
         }
 
         try {
-            if (isLogin) {
+            if (isRecovery) {
+                // PASSWORD RECOVERY FLOW
+                const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                    redirectTo: window.location.origin, // Redirect back to this app
+                });
+                if (error) throw error;
+                setSuccessMsg("Email di recupero inviata! Controlla la tua casella di posta (e lo spam) per il link di reset.");
+            } else if (isLogin) {
                 // LOGIN
                 const { error } = await supabase.auth.signInWithPassword({ email, password });
                 if (error) throw error;
@@ -74,8 +84,6 @@ const AuthScreen: React.FC = () => {
                          const trialEndDate = new Date(today);
                          trialEndDate.setDate(today.getDate() + 15);
 
-                         // Attempt insertion. If trigger exists on Supabase side, this might fail or be redundant, 
-                         // but we do it to ensure settings are populated correctly.
                          const { error: profileError } = await supabase.from('profiles').insert({
                              id: data.user.id,
                              email: email,
@@ -119,8 +127,15 @@ const AuthScreen: React.FC = () => {
 
             setError(msg);
         } finally {
-            if (!confirmationPending) setLoading(false);
+            if (!confirmationPending && !successMsg) setLoading(false);
+            if (isRecovery && !error) setLoading(false);
         }
+    };
+
+    const toggleRecovery = () => {
+        setIsRecovery(!isRecovery);
+        setError(null);
+        setSuccessMsg(null);
     };
 
     return (
@@ -136,9 +151,9 @@ const AuthScreen: React.FC = () => {
                     <p className="text-slate-400 mt-2 text-sm font-medium uppercase tracking-widest">SaaS Restaurant Management</p>
                 </div>
 
-                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl backdrop-blur-xl">
+                <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 shadow-2xl backdrop-blur-xl transition-all duration-300">
                     <h2 className="text-2xl font-bold text-white mb-6 text-center">
-                        {isLogin ? 'Accedi al Ristorante' : 'Registra Nuovo Locale'}
+                        {isRecovery ? 'Recupero Password' : (isLogin ? 'Accedi al Ristorante' : 'Registra Nuovo Locale')}
                     </h2>
 
                     {/* CONFIRMATION PENDING MESSAGE */}
@@ -150,12 +165,24 @@ const AuthScreen: React.FC = () => {
                                 Ti abbiamo inviato un link di conferma a <strong>{email}</strong>.
                                 Cliccalo per attivare l'account.
                             </p>
-                            <div className="mt-4 text-xs text-slate-500 bg-slate-950 p-2 rounded border border-slate-800">
-                                <strong>Suggerimento Dev:</strong> Se non arriva l'email, vai su Supabase &gt; Authentication &gt; Providers &gt; Email e disabilita "Confirm email".
-                            </div>
                             <button 
                                 onClick={() => setConfirmationPending(false)}
                                 className="mt-4 text-blue-400 font-bold hover:underline text-sm"
+                            >
+                                Torna al login
+                            </button>
+                        </div>
+                    )}
+
+                    {/* SUCCESS MESSAGE (RECOVERY) */}
+                    {successMsg && (
+                        <div className="bg-green-500/10 border border-green-500/20 text-green-400 p-6 rounded-xl text-center mb-6 animate-fade-in">
+                            <Send size={32} className="mx-auto mb-3 text-green-500" />
+                            <h3 className="font-bold text-lg text-white mb-2">Email Inviata</h3>
+                            <p className="text-sm">{successMsg}</p>
+                            <button 
+                                onClick={() => { setIsRecovery(false); setSuccessMsg(null); }}
+                                className="mt-4 text-green-400 font-bold hover:underline text-sm"
                             >
                                 Torna al login
                             </button>
@@ -176,10 +203,10 @@ const AuthScreen: React.FC = () => {
                         </div>
                     )}
 
-                    {!confirmationPending && (
+                    {!confirmationPending && !successMsg && (
                         <form onSubmit={handleAuth} className="space-y-4">
-                            {!isLogin && (
-                                <div className="relative">
+                            {!isLogin && !isRecovery && (
+                                <div className="relative animate-fade-in">
                                     <ChefHat className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
                                     <input 
                                         type="text" 
@@ -204,43 +231,71 @@ const AuthScreen: React.FC = () => {
                                 />
                             </div>
 
-                            <div className="relative">
-                                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
-                                <input 
-                                    type={showPassword ? "text" : "password"}
-                                    placeholder="Password"
-                                    value={password}
-                                    onChange={e => setPassword(e.target.value)}
-                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-4 pl-12 pr-12 text-white outline-none focus:border-orange-500 transition-colors"
-                                    required
-                                />
-                                <button 
-                                    type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors p-2 z-10"
-                                    tabIndex={-1}
-                                    title={showPassword ? "Nascondi password" : "Mostra password"}
-                                >
-                                    {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
-                                </button>
-                            </div>
+                            {!isRecovery && (
+                                <div className="relative animate-fade-in">
+                                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={20} />
+                                    <input 
+                                        type={showPassword ? "text" : "password"}
+                                        placeholder="Password"
+                                        value={password}
+                                        onChange={e => setPassword(e.target.value)}
+                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-4 pl-12 pr-12 text-white outline-none focus:border-orange-500 transition-colors"
+                                        required={!isRecovery}
+                                    />
+                                    <button 
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white transition-colors p-2 z-10"
+                                        tabIndex={-1}
+                                        title={showPassword ? "Nascondi password" : "Mostra password"}
+                                    >
+                                        {showPassword ? <EyeOff size={20}/> : <Eye size={20}/>}
+                                    </button>
+                                </div>
+                            )}
+
+                            {isLogin && !isRecovery && (
+                                <div className="flex justify-end">
+                                    <button 
+                                        type="button" 
+                                        onClick={toggleRecovery}
+                                        className="text-xs text-orange-500 font-bold hover:text-orange-400 hover:underline transition-colors"
+                                    >
+                                        Password dimenticata?
+                                    </button>
+                                </div>
+                            )}
 
                             <button 
                                 type="submit" 
                                 disabled={loading}
-                                className="w-full bg-orange-500 hover:bg-orange-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-orange-500/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                                className={`w-full text-white font-bold py-4 rounded-xl shadow-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2 ${isRecovery ? 'bg-indigo-600 hover:bg-indigo-500 shadow-indigo-600/20' : 'bg-orange-500 hover:bg-orange-600 shadow-orange-500/20'}`}
                             >
-                                {loading ? <Loader className="animate-spin" /> : (isLogin ? 'Entra' : 'Prova Gratis 15 Giorni')} {!loading && <ArrowRight size={20} />}
+                                {loading ? <Loader className="animate-spin" /> : (
+                                    isRecovery ? 'Invia Link di Reset' : (isLogin ? 'Entra' : 'Prova Gratis 15 Giorni')
+                                )} 
+                                {!loading && !isRecovery && <ArrowRight size={20} />}
+                                {!loading && isRecovery && <Send size={20} />}
                             </button>
+
+                            {isRecovery && (
+                                <button 
+                                    type="button"
+                                    onClick={toggleRecovery}
+                                    className="w-full py-3 text-slate-400 font-bold text-sm hover:text-white transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <ArrowLeft size={16}/> Torna al Login
+                                </button>
+                            )}
                         </form>
                     )}
 
-                    {!confirmationPending && (
-                        <div className="mt-8 text-center">
+                    {!confirmationPending && !isRecovery && !successMsg && (
+                        <div className="mt-8 text-center animate-fade-in">
                             <p className="text-slate-500 text-sm">
                                 {isLogin ? 'Non hai un account?' : 'Hai già un ristorante?'}
                                 <button 
-                                    onClick={() => setIsLogin(!isLogin)} 
+                                    onClick={() => { setIsLogin(!isLogin); setError(null); }} 
                                     className="ml-2 text-white font-bold hover:underline"
                                 >
                                     {isLogin ? 'Registrati ora' : 'Accedi'}
