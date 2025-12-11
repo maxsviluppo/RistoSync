@@ -265,6 +265,10 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
       setTimeout(() => setIsSyncing(false), 500);
   };
 
+  const handleConnectionClick = () => {
+      initSupabaseSync();
+  };
+
   useEffect(() => {
     initSupabaseSync(); // Ensure sync is active
     loadOrders();
@@ -358,9 +362,9 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
               <h1 className="text-3xl font-bold">Risto<span className={`${isPizzeria ? 'text-red-500' : isPub ? 'text-amber-500' : 'text-orange-500'}`}>Sync</span></h1>
               <div className="flex items-center gap-2">
                   <p className="text-slate-400 text-xs uppercase font-semibold">{isPizzeria ? 'Pizzeria' : isPub ? 'Pub' : 'Kitchen'} Dashboard</p>
-                  <div className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${isConnected ? 'bg-green-900/30 text-green-400 border border-green-500/30' : 'bg-red-900/30 text-red-400 border border-red-500/30 animate-pulse'}`}>
+                  <button onClick={handleConnectionClick} className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full hover:opacity-80 transition-opacity cursor-pointer ${isConnected ? 'bg-green-900/30 text-green-400 border border-green-500/30' : 'bg-red-900/30 text-red-400 border border-red-500/30 animate-pulse'}`}>
                       {isConnected ? <Wifi size={10}/> : <WifiOff size={10}/>} {isConnected ? 'ONLINE' : 'DISCONNESSO'}
-                  </div>
+                  </button>
               </div>
           </div>
           <button onClick={() => loadOrders()} className="ml-4 p-2 rounded-full bg-slate-800 text-slate-500 hover:text-white"><History size={16} /></button>
