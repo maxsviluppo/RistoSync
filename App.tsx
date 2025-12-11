@@ -4,7 +4,7 @@ import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import DigitalMenu from './components/DigitalMenu';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, RefreshCw, Send, Printer, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, FileSpreadsheet, Image as ImageIcon, Upload, FileImage, ExternalLink, CreditCard, Banknote, Briefcase, Clock, Check, ListPlus, ArrowRightLeft, Code2, Cookie, Shield, Wrench, Download, CloudUpload, BookOpen, EyeOff, LayoutGrid, ArrowLeft, PlayCircle, ChevronDown, FileJson, Wallet } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, RefreshCw, Send, Printer, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, FileSpreadsheet, Image as ImageIcon, Upload, FileImage, ExternalLink, CreditCard, Banknote, Briefcase, Clock, Check, ListPlus, ArrowRightLeft, Code2, Cookie, Shield, Wrench, Download, CloudUpload, BookOpen, EyeOff, LayoutGrid, ArrowLeft, PlayCircle, ChevronDown, FileJson, Wallet, Crown, Zap, ShieldCheck as ShieldIcon } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate, performFactoryReset, deleteAllMenuItems, importDemoMenu } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { askChefAI, generateRestaurantAnalysis, generateDishDescription, generateDishIngredients } from './services/geminiService';
@@ -199,45 +199,66 @@ export default function App() {
   const handleDeleteItem = () => { if (itemToDelete) { deleteMenuItem(itemToDelete.id); setMenuItems(getMenuItems()); setItemToDelete(null); } };
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => { setEditingItem(prev => ({ ...prev, image: reader.result as string })); }; reader.readAsDataURL(file); } };
   
-  // REAL BULK UPLOAD WITH IMAGE MATCHING
+  // REAL BULK UPLOAD WITH CRASH PREVENTION
   const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (!files || files.length === 0) return;
 
       let matchCount = 0;
-      const currentMenuItems = getMenuItems(); // Get latest
-      
-      const readFileAsBase64 = (file: File): Promise<string> => {
-          return new Promise((resolve, reject) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result as string);
-              reader.onerror = reject;
-              reader.readAsDataURL(file);
-          });
-      };
+      let skippedCount = 0;
+      const MAX_IMAGE_SIZE = 300 * 1024; // 300KB Limit to prevent localStorage crash
 
       try {
+          const currentMenuItems = [...getMenuItems()]; // Clone array safely
+
+          const readFileAsBase64 = (file: File): Promise<string> => {
+              return new Promise((resolve, reject) => {
+                  const reader = new FileReader();
+                  reader.onload = () => resolve(reader.result as string);
+                  reader.onerror = reject;
+                  reader.readAsDataURL(file);
+              });
+          };
+
           for (let i = 0; i < files.length; i++) {
               const file = files[i];
+              
+              if (file.size > MAX_IMAGE_SIZE) {
+                  console.warn(`File ${file.name} skipped: too large (${(file.size/1024).toFixed(0)}KB). Max 300KB.`);
+                  skippedCount++;
+                  continue;
+              }
+
               const fileNameNoExt = file.name.split('.').slice(0, -1).join('.').toLowerCase().trim();
               
-              const matchedItem = currentMenuItems.find(item => {
+              // Find index to modify reference in clone
+              const itemIndex = currentMenuItems.findIndex(item => {
                   const itemName = item.name.toLowerCase();
                   return itemName.includes(fileNameNoExt) || fileNameNoExt.includes(itemName);
               });
 
-              if (matchedItem) {
+              if (itemIndex !== -1) {
                   const base64 = await readFileAsBase64(file);
-                  const updatedItem = { ...matchedItem, image: base64 };
-                  updateMenuItem(updatedItem); 
+                  currentMenuItems[itemIndex] = { ...currentMenuItems[itemIndex], image: base64 };
+                  // Update single item in storage to persist
+                  updateMenuItem(currentMenuItems[itemIndex]);
                   matchCount++;
               }
           }
-          setMenuItems(getMenuItems());
-          alert(`Caricamento completato! Associate ${matchCount} immagini ai piatti corrispondenti.`);
+          
+          // Update local state cleanly
+          setMenuItems(getMenuItems()); // Re-fetch from reliable storage
+          
+          let msg = `Caricamento completato! Associate ${matchCount} immagini.`;
+          if (skippedCount > 0) msg += `\n⚠️ ${skippedCount} immagini saltate perché troppo pesanti (>300KB). Ridimensionale e riprova.`;
+          alert(msg);
+
       } catch (err) {
           console.error("Bulk upload error", err);
-          alert("Errore durante il caricamento delle immagini.");
+          alert("Errore durante il caricamento. Riprova con meno immagini o file più piccoli.");
+          setMenuItems(getMenuItems()); // Restore state on error
+      } finally {
+          if (bulkInputRef.current) bulkInputRef.current.value = ''; // Reset input
       }
   };
 
@@ -252,9 +273,9 @@ export default function App() {
   };
 
   // PLAN CHANGE HANDLER
-  const handlePlanChangeRequest = () => {
-      const subject = `Richiesta Cambio Piano - ${restaurantName}`;
-      const body = `Salve, vorrei cambiare il mio piano di abbonamento per il ristorante ${restaurantName}. Attendo un contatto per valutare le opzioni.`;
+  const handlePlanChangeRequest = (planName: string) => {
+      const subject = `Richiesta Attivazione Piano ${planName} - ${restaurantName}`;
+      const body = `Salve, vorrei passare al piano ${planName} per il ristorante ${restaurantName}. Attendo istruzioni.`;
       window.location.href = `mailto:${adminContactEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
@@ -610,46 +631,89 @@ export default function App() {
                             </div>
                         )}
 
-                        {/* 7. SUBSCRIPTION TAB (RESTORED WITH PAYMENT BUTTONS & DYNAMIC TRANSFER) */}
+                        {/* 7. SUBSCRIPTION TAB (NEW 3-CARD LAYOUT) */}
                         {adminTab === 'subscription' && (
-                            <div className="max-w-3xl mx-auto space-y-8 pb-20 animate-fade-in">
+                            <div className="max-w-6xl mx-auto space-y-8 pb-20 animate-fade-in">
                                 
-                                {/* HEADER & PLAN CARD */}
-                                <div className="bg-gradient-to-br from-slate-900 to-slate-800 p-8 rounded-3xl border border-slate-700 text-center relative overflow-hidden shadow-2xl">
-                                    <div className="absolute top-0 right-0 p-6 opacity-5"><CreditCard size={150} className="text-white"/></div>
-                                    
-                                    <div className="relative z-10 flex flex-col items-center">
-                                        <span className="inline-block px-4 py-1 rounded-full bg-blue-600/20 text-blue-400 text-xs font-black uppercase tracking-widest border border-blue-500/30 mb-4">Piano Attivo</span>
-                                        <h2 className="text-5xl font-black text-white mb-2">{appSettings.restaurantProfile?.planType || 'Pro'}</h2>
-                                        <p className="text-slate-400 mb-8 font-medium">Scadenza: <span className="text-white">{appSettings.restaurantProfile?.subscriptionEndDate ? new Date(appSettings.restaurantProfile.subscriptionEndDate).toLocaleDateString() : 'Illimitata'}</span></p>
-                                        
-                                        <div className="flex gap-3">
-                                            <button className="bg-blue-600 hover:bg-blue-500 text-white text-xl font-bold py-4 px-12 rounded-2xl shadow-lg shadow-blue-600/30 transform hover:scale-105 transition-all flex items-center gap-3">
-                                                <span>Rinnova Ora</span>
-                                                <div className="bg-blue-800 px-3 py-1 rounded-lg text-blue-200 text-sm">€ {appSettings.restaurantProfile?.subscriptionCost || '49.90'} / al mese</div>
-                                            </button>
-                                            <button onClick={handlePlanChangeRequest} className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-4 px-6 rounded-2xl border border-slate-600 flex items-center gap-2">
-                                                <Edit2 size={18}/> Richiedi Cambio Piano
-                                            </button>
-                                        </div>
-                                        <p className="text-slate-500 text-xs mt-4">Pagamento sicuro e fatturazione automatica.</p>
+                                {/* HEADER */}
+                                <div className="text-center mb-8">
+                                    <h3 className="text-3xl font-black text-white mb-2">Scegli il tuo Piano</h3>
+                                    <p className="text-slate-400 text-sm">Gestisci il tuo abbonamento RistoSync.</p>
+                                    {/* CURRENT STATUS BADGE */}
+                                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-full border border-slate-700 mt-4">
+                                        <div className={`w-2 h-2 rounded-full ${subscriptionExpired ? 'bg-red-500' : 'bg-green-500 animate-pulse'}`}></div>
+                                        <span className="text-xs font-bold text-white uppercase tracking-wider">
+                                            Stato: {subscriptionExpired ? 'SCADUTO' : appSettings.restaurantProfile?.planType || 'Trial'}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                {/* PLANS GRID */}
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    {/* TRIAL */}
+                                    <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 flex flex-col relative overflow-hidden group hover:border-blue-500 transition-all">
+                                        <div className="absolute top-0 right-0 p-4 opacity-10"><Sparkles size={80} className="text-blue-500"/></div>
+                                        <h4 className="text-xl font-black text-white mb-2">Trial</h4>
+                                        <p className="text-slate-400 text-xs mb-6 h-10">Prova tutte le funzionalità gratuitamente per iniziare.</p>
+                                        <div className="text-3xl font-black text-white mb-6">Gratis <span className="text-sm font-medium text-slate-500">/ 15 gg</span></div>
+                                        <button onClick={() => handlePlanChangeRequest('Trial')} className="w-full py-3 rounded-xl border border-slate-600 text-slate-300 font-bold hover:bg-slate-800 hover:text-white transition-colors">Richiedi Trial</button>
+                                        <ul className="mt-6 space-y-3">
+                                            <li className="flex items-center gap-2 text-xs text-slate-300"><Check size={14} className="text-blue-500"/> Accesso completo</li>
+                                            <li className="flex items-center gap-2 text-xs text-slate-300"><Check size={14} className="text-blue-500"/> Cloud Sync</li>
+                                            <li className="flex items-center gap-2 text-xs text-slate-300"><Check size={14} className="text-blue-500"/> Supporto Base</li>
+                                        </ul>
+                                    </div>
+
+                                    {/* STANDARD (HIGHLIGHTED) */}
+                                    <div className="bg-gradient-to-b from-slate-800 to-slate-900 border-2 border-indigo-500 rounded-3xl p-6 flex flex-col relative overflow-hidden shadow-2xl shadow-indigo-900/20 transform scale-105 z-10">
+                                        <div className="absolute top-0 right-0 bg-indigo-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl uppercase tracking-widest">Consigliato</div>
+                                        <h4 className="text-xl font-black text-white mb-2">Standard</h4>
+                                        <p className="text-indigo-200 text-xs mb-6 h-10">La soluzione completa per gestire il tuo locale senza limiti.</p>
+                                        <div className="text-3xl font-black text-white mb-6">€ {appSettings.restaurantProfile?.subscriptionCost || '49.90'} <span className="text-sm font-medium text-slate-500">/ mese</span></div>
+                                        <button onClick={() => handlePlanChangeRequest('Standard')} className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2">
+                                            <Zap size={16}/> Attiva Standard
+                                        </button>
+                                        <ul className="mt-6 space-y-3">
+                                            <li className="flex items-center gap-2 text-xs text-white font-bold"><Check size={14} className="text-indigo-400"/> Ordini Illimitati</li>
+                                            <li className="flex items-center gap-2 text-xs text-white font-bold"><Check size={14} className="text-indigo-400"/> Menu Digitale QR</li>
+                                            <li className="flex items-center gap-2 text-xs text-white font-bold"><Check size={14} className="text-indigo-400"/> AI Assistant</li>
+                                            <li className="flex items-center gap-2 text-xs text-white font-bold"><Check size={14} className="text-indigo-400"/> Multi-Device Sync</li>
+                                        </ul>
+                                    </div>
+
+                                    {/* PREMIUM */}
+                                    <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 flex flex-col relative overflow-hidden group hover:border-amber-500 transition-all">
+                                        <div className="absolute top-0 right-0 p-4 opacity-10"><Crown size={80} className="text-amber-500"/></div>
+                                        <h4 className="text-xl font-black text-white mb-2">Premium</h4>
+                                        <p className="text-slate-400 text-xs mb-6 h-10">Per chi vuole il massimo: personalizzazioni e supporto dedicato.</p>
+                                        <div className="text-3xl font-black text-white mb-6">€ 149.90 <span className="text-sm font-medium text-slate-500">/ mese</span></div>
+                                        <button onClick={() => handlePlanChangeRequest('Premium')} className="w-full py-3 rounded-xl border border-slate-600 text-amber-400 font-bold hover:bg-slate-800 hover:text-amber-300 transition-colors">Richiedi Premium</button>
+                                        <ul className="mt-6 space-y-3">
+                                            <li className="flex items-center gap-2 text-xs text-slate-300"><Check size={14} className="text-amber-500"/> Tutto incluso Standard</li>
+                                            <li className="flex items-center gap-2 text-xs text-slate-300"><Check size={14} className="text-amber-500"/> Logo Personalizzato</li>
+                                            <li className="flex items-center gap-2 text-xs text-slate-300"><Check size={14} className="text-amber-500"/> Assistenza Prioritaria 24/7</li>
+                                            <li className="flex items-center gap-2 text-xs text-slate-300"><Check size={14} className="text-amber-500"/> Setup Iniziale Menu</li>
+                                        </ul>
                                     </div>
                                 </div>
 
                                 {/* PAYMENT METHODS (UPDATED TO EMAIL REQUEST) */}
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    <button onClick={() => handlePayment('Carta di Credito')} className="bg-slate-900 border border-slate-700 hover:border-slate-500 p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1 active:scale-95 group">
-                                        <CreditCard size={24} className="text-white group-hover:text-blue-400"/> <span className="text-xs font-bold">Richiedi Link Carta</span>
-                                    </button>
-                                    <button onClick={() => handlePayment('PayPal')} className="bg-slate-900 border border-slate-700 hover:border-blue-500 p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1 active:scale-95">
-                                        <div className="font-black italic text-blue-500 text-lg">Pay<span className="text-blue-400">Pal</span></div> <span className="text-xs font-bold">Richiedi PayPal</span>
-                                    </button>
-                                    <button onClick={() => handlePayment('Apple Pay')} className="bg-slate-900 border border-slate-700 hover:border-white p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1 active:scale-95 group">
-                                        <div className="font-bold text-white text-lg group-hover:text-gray-300">Apple Pay</div> <span className="text-xs font-bold">Richiedi Link</span>
-                                    </button>
-                                    <button onClick={() => handlePayment('Google Pay')} className="bg-slate-900 border border-slate-700 hover:border-green-500 p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1 active:scale-95 group">
-                                        <div className="font-bold text-white text-lg"><span className="text-blue-500 group-hover:text-blue-400">G</span>Pay</div> <span className="text-xs font-bold">Richiedi Link</span>
-                                    </button>
+                                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                                    <h4 className="font-bold text-white mb-6 flex items-center gap-2">Metodi di Pagamento</h4>
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        <button onClick={() => handlePayment('Carta di Credito')} className="bg-slate-950 border border-slate-700 hover:border-slate-500 p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1 active:scale-95 group">
+                                            <CreditCard size={24} className="text-white group-hover:text-blue-400"/> <span className="text-xs font-bold">Richiedi Link Carta</span>
+                                        </button>
+                                        <button onClick={() => handlePayment('PayPal')} className="bg-slate-950 border border-slate-700 hover:border-blue-500 p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1 active:scale-95">
+                                            <div className="font-black italic text-blue-500 text-lg">Pay<span className="text-blue-400">Pal</span></div> <span className="text-xs font-bold">Richiedi PayPal</span>
+                                        </button>
+                                        <button onClick={() => handlePayment('Apple Pay')} className="bg-slate-950 border border-slate-700 hover:border-white p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1 active:scale-95 group">
+                                            <div className="font-bold text-white text-lg group-hover:text-gray-300">Apple Pay</div> <span className="text-xs font-bold">Richiedi Link</span>
+                                        </button>
+                                        <button onClick={() => handlePayment('Google Pay')} className="bg-slate-950 border border-slate-700 hover:border-green-500 p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1 active:scale-95 group">
+                                            <div className="font-bold text-white text-lg"><span className="text-blue-500 group-hover:text-blue-400">G</span>Pay</div> <span className="text-xs font-bold">Richiedi Link</span>
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {/* BANK TRANSFER SECTION (DYNAMIC) */}
@@ -713,7 +777,7 @@ export default function App() {
             <div className="fixed inset-0 z-[80] bg-black/90 flex items-center justify-center p-6 animate-fade-in">
                 <div className="bg-slate-900 w-full max-w-2xl h-[80vh] rounded-3xl border border-slate-800 shadow-2xl flex flex-col relative overflow-hidden">
                     <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-950">
-                        <h2 className="text-xl font-bold text-white flex items-center gap-2"><ShieldCheck className="text-green-500"/> Privacy & Termini di Servizio</h2>
+                        <h2 className="text-xl font-bold text-white flex items-center gap-2"><ShieldIcon className="text-green-500"/> Privacy & Termini di Servizio</h2>
                         <button onClick={() => setShowPrivacyModal(false)} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={20}/></button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-8 text-slate-300 text-sm leading-relaxed custom-scroll">
