@@ -164,8 +164,10 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
         if (currentActiveOrder) {
           updateOrderItems(currentActiveOrder.id, cart);
         } else {
+          // Robust ID generation
+          const newId = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
           const newOrder: Order = {
-            id: Date.now().toString(),
+            id: newId,
             tableNumber: selectedTable,
             items: cart,
             status: OrderStatus.PENDING,
@@ -188,7 +190,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
         
     } catch (error) {
         console.error("Errore invio ordine:", error);
-        alert("Errore invio ordine. Riprova.");
+        alert("Errore invio ordine. Riprova o verifica la connessione.");
         setShowConfirmModal(false);
     }
   };
