@@ -26,6 +26,7 @@ let currentUserId: string | null = null;
 let pollingInterval: any = null;
 let isSyncing = false; // Prevent overlapping syncs
 let realtimeChannel: any = null;
+let isConnected = false;
 
 // HELPER: SAFE STORAGE SAVE
 const safeLocalStorageSave = (key: string, value: string) => {
@@ -37,7 +38,6 @@ const safeLocalStorageSave = (key: string, value: string) => {
             if (key === STORAGE_KEY) {
                 try {
                     const orders = JSON.parse(value) as Order[];
-                    // Aggressively trim delivered orders if local storage is full
                     const streamlined = orders.filter(o => o.status !== OrderStatus.DELIVERED);
                     localStorage.setItem(key, JSON.stringify(streamlined));
                 } catch (cleanError) {}
@@ -49,14 +49,12 @@ const safeLocalStorageSave = (key: string, value: string) => {
 const ensureUserId = async () => {
     if (!supabase) return null;
     
-    // Always double check session to avoid stale state
     const { data } = await supabase.auth.getSession();
     if (data.session?.user?.id) {
         currentUserId = data.session.user.id;
         return currentUserId;
     }
     
-    // Fallback try getUser
     const { data: userData } = await supabase.auth.getUser();
     if (userData.user?.id) {
         currentUserId = userData.user.id;
@@ -67,7 +65,7 @@ const ensureUserId = async () => {
 };
 
 const broadcastUpdate = async (type: 'orders' | 'menu') => {
-    if (realtimeChannel && currentUserId) {
+    if (realtimeChannel && currentUserId && isConnected) {
         await realtimeChannel.send({
             type: 'broadcast',
             event: 'sync_update',
@@ -76,6 +74,13 @@ const broadcastUpdate = async (type: 'orders' | 'menu') => {
     }
 };
 
+const setConnectionStatus = (status: boolean) => {
+    isConnected = status;
+    window.dispatchEvent(new CustomEvent('connection-status-change', { detail: { connected: status } }));
+};
+
+export const getConnectionStatus = () => isConnected;
+
 // Initialize Realtime Subscription
 export const initSupabaseSync = async () => {
     if (!supabase) return;
@@ -83,22 +88,23 @@ export const initSupabaseSync = async () => {
     await ensureUserId();
     
     if (currentUserId) {
-        // 1. Initial Sync - FORCE CLOUD SETTINGS PRIORITY
-        // We do not await this to prevent blocking UI, but it runs immediately
-        Promise.all([
-            fetchFromCloud(),
-            fetchFromCloudMenu(),
-            fetchSettingsFromCloud(true) // Force overwrite local settings
-        ]).catch(e => console.error("Initial Sync Failed", e));
+        // 1. Initial Sync - Slight delay to ensure connection is ready
+        setTimeout(() => {
+            Promise.all([
+                fetchFromCloud(),
+                fetchFromCloudMenu(),
+                fetchSettingsFromCloud(true) 
+            ]).catch(e => console.error("Initial Sync Failed", e));
+        }, 1000);
         
-        // 2. Sync Profile Settings (API KEY)
         supabase.from('profiles').select('google_api_key').eq('id', currentUserId).single().then(({data}) => {
              if (data?.google_api_key) safeLocalStorageSave(GOOGLE_API_KEY_STORAGE, data.google_api_key);
         });
 
-        // 3. Realtime Subscription (Robust Mode with Broadcast)
+        // 3. Realtime Subscription
         if (realtimeChannel) await supabase.removeChannel(realtimeChannel);
 
+        // Unique channel name per user to ensure isolation
         realtimeChannel = supabase.channel(`room:${currentUserId}`);
 
         realtimeChannel
@@ -118,30 +124,28 @@ export const initSupabaseSync = async () => {
                 console.log("🔔 DB Menu Update");
                 fetchFromCloudMenu();
             })
-            .on('postgres_changes', { 
-                event: 'UPDATE', 
-                schema: 'public', 
-                table: 'profiles',
-                filter: `id=eq.${currentUserId}`
-            }, () => {
-                console.log("🔔 Profile Update (Subscription)");
-                fetchSettingsFromCloud(true);
-            })
             .on('broadcast', { event: 'sync_update' }, (payload: any) => {
                 console.log("📡 Broadcast Received:", payload);
                 if (payload.payload?.type === 'orders') fetchFromCloud();
                 if (payload.payload?.type === 'menu') fetchFromCloudMenu();
             })
             .subscribe((status: string) => {
-                 if (status === 'SUBSCRIBED') console.log("🟢 Realtime Connected");
+                 if (status === 'SUBSCRIBED') {
+                     console.log("🟢 Realtime Connected");
+                     setConnectionStatus(true);
+                 } else {
+                     console.log("🔴 Realtime Disconnected:", status);
+                     setConnectionStatus(false);
+                 }
             });
 
-        // 4. Fallback Polling (Heartbeat) - 10s
+        // 4. Fallback Polling (Heartbeat) - 5s (More aggressive)
         if (pollingInterval) clearInterval(pollingInterval);
         pollingInterval = setInterval(() => {
             fetchFromCloud();
-            fetchSettingsFromCloud();
-        }, 10000);
+            // Also check settings periodically
+            if (Math.random() > 0.7) fetchSettingsFromCloud();
+        }, 5000);
     }
 };
 
@@ -150,13 +154,14 @@ export const forceCloudSync = async () => {
     await ensureUserId();
     await fetchFromCloud();
     await fetchFromCloudMenu();
-    await fetchSettingsFromCloud(true); // Force overwrite
+    await fetchSettingsFromCloud(true); 
     return true;
 };
 
 const handleSupabaseError = (error: any) => {
     if (!error) return;
     console.error("Supabase Error:", error.message || JSON.stringify(error));
+    // If error suggests auth issue, maybe trigger logout? For now just log.
     return error;
 }
 
@@ -168,23 +173,24 @@ const fetchFromCloud = async () => {
     isSyncing = true;
     
     try {
-        // OPTIMIZATION: Fetch last 48 hours
-        const lookbackWindow = new Date();
-        lookbackWindow.setDate(lookbackWindow.getDate() - 2); 
-
+        // PERFORMANCE OPTIMIZATION: Reduced limit to 50 to prevent timeouts
+        // Index on (user_id, created_at) is required for this to be fast
         const { data, error } = await supabase
             .from('orders')
             .select('*')
-            // Using RLS, so filter should be implicit, but keeping for safety
             .eq('user_id', currentUserId)
-            .gte('created_at', lookbackWindow.toISOString());
+            .order('created_at', { ascending: false }) // Get latest first
+            .limit(50); // REDUCED LIMIT
 
         if (error) {
             handleSupabaseError(error);
+            setConnectionStatus(false);
             isSyncing = false;
             return;
         }
         
+        setConnectionStatus(true);
+
         // Convert Cloud Orders
         const cloudOrders: Order[] = data.map((row: any) => ({
             id: row.id,
@@ -198,33 +204,28 @@ const fetchFromCloud = async () => {
 
         // SMART MERGE STRATEGY
         const localOrders = getOrders();
-        const now = Date.now();
         const mergedOrders: Order[] = [];
         const processedIds = new Set<string>();
 
-        // 1. Merge Cloud Orders
+        // 1. Merge Cloud Orders (Priority)
         cloudOrders.forEach(cloudOrder => {
             processedIds.add(cloudOrder.id);
+            // If we have a local version that is newer (modified within last 3 seconds), keep local to prevent jitter
+            // Otherwise trust cloud
             const localOrder = localOrders.find(l => l.id === cloudOrder.id);
-
-            if (localOrder) {
-                const isLocalRecent = (now - localOrder.timestamp) < 10000;
-                const isLocalNewer = localOrder.timestamp > cloudOrder.timestamp;
-
-                if (isLocalRecent && isLocalNewer) {
-                    mergedOrders.push(localOrder);
-                    addOrder(localOrder, true); 
-                    return;
-                }
+            if (localOrder && localOrder.timestamp > cloudOrder.timestamp && (Date.now() - localOrder.timestamp < 3000)) {
+                 mergedOrders.push(localOrder);
+            } else {
+                 mergedOrders.push(cloudOrder);
             }
-            mergedOrders.push(cloudOrder);
         });
 
-        // 2. Keep Local Orders NOT in Cloud yet
+        // 2. Keep Local Orders NOT in Cloud yet (Optimistic)
         localOrders.forEach(localOrder => {
             if (!processedIds.has(localOrder.id)) {
                  mergedOrders.push(localOrder);
-                 if ((now - localOrder.timestamp) > 3000 && (now - localOrder.timestamp) < 300000) {
+                 // Retry push if it's been a while (e.g. connection restored)
+                 if ((Date.now() - localOrder.timestamp) > 5000) {
                      addOrder(localOrder, true);
                  }
             }
@@ -266,7 +267,7 @@ const fetchFromCloudMenu = async () => {
         image: row.image,
         isCombo: row.category === Category.MENU_COMPLETO,
         comboItems: row.combo_items,
-        specificDepartment: row.specific_department
+        specific_department: row.specific_department
     }));
 
     safeLocalStorageSave(MENU_KEY, JSON.stringify(cloudMenu));
@@ -280,20 +281,9 @@ const fetchSettingsFromCloud = async (forceOverwrite = false) => {
 
     try {
         const { data, error } = await supabase.from('profiles').select('settings').eq('id', currentUserId).single();
-        
         if (data?.settings) {
-            // FIX: If forceOverwrite is true, we blindly trust the cloud data.
-            // This solves the issue where subscription changes in DB weren't reflecting locally
-            // because the local version was deemed "newer" or conflict resolution failed.
-            if (forceOverwrite) {
-                console.log("☁️ Forcing Settings Sync from Cloud");
-                safeLocalStorageSave(APP_SETTINGS_KEY, JSON.stringify(data.settings));
-                window.dispatchEvent(new Event('local-settings-update'));
-            } else {
-                // Gentle sync logic (optional)
-                safeLocalStorageSave(APP_SETTINGS_KEY, JSON.stringify(data.settings));
-                window.dispatchEvent(new Event('local-settings-update'));
-            }
+            safeLocalStorageSave(APP_SETTINGS_KEY, JSON.stringify(data.settings));
+            window.dispatchEvent(new Event('local-settings-update'));
         }
     } catch (e) {
         console.error("Settings Sync Error", e);
@@ -334,11 +324,10 @@ export const addOrder = async (order: Order, silent = false) => {
 
         if (error) {
             console.error("🔴 CLOUD SYNC FAILED (addOrder):", error.message);
-            // DO NOT THROW. We want to keep working offline. 
-            // Ideally, we'd queue this for retry. 
-            // For now, the Polling mechanism will try to pick up diffs, 
-            // OR the 'Force Sync' button will resolve it.
+            setConnectionStatus(false);
         } else {
+            console.log("✅ Order Pushed to Cloud:", order.id);
+            setConnectionStatus(true);
             broadcastUpdate('orders'); // BROADCAST SUCCESS
         }
     } else {

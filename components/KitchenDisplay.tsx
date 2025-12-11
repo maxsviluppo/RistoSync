@@ -1,8 +1,8 @@
 
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Order, OrderStatus, Category, AppSettings, Department, OrderItem, MenuItem } from '../types';
-import { getOrders, updateOrderStatus, toggleOrderItemCompletion, getAppSettings, getMenuItems, forceCloudSync } from '../services/storageService';
-import { Clock, CheckCircle, ChefHat, Bell, User, LogOut, Square, CheckSquare, AlertOctagon, Timer, PlusCircle, History, Calendar, ChevronLeft, ChevronRight, DollarSign, UtensilsCrossed, Receipt, Pizza, ArrowRightLeft, Utensils, CakeSlice, Wine, Sandwich, ListPlus, RefreshCw } from 'lucide-react';
+import { getOrders, updateOrderStatus, toggleOrderItemCompletion, getAppSettings, getMenuItems, forceCloudSync, getConnectionStatus, initSupabaseSync } from '../services/storageService';
+import { Clock, CheckCircle, ChefHat, Bell, User, LogOut, Square, CheckSquare, AlertOctagon, Timer, PlusCircle, History, Calendar, ChevronLeft, ChevronRight, DollarSign, UtensilsCrossed, Receipt, Pizza, ArrowRightLeft, Utensils, CakeSlice, Wine, Sandwich, ListPlus, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 
 const CATEGORY_PRIORITY: Record<Category, number> = {
     [Category.MENU_COMPLETO]: 0,
@@ -164,6 +164,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
   const [notification, setNotification] = useState<{msg: string, type: 'info' | 'success' | 'alert'} | null>(null);
   const [allMenuItems, setAllMenuItems] = useState<MenuItem[]>([]); // New: Full menu reference for combo lookup
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isConnected, setIsConnected] = useState(getConnectionStatus());
   
   // Analytics State
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -265,19 +266,26 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
   };
 
   useEffect(() => {
+    initSupabaseSync(); // Ensure sync is active
     loadOrders();
+    setIsConnected(getConnectionStatus());
+
     const handleStorageChange = (e: StorageEvent) => { if (e.key === 'ristosync_orders') loadOrders(); };
     const handleLocalUpdate = () => loadOrders();
     const handleSettingsUpdate = () => { setAppSettings(getAppSettings()); loadOrders(); };
+    const handleConnection = (e: any) => setIsConnected(e.detail.connected);
+
     window.addEventListener('storage', handleStorageChange);
     window.addEventListener('local-storage-update', handleLocalUpdate);
     window.addEventListener('local-settings-update', handleSettingsUpdate);
     window.addEventListener('local-menu-update', handleLocalUpdate);
+    window.addEventListener('connection-status-change', handleConnection);
     return () => {
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('local-storage-update', handleLocalUpdate);
       window.removeEventListener('local-settings-update', handleSettingsUpdate);
       window.removeEventListener('local-menu-update', handleLocalUpdate);
+      window.removeEventListener('connection-status-change', handleConnection);
     };
   }, [appSettings, department]); 
 
@@ -346,7 +354,15 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
       <div className="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
         <div className="flex items-center gap-3">
           <div className={`w-14 h-14 rounded-full flex items-center justify-center ${isPizzeria ? 'bg-red-600' : isPub ? 'bg-amber-500' : 'bg-orange-500'}`}><ThemeIcon className="w-8 h-8 text-white" /></div>
-          <div><h1 className="text-3xl font-bold">Risto<span className={`${isPizzeria ? 'text-red-500' : isPub ? 'text-amber-500' : 'text-orange-500'}`}>Sync</span></h1><p className="text-slate-400 text-xs uppercase font-semibold">{isPizzeria ? 'Pizzeria' : isPub ? 'Pub' : 'Kitchen'} Dashboard</p></div>
+          <div>
+              <h1 className="text-3xl font-bold">Risto<span className={`${isPizzeria ? 'text-red-500' : isPub ? 'text-amber-500' : 'text-orange-500'}`}>Sync</span></h1>
+              <div className="flex items-center gap-2">
+                  <p className="text-slate-400 text-xs uppercase font-semibold">{isPizzeria ? 'Pizzeria' : isPub ? 'Pub' : 'Kitchen'} Dashboard</p>
+                  <div className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${isConnected ? 'bg-green-900/30 text-green-400 border border-green-500/30' : 'bg-red-900/30 text-red-400 border border-red-500/30 animate-pulse'}`}>
+                      {isConnected ? <Wifi size={10}/> : <WifiOff size={10}/>} {isConnected ? 'ONLINE' : 'DISCONNESSO'}
+                  </div>
+              </div>
+          </div>
           <button onClick={() => loadOrders()} className="ml-4 p-2 rounded-full bg-slate-800 text-slate-500 hover:text-white"><History size={16} /></button>
           <div className="ml-4 flex bg-slate-800 rounded-lg p-1 border border-slate-700">
              <button onClick={() => setViewMode('active')} className={`px-6 py-2 rounded-md font-bold text-sm uppercase transition-all ${viewMode === 'active' ? 'bg-slate-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}>Attivi</button>
