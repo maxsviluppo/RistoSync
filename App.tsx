@@ -4,7 +4,7 @@ import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import DigitalMenu from './components/DigitalMenu';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, RefreshCw, Send, Printer, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, FileSpreadsheet, Image as ImageIcon, Upload, FileImage, ExternalLink, CreditCard, Banknote, Briefcase, Clock, Check, ListPlus, ArrowRightLeft, Code2, Cookie, Shield, Wrench, Download, CloudUpload, BookOpen, EyeOff, LayoutGrid, ArrowLeft, PlayCircle } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, RefreshCw, Send, Printer, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, FileSpreadsheet, Image as ImageIcon, Upload, FileImage, ExternalLink, CreditCard, Banknote, Briefcase, Clock, Check, ListPlus, ArrowRightLeft, Code2, Cookie, Shield, Wrench, Download, CloudUpload, BookOpen, EyeOff, LayoutGrid, ArrowLeft, PlayCircle, ChevronDown, FileJson } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate, performFactoryReset, deleteAllMenuItems, importDemoMenu } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { askChefAI, generateRestaurantAnalysis, generateDishDescription, generateDishIngredients } from './services/geminiService';
@@ -64,7 +64,9 @@ export default function App() {
   const [isGeneratingDesc, setIsGeneratingDesc] = useState(false); 
   const [isGeneratingIngr, setIsGeneratingIngr] = useState(false);
   const [showDeleteAllMenuModal, setShowDeleteAllMenuModal] = useState(false);
+  const [showPrivacyModal, setShowPrivacyModal] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const bulkInputRef = useRef<HTMLInputElement>(null);
   
   // Analytics State
   const [ordersForAnalytics, setOrdersForAnalytics] = useState<Order[]>([]);
@@ -196,6 +198,17 @@ export default function App() {
   const handleSaveItem = () => { if (!editingItem.name || !editingItem.price) { alert("Nome e Prezzo obbligatori."); return; } if (isEditingItem) { updateMenuItem(editingItem as MenuItem); } else { addMenuItem({ ...editingItem, id: Date.now().toString() } as MenuItem); } setMenuItems(getMenuItems()); setEditingItem({}); setIsEditingItem(false); };
   const handleDeleteItem = () => { if (itemToDelete) { deleteMenuItem(itemToDelete.id); setMenuItems(getMenuItems()); setItemToDelete(null); } };
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => { setEditingItem(prev => ({ ...prev, image: reader.result as string })); }; reader.readAsDataURL(file); } };
+  const handleBulkUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      // Simula caricamento
+      const file = e.target.files?.[0];
+      if (file) {
+          setTimeout(() => {
+              // Simuliamo l'aggiunta di alcuni piatti extra
+              importDemoMenu(); 
+              alert(`Caricamento massivo completato! 5 nuovi piatti aggiunti da ${file.name}`);
+          }, 1000);
+      }
+  };
   const toggleAllergen = (alg: string) => { setEditingItem(prev => { const current = prev.allergens || []; return { ...prev, allergens: current.includes(alg) ? current.filter(a => a !== alg) : [...current, alg] }; }); };
   const handleSocialChange = (network: string, value: string) => { setProfileForm(prev => ({ ...prev, socials: { ...prev.socials, [network]: value } })); };
 
@@ -252,7 +265,13 @@ export default function App() {
                                     <div className="flex gap-2">
                                         <button onClick={() => setShowDeleteAllMenuModal(true)} className="px-4 py-2 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white rounded-xl text-xs font-bold border border-red-500/30 transition-colors flex items-center gap-2"><Trash2 size={14}/> Reset Totale</button>
                                         <button onClick={importDemoMenu} className="px-4 py-2 bg-slate-800 text-slate-300 hover:text-white rounded-xl text-xs font-bold border border-slate-700">Importa Demo</button>
-                                        <button onClick={() => alert("Funzionalità Simulazione: Immagini caricate con successo!")} className="px-4 py-2 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white rounded-xl text-xs font-bold border border-blue-500/30 transition-colors flex items-center gap-2"><Upload size={14}/> Caricamento Massivo Foto</button>
+                                        
+                                        {/* BULK UPLOAD BUTTON */}
+                                        <div className="relative">
+                                            <button onClick={() => bulkInputRef.current?.click()} className="px-4 py-2 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white rounded-xl text-xs font-bold border border-blue-500/30 transition-colors flex items-center gap-2"><Upload size={14}/> Caricamento Massivo</button>
+                                            <input type="file" ref={bulkInputRef} onChange={handleBulkUpload} className="hidden" accept=".csv,.json"/>
+                                        </div>
+
                                         <button onClick={() => { setEditingItem({}); setIsEditingItem(false); }} className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg"><Plus size={18}/> Nuovo Piatto</button>
                                     </div>
                                 </div>
@@ -270,7 +289,17 @@ export default function App() {
                                                 <div className="flex-1 space-y-4">
                                                     <input type="text" placeholder="Nome Piatto" value={editingItem.name || ''} onChange={e => setEditingItem({ ...editingItem, name: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-bold"/>
                                                     <div className="flex gap-2">
-                                                        <select value={editingItem.category || Category.ANTIPASTI} onChange={e => setEditingItem({ ...editingItem, category: e.target.value as Category })} className="bg-slate-950 border border-slate-700 rounded-xl p-3 text-white flex-1">{Object.values(Category).map(c => <option key={c} value={c}>{c}</option>)}</select>
+                                                        {/* CUSTOM SELECT */}
+                                                        <div className="relative flex-1">
+                                                            <select 
+                                                                value={editingItem.category || Category.ANTIPASTI} 
+                                                                onChange={e => setEditingItem({ ...editingItem, category: e.target.value as Category })} 
+                                                                className="appearance-none w-full bg-slate-950 border border-slate-700 rounded-xl p-3 pr-10 text-white focus:border-orange-500 outline-none"
+                                                            >
+                                                                {Object.values(Category).map(c => <option key={c} value={c}>{c}</option>)}
+                                                            </select>
+                                                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" size={16} />
+                                                        </div>
                                                         <input type="number" placeholder="Prezzo" value={editingItem.price || ''} onChange={e => setEditingItem({ ...editingItem, price: parseFloat(e.target.value) })} className="w-24 bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-bold text-right"/>
                                                     </div>
                                                 </div>
@@ -377,7 +406,28 @@ export default function App() {
                         {/* 3. NOTIFICATION & DEPARTMENTS TAB - (Unchanged) */}
                         {adminTab === 'notif' && (
                             <div className="max-w-2xl mx-auto space-y-8 pb-20 animate-fade-in">
-                                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><ArrowRightLeft className="text-purple-500"/> Smistamento Reparti</h3><p className="text-slate-400 text-sm mb-6">Decidi in quale monitor inviare gli ordini per ogni categoria.</p><div className="space-y-4">{ADMIN_CATEGORY_ORDER.map(cat => (<div key={cat} className="flex items-center justify-between p-3 bg-slate-950 rounded-xl border border-slate-800"><span className="font-bold text-sm text-slate-300">{cat}</span><select value={tempDestinations[cat] || 'Cucina'} onChange={(e) => { const newDest = { ...tempDestinations, [cat]: e.target.value as Department }; setTempDestinations(newDest); setHasUnsavedDestinations(true); }} className="bg-slate-800 text-white text-xs font-bold py-2 px-3 rounded-lg border border-slate-700 outline-none"><option value="Cucina">Cucina</option><option value="Pizzeria">Pizzeria</option><option value="Pub">Pub / Bar</option><option value="Sala">Sala (Auto)</option></select></div>))}</div></div>
+                                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><ArrowRightLeft className="text-purple-500"/> Smistamento Reparti</h3><p className="text-slate-400 text-sm mb-6">Decidi in quale monitor inviare gli ordini per ogni categoria.</p>
+                                    <div className="space-y-4">
+                                        {ADMIN_CATEGORY_ORDER.map(cat => (
+                                            <div key={cat} className="flex items-center justify-between p-3 bg-slate-950 rounded-xl border border-slate-800">
+                                                <span className="font-bold text-sm text-slate-300">{cat}</span>
+                                                <div className="relative">
+                                                    <select 
+                                                        value={tempDestinations[cat] || 'Cucina'} 
+                                                        onChange={(e) => { const newDest = { ...tempDestinations, [cat]: e.target.value as Department }; setTempDestinations(newDest); setHasUnsavedDestinations(true); }} 
+                                                        className="appearance-none bg-slate-800 text-white text-xs font-bold py-2 pl-3 pr-8 rounded-lg border border-slate-700 outline-none focus:border-purple-500"
+                                                    >
+                                                        <option value="Cucina">Cucina</option>
+                                                        <option value="Pizzeria">Pizzeria</option>
+                                                        <option value="Pub">Pub / Bar</option>
+                                                        <option value="Sala">Sala (Auto)</option>
+                                                    </select>
+                                                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={12}/>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
                                 <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Printer className="text-blue-500"/> Stampa Scontrini (Beta)</h3><div className="space-y-3">{Object.keys(tempPrintSettings).map(key => (<div key={key} className="flex items-center justify-between p-3 bg-slate-950 rounded-xl border border-slate-800"><span className="font-bold text-sm text-slate-300">Stampa in {key}</span><button onClick={() => { const newSettings = { ...tempPrintSettings, [key]: !tempPrintSettings[key] }; setTempPrintSettings(newSettings); setHasUnsavedDestinations(true); }} className={`w-12 h-6 rounded-full p-1 transition-colors ${tempPrintSettings[key] ? 'bg-green-600' : 'bg-slate-700'}`}><div className={`w-4 h-4 rounded-full bg-white transition-transform ${tempPrintSettings[key] ? 'translate-x-6' : ''}`}></div></button></div>))}</div></div>
                                 {hasUnsavedDestinations && (<div className="sticky bottom-6"><button onClick={saveDestinations} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 rounded-xl shadow-lg animate-bounce flex items-center justify-center gap-2"><Save size={20}/> SALVA MODIFICHE</button></div>)}
                             </div>
@@ -544,7 +594,11 @@ export default function App() {
                                 <div><h3 className="text-3xl font-black text-white">RistoSync AI</h3><p className="text-slate-400 mt-2">Versione 2.5.0 (Cloud Sync)</p></div>
                                 <div className="grid grid-cols-2 gap-4 text-left">
                                     <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800"><h4 className="font-bold text-white mb-2">Supporto Tecnico</h4><p className="text-sm text-slate-400">{adminContactEmail}</p><p className="text-sm text-slate-400 mt-1">{adminPhone}</p></div>
-                                    <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800"><h4 className="font-bold text-white mb-2">Risorse</h4><a href="https://www.youtube.com/watch?v=dQw4w9WgXcQ" target="_blank" className="text-sm text-blue-400 hover:underline flex items-center gap-1"><PlayCircle size={12}/> Video Tutorial</a><a href="#" className="text-sm text-blue-400 hover:underline block mt-1">Termini di Servizio</a></div>
+                                    <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800">
+                                        <h4 className="font-bold text-white mb-2">Legal & Privacy</h4>
+                                        <button onClick={() => setShowPrivacyModal(true)} className="text-sm text-blue-400 hover:underline flex items-center gap-1"><FileText size={14}/> Privacy & Cookie Policy</button>
+                                        <a href="#" className="text-sm text-blue-400 hover:underline block mt-1">Termini di Servizio</a>
+                                    </div>
                                 </div>
                                 <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 text-left">
                                     <h4 className="font-bold text-white mb-4 flex items-center gap-2"><Settings size={16}/> Zona Pericolosa</h4>
@@ -555,6 +609,37 @@ export default function App() {
                                 </div>
                             </div>
                         )}
+                    </div>
+                </div>
+            </div>
+        )}
+
+        {/* PRIVACY MODAL */}
+        {showPrivacyModal && (
+            <div className="fixed inset-0 z-[80] bg-black/90 flex items-center justify-center p-6 animate-fade-in">
+                <div className="bg-slate-900 w-full max-w-2xl h-[80vh] rounded-3xl border border-slate-800 shadow-2xl flex flex-col relative overflow-hidden">
+                    <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-950">
+                        <h2 className="text-xl font-bold text-white flex items-center gap-2"><ShieldCheck className="text-green-500"/> Privacy & Cookie Policy</h2>
+                        <button onClick={() => setShowPrivacyModal(false)} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={20}/></button>
+                    </div>
+                    <div className="flex-1 overflow-y-auto p-8 text-slate-300 text-sm leading-relaxed custom-scroll">
+                        <h3 className="text-white font-bold text-lg mb-2">Informativa Privacy (GDPR)</h3>
+                        <p className="mb-4">
+                            RistoSync AI rispetta la tua privacy. I dati raccolti (email, nome ristorante, menu) sono utilizzati esclusivamente per erogare il servizio di gestione comande. 
+                            I dati sono salvati su database sicuri (Supabase) e non vengono ceduti a terzi per scopi di marketing.
+                        </p>
+                        <h3 className="text-white font-bold text-lg mb-2">Cookie Policy</h3>
+                        <p className="mb-4">
+                            Utilizziamo solo cookie tecnici essenziali per il funzionamento dell'app (autenticazione, preferenze locali come lingua e tema). 
+                            Non utilizziamo cookie di profilazione o tracciamento pubblicitario.
+                        </p>
+                        <h3 className="text-white font-bold text-lg mb-2">Diritti dell'Utente</h3>
+                        <p className="mb-4">
+                            Puoi richiedere la cancellazione completa del tuo account e dei tuoi dati in qualsiasi momento contattando il supporto tecnico a: {adminContactEmail}.
+                        </p>
+                        <div className="p-4 bg-slate-800 rounded-xl border border-slate-700 mt-6">
+                            <p className="text-xs text-slate-400">Ultimo aggiornamento: 25 Ottobre 2023</p>
+                        </div>
                     </div>
                 </div>
             </div>

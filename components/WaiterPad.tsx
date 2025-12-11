@@ -164,8 +164,10 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
         if (currentActiveOrder) {
           updateOrderItems(currentActiveOrder.id, cart);
         } else {
-          // Robust ID generation
-          const newId = `${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+          // MORE ROBUST ID GENERATION TO PREVENT COLLISIONS
+          const randomSuffix = Math.random().toString(36).substring(2, 8);
+          const newId = `order_${Date.now()}_${randomSuffix}`;
+          
           const newOrder: Order = {
             id: newId,
             tableNumber: selectedTable,
@@ -186,11 +188,11 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
         // Force update to refresh table status immediately
         setTimeout(() => {
             loadData();
-        }, 50);
+        }, 100);
         
     } catch (error) {
         console.error("Errore invio ordine:", error);
-        alert("Errore invio ordine. Riprova o verifica la connessione.");
+        alert("Errore di connessione. Se il problema persiste, contatta l'assistenza.");
         setShowConfirmModal(false);
     }
   };
