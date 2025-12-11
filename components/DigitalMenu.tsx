@@ -353,7 +353,7 @@ const DigitalMenu: React.FC<DigitalMenuProps> = ({ restaurantId, isPreview = fal
                                                 
                                                 {/* DISH IMAGE */}
                                                 {item.image && (
-                                                    <div className={`shrink-0 rounded-xl border border-slate-100 overflow-hidden shadow-sm ${isPreview ? 'w-16 h-16' : 'w-24 h-24'}`}>
+                                                    <div className={`shrink-0 rounded-xl overflow-hidden aspect-square bg-white ${isPreview ? 'w-16' : 'w-24'}`}>
                                                         <img src={item.image} alt={item.name} className="w-full h-full object-cover"/>
                                                     </div>
                                                 )}

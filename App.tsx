@@ -1039,7 +1039,7 @@ Grazie.`);
                                 ) : (
                                     <div className="w-16 h-16 bg-slate-950 rounded-xl border border-dashed border-slate-700 flex items-center justify-center text-slate-500"><ImageIcon size={20}/></div>
                                 )}
-                                <div className="flex-1"><input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" id="dish-image-upload"/><label htmlFor="dish-image-upload" className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold uppercase rounded-lg cursor-pointer transition-colors border border-slate-700"><Upload size={14}/> Carica Foto</label><p className="text-[10px] text-slate-500 mt-1">Formati: JPG, PNG. Max 1MB consigliato.</p></div>
+                                <div className="flex-1"><input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" id="dish-image-upload"/><label htmlFor="dish-image-upload" className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold uppercase rounded-lg cursor-pointer transition-colors border border-slate-700"><Upload size={14}/> Carica Foto</label><p className="text-[10px] text-slate-500 mt-1">Formati: JPG, PNG. Max 1MB.<br/><span className="text-orange-500 font-bold">Consiglio:</span> Usa img quadrate (800x800) su fondo bianco.</p></div>
                             </div>
                         </div>
 
