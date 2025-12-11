@@ -623,18 +623,19 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
           </div>
       )}
 
-      {/* --- MENU GRID --- */}
-      <div className={`flex-1 overflow-y-auto pb-48 relative scroll-smooth z-10 no-scrollbar touch-pan-y transition-all ${editingItemId ? 'opacity-30 pointer-events-none grayscale' : ''}`}>
-          <div className="sticky top-0 z-30 pt-2 pb-4 bg-gradient-to-b from-slate-900 via-slate-900/95 to-transparent">
-            <div className="flex px-4 gap-3 overflow-x-auto no-scrollbar scroll-smooth snap-x snap-mandatory">
-                {Object.values(Category).map(cat => {
-                    const isActive = selectedCategory === cat;
-                    return <button key={cat} onClick={() => setSelectedCategory(cat)} className={`flex flex-row items-center justify-center gap-2 py-3 px-5 rounded-lg transition-all duration-300 snap-center shrink-0 border ${isActive ? 'bg-orange-500 border-orange-400 text-white shadow-lg shadow-orange-500/25 font-bold' : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}><span className={`transition-transform duration-300 ${isActive ? 'scale-110' : ''}`}>{getCategoryIcon(cat)}</span><span className="text-xs uppercase tracking-wide">{cat}</span></button>;
-                })}
-            </div>
-          </div>
+      {/* --- CATEGORY BAR (FIXED) --- */}
+      <div className="z-30 pt-2 pb-2 bg-slate-900 border-b border-white/5 shrink-0">
+        <div className="flex px-4 gap-3 overflow-x-auto no-scrollbar scroll-smooth snap-x snap-mandatory">
+            {Object.values(Category).map(cat => {
+                const isActive = selectedCategory === cat;
+                return <button key={cat} onClick={() => setSelectedCategory(cat)} className={`flex flex-row items-center justify-center gap-2 py-3 px-5 rounded-lg transition-all duration-300 snap-center shrink-0 border ${isActive ? 'bg-orange-500 border-orange-400 text-white shadow-lg shadow-orange-500/25 font-bold' : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:bg-slate-800 hover:text-slate-200'}`}><span className={`transition-transform duration-300 ${isActive ? 'scale-110' : ''}`}>{getCategoryIcon(cat)}</span><span className="text-xs uppercase tracking-wide">{cat}</span></button>;
+            })}
+        </div>
+      </div>
 
-          <div className="px-3 pt-1 grid grid-cols-2 gap-3 pb-32">
+      {/* --- MENU GRID (SCROLLABLE) --- */}
+      <div className={`flex-1 overflow-y-auto pb-48 relative scroll-smooth touch-pan-y transition-all ${editingItemId ? 'opacity-30 pointer-events-none grayscale' : ''}`}>
+          <div className="px-3 pt-4 grid grid-cols-2 gap-3 pb-32">
               {menuItems.filter(i => i.category === selectedCategory).map(item => {
                   const isPopping = justAddedId === item.id;
                   return (
