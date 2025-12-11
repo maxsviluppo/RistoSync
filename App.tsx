@@ -244,8 +244,18 @@ export default function App() {
   const toggleAllergen = (alg: string) => { setEditingItem(prev => { const current = prev.allergens || []; return { ...prev, allergens: current.includes(alg) ? current.filter(a => a !== alg) : [...current, alg] }; }); };
   const handleSocialChange = (network: string, value: string) => { setProfileForm(prev => ({ ...prev, socials: { ...prev.socials, [network]: value } })); };
 
+  // PAYMENT REQUEST HANDLER
   const handlePayment = (method: string) => {
-      alert(`Reindirizzamento al gateway di pagamento ${method}... (Funzione simulata per la demo)`);
+      const subject = `Richiesta Link Pagamento ${method} - ${restaurantName}`;
+      const body = `Salve, vorrei effettuare il pagamento del rinnovo tramite ${method}. Attendo link sicuro o istruzioni.`;
+      window.location.href = `mailto:${adminContactEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
+
+  // PLAN CHANGE HANDLER
+  const handlePlanChangeRequest = () => {
+      const subject = `Richiesta Cambio Piano - ${restaurantName}`;
+      const body = `Salve, vorrei cambiare il mio piano di abbonamento per il ristorante ${restaurantName}. Attendo un contatto per valutare le opzioni.`;
+      window.location.href = `mailto:${adminContactEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
   // SHARE HANDLERS
@@ -311,6 +321,20 @@ export default function App() {
                                         <button onClick={() => { setEditingItem({}); setIsEditingItem(false); }} className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg"><Plus size={18}/> Nuovo Piatto</button>
                                     </div>
                                 </div>
+
+                                {/* TABLE COUNT (MOVED HERE) */}
+                                <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 mb-6 flex items-center gap-4">
+                                    <div className="p-3 bg-slate-800 rounded-lg text-slate-400"><LayoutGrid size={24}/></div>
+                                    <div className="flex-1">
+                                        <h4 className="text-sm font-bold text-white">Configurazione Sala</h4>
+                                        <p className="text-xs text-slate-400">Imposta il numero totale di tavoli visibili nel pad cameriere.</p>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <input type="number" min="1" max="100" value={profileForm.tableCount || 12} onChange={e => setProfileForm({...profileForm, tableCount: parseInt(e.target.value) || 1})} className="w-24 bg-slate-950 border border-slate-700 rounded-xl py-3 px-4 text-white font-black text-lg outline-none text-center"/>
+                                        <button onClick={handleSaveProfile} className="bg-blue-600 hover:bg-blue-500 text-white p-3 rounded-xl font-bold transition-colors"><Save size={20}/></button>
+                                    </div>
+                                </div>
+
                                 {/* EDIT FORM */}
                                 { (isEditingItem || Object.keys(editingItem).length > 0) && (
                                     <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 mb-8 animate-slide-up shadow-xl">
@@ -419,11 +443,6 @@ export default function App() {
                                         </div>
                                         <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Insegna Ristorante</label>
                                         <div className="relative mb-4"><ChefHat className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/><input type="text" value={profileForm.name || ''} onChange={e => setProfileForm({...profileForm, name: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white font-bold text-lg outline-none" placeholder="Il Tuo Ristorante"/></div>
-                                        <label className="block text-slate-400 text-xs font-bold uppercase mb-2 flex items-center gap-2"><LayoutGrid size={14}/> Numero Tavoli</label>
-                                        <div className="flex items-center gap-3">
-                                            <input type="number" min="1" max="100" value={profileForm.tableCount || 12} onChange={e => setProfileForm({...profileForm, tableCount: parseInt(e.target.value) || 1})} className="w-24 bg-slate-950 border border-slate-700 rounded-xl py-3 px-4 text-white font-black text-lg outline-none text-center"/>
-                                            <span className="text-sm text-slate-500 font-medium">Tavoli totali visibili nel WaiterPad.</span>
-                                        </div>
                                     </div>
                                     
                                     <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h4 className="text-slate-300 font-bold mb-4 flex items-center gap-2"><Briefcase size={18}/> Dati Fiscali</h4><div className="grid grid-cols-1 gap-4"><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Ragione Sociale</label><input type="text" value={profileForm.businessName || ''} onChange={e => setProfileForm({...profileForm, businessName: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Es. Rossi S.r.l."/></div><div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Responsabile</label><input type="text" value={profileForm.responsiblePerson || ''} onChange={e => setProfileForm({...profileForm, responsiblePerson: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Nome Cognome"/></div><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">P.IVA / CF</label><input type="text" value={profileForm.vatNumber || ''} onChange={e => setProfileForm({...profileForm, vatNumber: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm font-mono"/></div></div>
@@ -434,6 +453,14 @@ export default function App() {
                                     
                                     <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h4 className="text-slate-300 font-bold mb-4 flex items-center gap-2"><Share2 size={18}/> Social Networks</h4><div className="space-y-3"><div className="flex items-center gap-3"><Instagram className="text-pink-500"/><input type="text" value={profileForm.socials?.instagram || ''} onChange={e => handleSocialChange('instagram', e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Link Instagram"/></div><div className="flex items-center gap-3"><Facebook className="text-blue-600"/><input type="text" value={profileForm.socials?.facebook || ''} onChange={e => handleSocialChange('facebook', e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Link Facebook"/></div><div className="flex items-center gap-3"><Store className="text-blue-400"/><input type="text" value={profileForm.socials?.google || ''} onChange={e => handleSocialChange('google', e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Link Google Business"/></div><div className="flex items-center gap-3"><Compass className="text-green-500"/><input type="text" value={profileForm.socials?.tripadvisor || ''} onChange={e => handleSocialChange('tripadvisor', e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Link TripAdvisor"/></div></div></div>
                                     
+                                    {/* DANGER ZONE - MOVED HERE */}
+                                    <div className="bg-slate-900 p-6 rounded-2xl border border-red-500/20 text-left mt-6">
+                                        <h4 className="font-bold text-white mb-4 flex items-center gap-2 text-red-400"><Settings size={16}/> Zona Pericolosa</h4>
+                                        <div className="flex gap-3">
+                                            <button onClick={() => { if(confirm("Vuoi resettare tutte le impostazioni locali?")){ localStorage.clear(); window.location.reload(); } }} className="flex-1 py-3 bg-red-600/10 hover:bg-red-600 text-red-400 hover:text-white text-xs font-bold uppercase tracking-widest rounded-xl border border-red-500/30 transition-all flex items-center justify-center gap-2"><RefreshCw size={14}/> Factory Reset</button>
+                                        </div>
+                                    </div>
+
                                     <div className="pt-4 border-t border-slate-800"><button onClick={handleSaveProfile} className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-green-600/20 active:scale-95 transition-all"><Save size={20}/> SALVA PROFILO</button></div>
                                 </div>
                             </div>
@@ -596,27 +623,32 @@ export default function App() {
                                         <h2 className="text-5xl font-black text-white mb-2">{appSettings.restaurantProfile?.planType || 'Pro'}</h2>
                                         <p className="text-slate-400 mb-8 font-medium">Scadenza: <span className="text-white">{appSettings.restaurantProfile?.subscriptionEndDate ? new Date(appSettings.restaurantProfile.subscriptionEndDate).toLocaleDateString() : 'Illimitata'}</span></p>
                                         
-                                        <button className="bg-blue-600 hover:bg-blue-500 text-white text-xl font-bold py-4 px-12 rounded-2xl shadow-lg shadow-blue-600/30 transform hover:scale-105 transition-all flex items-center gap-3">
-                                            <span>Rinnova Ora</span>
-                                            <div className="bg-blue-800 px-3 py-1 rounded-lg text-blue-200 text-sm">€ {appSettings.restaurantProfile?.subscriptionCost || '49.90'} / al mese</div>
-                                        </button>
+                                        <div className="flex gap-3">
+                                            <button className="bg-blue-600 hover:bg-blue-500 text-white text-xl font-bold py-4 px-12 rounded-2xl shadow-lg shadow-blue-600/30 transform hover:scale-105 transition-all flex items-center gap-3">
+                                                <span>Rinnova Ora</span>
+                                                <div className="bg-blue-800 px-3 py-1 rounded-lg text-blue-200 text-sm">€ {appSettings.restaurantProfile?.subscriptionCost || '49.90'} / al mese</div>
+                                            </button>
+                                            <button onClick={handlePlanChangeRequest} className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-4 px-6 rounded-2xl border border-slate-600 flex items-center gap-2">
+                                                <Edit2 size={18}/> Richiedi Cambio Piano
+                                            </button>
+                                        </div>
                                         <p className="text-slate-500 text-xs mt-4">Pagamento sicuro e fatturazione automatica.</p>
                                     </div>
                                 </div>
 
-                                {/* PAYMENT METHODS */}
+                                {/* PAYMENT METHODS (UPDATED TO EMAIL REQUEST) */}
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    <button onClick={() => handlePayment('Carta di Credito')} className="bg-slate-900 border border-slate-700 hover:border-slate-500 p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1 active:scale-95">
-                                        <CreditCard size={24} className="text-white"/> <span className="text-xs font-bold">Carta</span>
+                                    <button onClick={() => handlePayment('Carta di Credito')} className="bg-slate-900 border border-slate-700 hover:border-slate-500 p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1 active:scale-95 group">
+                                        <CreditCard size={24} className="text-white group-hover:text-blue-400"/> <span className="text-xs font-bold">Richiedi Link Carta</span>
                                     </button>
                                     <button onClick={() => handlePayment('PayPal')} className="bg-slate-900 border border-slate-700 hover:border-blue-500 p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1 active:scale-95">
-                                        <div className="font-black italic text-blue-500 text-lg">Pay<span className="text-blue-400">Pal</span></div> <span className="text-xs font-bold">PayPal</span>
+                                        <div className="font-black italic text-blue-500 text-lg">Pay<span className="text-blue-400">Pal</span></div> <span className="text-xs font-bold">Richiedi PayPal</span>
                                     </button>
-                                    <button onClick={() => handlePayment('Apple Pay')} className="bg-slate-900 border border-slate-700 hover:border-white p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1 active:scale-95">
-                                        <div className="font-bold text-white text-lg">Apple Pay</div> <span className="text-xs font-bold">Apple</span>
+                                    <button onClick={() => handlePayment('Apple Pay')} className="bg-slate-900 border border-slate-700 hover:border-white p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1 active:scale-95 group">
+                                        <div className="font-bold text-white text-lg group-hover:text-gray-300">Apple Pay</div> <span className="text-xs font-bold">Richiedi Link</span>
                                     </button>
-                                    <button onClick={() => handlePayment('Google Pay')} className="bg-slate-900 border border-slate-700 hover:border-green-500 p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1 active:scale-95">
-                                        <div className="font-bold text-white text-lg"><span className="text-blue-500">G</span>Pay</div> <span className="text-xs font-bold">Google</span>
+                                    <button onClick={() => handlePayment('Google Pay')} className="bg-slate-900 border border-slate-700 hover:border-green-500 p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1 active:scale-95 group">
+                                        <div className="font-bold text-white text-lg"><span className="text-blue-500 group-hover:text-blue-400">G</span>Pay</div> <span className="text-xs font-bold">Richiedi Link</span>
                                     </button>
                                 </div>
 
@@ -669,13 +701,6 @@ export default function App() {
                                         <a href="#" className="text-sm text-blue-400 hover:underline block mt-1">Termini di Servizio</a>
                                     </div>
                                 </div>
-                                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 text-left">
-                                    <h4 className="font-bold text-white mb-4 flex items-center gap-2"><Settings size={16}/> Zona Pericolosa</h4>
-                                    <div className="flex gap-3">
-                                        <button onClick={() => setShowDeleteAllMenuModal(true)} className="flex-1 py-3 bg-red-600/10 hover:bg-red-600 hover:text-white text-red-500 text-xs font-bold uppercase tracking-widest rounded-xl border border-red-500/30 transition-all flex items-center justify-center gap-2"><Trash2 size={14}/> Reset Menu</button>
-                                        <button onClick={() => { if(confirm("Vuoi resettare tutte le impostazioni locali?")){ localStorage.clear(); window.location.reload(); } }} className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold uppercase tracking-widest rounded-xl border border-slate-700 transition-all flex items-center justify-center gap-2"><RefreshCw size={14}/> Factory Reset</button>
-                                    </div>
-                                </div>
                             </div>
                         )}
                     </div>
@@ -683,29 +708,48 @@ export default function App() {
             </div>
         )}
 
-        {/* PRIVACY MODAL */}
+        {/* PRIVACY & TERMS MODAL */}
         {showPrivacyModal && (
             <div className="fixed inset-0 z-[80] bg-black/90 flex items-center justify-center p-6 animate-fade-in">
                 <div className="bg-slate-900 w-full max-w-2xl h-[80vh] rounded-3xl border border-slate-800 shadow-2xl flex flex-col relative overflow-hidden">
                     <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-950">
-                        <h2 className="text-xl font-bold text-white flex items-center gap-2"><ShieldCheck className="text-green-500"/> Privacy & Cookie Policy</h2>
+                        <h2 className="text-xl font-bold text-white flex items-center gap-2"><ShieldCheck className="text-green-500"/> Privacy & Termini di Servizio</h2>
                         <button onClick={() => setShowPrivacyModal(false)} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={20}/></button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-8 text-slate-300 text-sm leading-relaxed custom-scroll">
+                        <h3 className="text-white font-bold text-lg mb-2">Fornitore del Servizio</h3>
+                        <p className="mb-4">
+                            Il servizio <strong>RistoSync AI</strong> è erogato da:<br/>
+                            <strong>Massimo Castro</strong><br/>
+                            Email: {adminContactEmail}<br/>
+                            Telefono: {adminPhone}
+                        </p>
+
+                        <h3 className="text-white font-bold text-lg mb-2">Termini di Pagamento</h3>
+                        <p className="mb-4">
+                            L'abbonamento al servizio è mensile o annuale. Il pagamento deve essere effettuato tramite bonifico bancario alle seguenti coordinate:<br/>
+                            <strong>IBAN:</strong> {adminIban}<br/>
+                            <strong>Intestatario:</strong> {adminHolder}<br/>
+                            Il mancato pagamento comporta la sospensione dell'account dopo 5 giorni dalla scadenza.
+                        </p>
+
                         <h3 className="text-white font-bold text-lg mb-2">Informativa Privacy (GDPR)</h3>
                         <p className="mb-4">
                             RistoSync AI rispetta la tua privacy. I dati raccolti (email, nome ristorante, menu) sono utilizzati esclusivamente per erogare il servizio di gestione comande. 
                             I dati sono salvati su database sicuri (Supabase) e non vengono ceduti a terzi per scopi di marketing.
                         </p>
+                        
                         <h3 className="text-white font-bold text-lg mb-2">Cookie Policy</h3>
                         <p className="mb-4">
                             Utilizziamo solo cookie tecnici essenziali per il funzionamento dell'app (autenticazione, preferenze locali come lingua e tema). 
                             Non utilizziamo cookie di profilazione o tracciamento pubblicitario.
                         </p>
+                        
                         <h3 className="text-white font-bold text-lg mb-2">Diritti dell'Utente</h3>
                         <p className="mb-4">
                             Puoi richiedere la cancellazione completa del tuo account e dei tuoi dati in qualsiasi momento contattando il supporto tecnico a: {adminContactEmail}.
                         </p>
+                        
                         <div className="p-4 bg-slate-800 rounded-xl border border-slate-700 mt-6">
                             <p className="text-xs text-slate-400">Ultimo aggiornamento: 25 Ottobre 2023</p>
                         </div>

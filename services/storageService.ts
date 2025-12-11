@@ -124,6 +124,15 @@ export const initSupabaseSync = async () => {
     }
 };
 
+const handleSupabaseError = (error: any) => {
+    if (!error) return;
+    console.error("Supabase Error:", error);
+    if (error.message && error.message.includes("quota")) {
+        alert("⚠️ Spazio Database Esaurito! Il piano gratuito di Supabase ha raggiunto il limite. Contatta l'amministratore per l'upgrade o cancella vecchi ordini.");
+    }
+    return error;
+}
+
 const fetchFromCloud = async () => {
     if (!supabase || !currentUserId) return;
     // CRITICAL FIX: Explicitly filter by user_id to prevent data mixing
@@ -133,7 +142,7 @@ const fetchFromCloud = async () => {
         .eq('user_id', currentUserId);
 
     if (error) {
-        console.error('Error fetching orders:', error);
+        handleSupabaseError(error);
         return;
     }
     
@@ -162,6 +171,8 @@ const fetchFromCloudMenu = async () => {
         .from('menu_items')
         .select('*')
         .eq('user_id', currentUserId);
+
+    if (error) handleSupabaseError(error);
 
     if (!error && data) {
          // Map DB snake_case columns back to camelCase for App
@@ -213,6 +224,7 @@ const syncOrderToCloud = async (order: Order, isDelete = false) => {
     
     if (isDelete) {
         const { error } = await supabase.from('orders').delete().eq('id', order.id);
+        if (error) handleSupabaseError(error);
         return error;
     } else {
         const payload = {
@@ -225,7 +237,7 @@ const syncOrderToCloud = async (order: Order, isDelete = false) => {
             waiter_name: order.waiterName
         };
         const { error } = await supabase.from('orders').upsert(payload);
-        if (error) console.error("Cloud Sync Error", error);
+        if (error) handleSupabaseError(error);
         return error;
     }
 };
@@ -489,12 +501,14 @@ export const deleteHistoryByDate = async (targetDate: Date) => {
         const startOfDay = new Date(targetDate); startOfDay.setHours(0,0,0,0);
         const endOfDay = new Date(targetDate); endOfDay.setHours(23,59,59,999);
         
-        await supabase.from('orders')
+        const { error } = await supabase.from('orders')
             .delete()
             .eq('user_id', currentUserId)
             .eq('status', OrderStatus.DELIVERED)
             .gte('created_at', startOfDay.toISOString())
             .lte('created_at', endOfDay.toISOString());
+        
+        if (error) handleSupabaseError(error);
     }
 };
 
@@ -538,7 +552,8 @@ export const deleteAllMenuItems = async () => {
     window.dispatchEvent(new Event('local-menu-update'));
 
     if (supabase && currentUserId) {
-        await supabase.from('menu_items').delete().eq('user_id', currentUserId);
+        const { error } = await supabase.from('menu_items').delete().eq('user_id', currentUserId);
+        if (error) handleSupabaseError(error);
     }
 };
 
@@ -562,7 +577,7 @@ export const importDemoMenu = async () => {
     const { error } = await supabase.from('menu_items').upsert(demoItemsWithUserId);
     
     if (error) {
-        console.error("Demo Import Error:", error);
+        handleSupabaseError(error);
         alert("Errore durante l'importazione demo.");
         return;
     }
@@ -612,7 +627,8 @@ export const getMenuItems = (): MenuItem[] => {
 const syncMenuToCloud = async (item: MenuItem, isDelete = false) => {
     if (!supabase || !currentUserId) return;
     if (isDelete) {
-        await supabase.from('menu_items').delete().eq('id', item.id);
+        const { error } = await supabase.from('menu_items').delete().eq('id', item.id);
+        if (error) handleSupabaseError(error);
     } else {
          const payload = {
             id: item.id,
@@ -627,7 +643,8 @@ const syncMenuToCloud = async (item: MenuItem, isDelete = false) => {
             combo_items: item.comboItems, 
             specific_department: item.specificDepartment
         };
-        await supabase.from('menu_items').upsert(payload);
+        const { error } = await supabase.from('menu_items').upsert(payload);
+        if (error) handleSupabaseError(error);
     }
 };
 
@@ -732,7 +749,7 @@ export const saveAppSettings = async (settings: AppSettings) => {
             .from('profiles')
             .update({ settings: settings })
             .eq('id', currentUserId);
-        if (error) console.error("Failed to save App Settings to cloud", error);
+        if (error) handleSupabaseError(error);
     }
 };
 

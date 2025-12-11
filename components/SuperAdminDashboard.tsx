@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { supabase, signOut } from '../services/supabase';
 import { ShieldCheck, Users, Database, LogOut, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon, FileText, MapPin, CreditCard, Mail, MessageCircle, Share2, PhoneCall, Facebook, Instagram, Store, Compass, Wrench, Calendar, DollarSign, Briefcase, Sparkles, Clock, AlertOctagon, UserCheck, Banknote, CalendarCheck, Settings, Inbox, Hash, MonitorPlay } from 'lucide-react';
@@ -262,7 +261,7 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
                         <button onClick={() => setShowFixModal(true)} className="p-3 bg-red-600/20 rounded-xl text-red-400 hover:text-white hover:bg-red-600 transition-colors border border-red-500/50 shadow-lg shadow-red-900/20 active:scale-95" title="Strumenti Riparazione DB"><Wrench size={20} /></button>
                         <button onClick={() => setShowSqlModal(true)} className="p-3 bg-slate-800 rounded-xl text-slate-400 hover:text-white hover:bg-slate-700 transition-colors border border-slate-700 active:scale-95" title="Genera Demo User"><Database size={20} /></button>
                         <button onClick={onEnterApp} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl font-bold shadow-lg shadow-blue-600/20 transition-all"><Smartphone size={18} /> Entra come Utente</button>
-                        <button onClick={signOut} className="flex items-center gap-2 text-slate-400 hover:text-white bg-slate-800 px-6 py-3 rounded-xl font-bold border border-slate-700"><LogOut size={18} /> Logout</button>
+                        <button onClick={signOut} className="flex items-center gap-2 text-red-400 hover:text-white bg-slate-800 px-6 py-3 rounded-xl font-bold border border-slate-700 hover:bg-red-900/20"><LogOut size={18} /> Esci e Torna al Login</button>
                     </div>
                 </div>
 
