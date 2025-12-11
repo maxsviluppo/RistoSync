@@ -244,6 +244,10 @@ export default function App() {
   const toggleAllergen = (alg: string) => { setEditingItem(prev => { const current = prev.allergens || []; return { ...prev, allergens: current.includes(alg) ? current.filter(a => a !== alg) : [...current, alg] }; }); };
   const handleSocialChange = (network: string, value: string) => { setProfileForm(prev => ({ ...prev, socials: { ...prev.socials, [network]: value } })); };
 
+  const handlePayment = (method: string) => {
+      alert(`Reindirizzamento al gateway di pagamento ${method}... (Funzione simulata per la demo)`);
+  };
+
   // SHARE HANDLERS
   const digitalMenuLink = session?.user?.id ? `${window.location.origin}?menu=${session.user.id}` : '';
   const qrCodeUrl = digitalMenuLink ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(digitalMenuLink)}` : '';
@@ -594,7 +598,7 @@ export default function App() {
                                         
                                         <button className="bg-blue-600 hover:bg-blue-500 text-white text-xl font-bold py-4 px-12 rounded-2xl shadow-lg shadow-blue-600/30 transform hover:scale-105 transition-all flex items-center gap-3">
                                             <span>Rinnova Ora</span>
-                                            <div className="bg-blue-800 px-3 py-1 rounded-lg text-blue-200 text-sm">€ {appSettings.restaurantProfile?.subscriptionCost || '49.90'}</div>
+                                            <div className="bg-blue-800 px-3 py-1 rounded-lg text-blue-200 text-sm">€ {appSettings.restaurantProfile?.subscriptionCost || '49.90'} / al mese</div>
                                         </button>
                                         <p className="text-slate-500 text-xs mt-4">Pagamento sicuro e fatturazione automatica.</p>
                                     </div>
@@ -602,16 +606,16 @@ export default function App() {
 
                                 {/* PAYMENT METHODS */}
                                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    <button className="bg-slate-900 border border-slate-700 hover:border-slate-500 p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1">
+                                    <button onClick={() => handlePayment('Carta di Credito')} className="bg-slate-900 border border-slate-700 hover:border-slate-500 p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1 active:scale-95">
                                         <CreditCard size={24} className="text-white"/> <span className="text-xs font-bold">Carta</span>
                                     </button>
-                                    <button className="bg-slate-900 border border-slate-700 hover:border-blue-500 p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1">
+                                    <button onClick={() => handlePayment('PayPal')} className="bg-slate-900 border border-slate-700 hover:border-blue-500 p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1 active:scale-95">
                                         <div className="font-black italic text-blue-500 text-lg">Pay<span className="text-blue-400">Pal</span></div> <span className="text-xs font-bold">PayPal</span>
                                     </button>
-                                    <button className="bg-slate-900 border border-slate-700 hover:border-white p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1">
+                                    <button onClick={() => handlePayment('Apple Pay')} className="bg-slate-900 border border-slate-700 hover:border-white p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1 active:scale-95">
                                         <div className="font-bold text-white text-lg">Apple Pay</div> <span className="text-xs font-bold">Apple</span>
                                     </button>
-                                    <button className="bg-slate-900 border border-slate-700 hover:border-green-500 p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1">
+                                    <button onClick={() => handlePayment('Google Pay')} className="bg-slate-900 border border-slate-700 hover:border-green-500 p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1 active:scale-95">
                                         <div className="font-bold text-white text-lg"><span className="text-blue-500">G</span>Pay</div> <span className="text-xs font-bold">Google</span>
                                     </button>
                                 </div>
