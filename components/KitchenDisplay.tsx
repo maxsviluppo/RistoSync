@@ -323,7 +323,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
       <style>{`@keyframes wiggle { 0%, 100% { transform: rotate(-10deg); } 50% { transform: rotate(10deg); } } .animate-wiggle { animation: wiggle 0.3s ease-in-out infinite; } .receipt-edge { clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 95% 95%, 90% 100%, 85% 95%, 80% 100%, 75% 95%, 70% 100%, 65% 95%, 60% 100%, 55% 95%, 50% 100%, 45% 95%, 40% 100%, 35% 95%, 30% 100%, 25% 95%, 20% 100%, 15% 95%, 10% 100%, 5% 95%, 0% 100%); }`}</style>
 
       {notification && (
-        <div className={`fixed top-6 left-1/2 transform -translate-x-1/2 z-50 px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-4 animate-slide-down border-2 ${notification.type === 'success' ? 'bg-green-600 border-green-400' : notification.type === 'alert' ? 'bg-red-600 border-red-400 animate-pulse' : 'bg-blue-600 border-blue-400'}`}>
+        <div className={`fixed top-24 left-1/2 transform -translate-x-1/2 z-50 px-8 py-4 rounded-2xl shadow-2xl flex items-center gap-4 animate-slide-down border-2 ${notification.type === 'success' ? 'bg-green-600 border-green-400' : notification.type === 'alert' ? 'bg-red-600 border-red-400 animate-pulse' : 'bg-blue-600 border-blue-400'}`}>
             {notification.type === 'success' ? <CheckCircle size={32} className="animate-bounce" /> : notification.type === 'alert' ? <Bell size={32} className="animate-wiggle" /> : <Bell size={32} className="animate-swing" />}
             <div><h3 className="font-black text-2xl uppercase">{notification.type === 'success' ? 'ORDINE PRONTO' : notification.type === 'alert' ? 'ATTENZIONE RITARDO' : 'NUOVO ORDINE'}</h3><p className="font-medium text-lg">{notification.msg}</p></div>
         </div>

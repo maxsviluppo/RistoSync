@@ -10,7 +10,7 @@ import {
   LogOut, Plus, Search, Utensils, CheckCircle, 
   ChevronLeft, ShoppingCart, Trash2, User, Clock, 
   DoorOpen, ChefHat, Pizza, Sandwich, 
-  Wine, CakeSlice, UtensilsCrossed 
+  Wine, CakeSlice, UtensilsCrossed, Send as SendIcon 
 } from 'lucide-react';
 
 interface WaiterPadProps {
@@ -170,7 +170,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   return (
     <div className="min-h-screen bg-slate-900 text-white flex flex-col font-sans">
       {/* HEADER */}
-      <div className="p-4 bg-slate-800 border-b border-slate-700 flex justify-between items-center shadow-lg z-10">
+      <div className="p-4 bg-slate-800 border-b border-slate-700 flex justify-between items-center shadow-lg z-30 relative">
         <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold flex items-center gap-2"><div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center"><User size={18} className="text-white"/></div> {waiterName || 'Waiter Pad'}</h1>
         </div>
@@ -274,35 +274,38 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
         {view === 'menu' && (
             <div className="flex-1 flex flex-col h-full overflow-hidden">
-                {/* Category Nav */}
-                <div className="bg-slate-800 p-2 overflow-x-auto whitespace-nowrap border-b border-slate-700 flex gap-2 no-scrollbar">
-                    {CATEGORIES.map(cat => (
-                        <button 
-                            key={cat} 
-                            onClick={() => setActiveCategory(cat)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-colors ${activeCategory === cat ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-700 text-slate-400'}`}
-                        >
-                            {getCategoryIcon(cat)} {cat}
-                        </button>
-                    ))}
-                </div>
+                {/* FIXED HEADER WRAPPER FOR CATEGORIES & SEARCH */}
+                <div className="sticky top-0 z-20 bg-slate-900 shadow-md">
+                    {/* Category Nav */}
+                    <div className="bg-slate-800 p-2 overflow-x-auto whitespace-nowrap border-b border-slate-700 flex gap-2 no-scrollbar">
+                        {CATEGORIES.map(cat => (
+                            <button 
+                                key={cat} 
+                                onClick={() => setActiveCategory(cat)}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-colors ${activeCategory === cat ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-700 text-slate-400'}`}
+                            >
+                                {getCategoryIcon(cat)} {cat}
+                            </button>
+                        ))}
+                    </div>
 
-                {/* Search Bar */}
-                <div className="p-3 bg-slate-800 border-b border-slate-700">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                        <input 
-                            type="text" 
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="Cerca piatto..." 
-                            className="w-full bg-slate-900 text-white rounded-xl pl-10 pr-4 py-3 border border-slate-700 focus:border-blue-500 outline-none font-bold"
-                        />
+                    {/* Search Bar */}
+                    <div className="p-3 bg-slate-800 border-b border-slate-700">
+                        <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                            <input 
+                                type="text" 
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder="Cerca piatto..." 
+                                className="w-full bg-slate-900 text-white rounded-xl pl-10 pr-4 py-3 border border-slate-700 focus:border-blue-500 outline-none font-bold"
+                            />
+                        </div>
                     </div>
                 </div>
 
-                {/* Menu Grid */}
-                <div className="flex-1 overflow-y-auto p-4">
+                {/* Menu Grid - Scrolls Independently */}
+                <div className="flex-1 overflow-y-auto p-4 pb-24">
                     <div className="grid grid-cols-1 gap-3">
                         {filteredItems.map(item => (
                             <button 
@@ -331,15 +334,18 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                     </div>
                 </div>
                 
-                {/* Cart Bar */}
+                {/* Cart Bar - Fixed Bottom */}
                 {cart.length > 0 && (
-                    <div className="p-4 bg-slate-800 border-t border-slate-700">
-                        <button onClick={() => setView('cart')} className="w-full bg-green-600 hover:bg-green-500 text-white py-4 rounded-xl font-black text-lg shadow-lg shadow-green-600/20 flex items-center justify-between px-6 transition-transform active:scale-95">
-                            <div className="flex items-center gap-2"><ShoppingCart size={24}/> <span>VAI AL RIEPILOGO</span></div>
+                    <div className="p-4 bg-slate-800 border-t border-slate-700 fixed bottom-0 left-0 right-0 z-30 flex gap-3 shadow-2xl">
+                        <button onClick={() => setView('cart')} className="flex-1 bg-green-600 hover:bg-green-500 text-white py-4 rounded-xl font-black text-lg shadow-lg shadow-green-600/20 flex items-center justify-between px-6 transition-transform active:scale-95">
+                            <div className="flex items-center gap-2"><ShoppingCart size={24}/> <span>RIEPILOGO</span></div>
                             <div className="flex items-center gap-3">
-                                <span className="bg-green-800 px-3 py-1 rounded-lg text-sm">{cart.reduce((a, b) => a + b.quantity, 0)} items</span>
+                                <span className="bg-green-800 px-3 py-1 rounded-lg text-sm">{cart.reduce((a, b) => a + b.quantity, 0)}</span>
                                 <span>€ {cart.reduce((a, b) => a + (b.menuItem.price * b.quantity), 0).toFixed(2)}</span>
                             </div>
+                        </button>
+                        <button onClick={sendOrder} className="w-20 bg-orange-500 hover:bg-orange-600 text-white rounded-xl shadow-lg shadow-orange-500/20 flex items-center justify-center transition-transform active:scale-95 border-2 border-orange-400">
+                            <SendIcon size={28} className="ml-1" />
                         </button>
                     </div>
                 )}
