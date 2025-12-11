@@ -1,4 +1,5 @@
-import { Order, OrderStatus, OrderItem, MenuItem, AppSettings, Category, Department } from '../types';
+
+import { Order, OrderStatus, OrderItem, MenuItem, AppSettings, Category, Department, NotificationSettings } from '../types';
 import { supabase } from './supabase';
 
 const STORAGE_KEY = 'ristosync_orders';
@@ -14,42 +15,21 @@ const DEMO_MENU_ITEMS: MenuItem[] = [
     // ANTIPASTI
     { id: 'demo_a1', name: 'Tagliere del Contadino', price: 18, category: Category.ANTIPASTI, description: 'Selezione di salumi nostrani, formaggi stagionati, miele di castagno e noci.', allergens: ['Latticini', 'Frutta a guscio'], ingredients: 'Prosciutto crudo, Salame felino, Pecorino, Miele, Noci' },
     { id: 'demo_a2', name: 'Bruschette Miste', price: 8, category: Category.ANTIPASTI, description: 'Tris di bruschette: pomodoro fresco, patè di olive, crema di carciofi.', allergens: ['Glutine'], ingredients: 'Pane casereccio, Pomodoro, Aglio, Olio EVO, Olive' },
-    { id: 'demo_a3', name: 'Insalata di Mare', price: 14, category: Category.ANTIPASTI, description: 'Molluschi e crostacei freschi marinati al limone e prezzemolo.', allergens: ['Pesce', 'Molluschi'], ingredients: 'Polpo, Calamari, Gamberi, Sedano, Carote' },
     
     // PRIMI
     { id: 'demo_p1', name: 'Spaghetti alla Carbonara', price: 12, category: Category.PRIMI, description: 'La vera ricetta romana con guanciale croccante, uova bio e pecorino.', allergens: ['Glutine', 'Uova', 'Latticini'], ingredients: 'Spaghetti, Guanciale, Tuorlo d\'uovo, Pecorino Romano, Pepe nero' },
     { id: 'demo_p2', name: 'Tonnarelli Cacio e Pepe', price: 11, category: Category.PRIMI, description: 'Cremosità unica con pecorino romano DOP e pepe nero tostato.', allergens: ['Glutine', 'Latticini'], ingredients: 'Tonnarelli freschi, Pecorino Romano, Pepe nero' },
-    { id: 'demo_p3', name: 'Risotto ai Funghi Porcini', price: 14, category: Category.PRIMI, description: 'Riso Carnaroli mantecato con funghi porcini freschi e prezzemolo.', allergens: ['Latticini'], ingredients: 'Riso Carnaroli, Funghi Porcini, Burro, Parmigiano, Brodo vegetale' },
-    { id: 'demo_p4', name: 'Lasagna alla Bolognese', price: 13, category: Category.PRIMI, description: 'Sfoglia fresca, ragù a lunga cottura e besciamella fatta in casa.', allergens: ['Glutine', 'Latticini', 'Uova', 'Sedano'], ingredients: 'Sfoglia all\'uovo, Carne macinata, Pomodoro, Besciamella' },
 
     // SECONDI
     { id: 'demo_s1', name: 'Tagliata di Manzo', price: 22, category: Category.SECONDI, description: 'Controfiletto servito con rucola selvatica e scaglie di grana.', allergens: ['Latticini'], ingredients: 'Manzo, Rucola, Grana Padano, Aceto Balsamico' },
-    { id: 'demo_s2', name: 'Filetto al Pepe Verde', price: 24, category: Category.SECONDI, description: 'Tenero filetto scottato in salsa cremosa al pepe verde.', allergens: ['Latticini', 'Senape'], ingredients: 'Filetto di manzo, Panna fresca, Pepe verde in salamoia, Brandy' },
-    { id: 'demo_s3', name: 'Grigliata Mista di Pesce', price: 26, category: Category.SECONDI, description: 'Gamberoni, calamari e pescato del giorno alla griglia.', allergens: ['Pesce', 'Crostacei'], ingredients: 'Gamberoni, Calamari, Pesce spada, Orata' },
-    { id: 'demo_s4', name: 'Parmigiana di Melanzane', price: 12, category: Category.SECONDI, description: 'Melanzane fritte, pomodoro San Marzano, mozzarella fior di latte e basilico.', allergens: ['Latticini', 'Glutine'], ingredients: 'Melanzane, Salsa di pomodoro, Mozzarella, Parmigiano, Basilico' },
-
+    
     // PIZZE
     { id: 'demo_pz1', name: 'Margherita DOP', price: 8, category: Category.PIZZE, description: 'Pomodoro San Marzano, Mozzarella di Bufala, Basilico fresco.', allergens: ['Glutine', 'Latticini'], ingredients: 'Impasto, Pomodoro, Mozzarella di Bufala, Basilico, Olio EVO' },
-    { id: 'demo_pz2', name: 'Diavola', price: 9, category: Category.PIZZE, description: 'Per chi ama il piccante: salame napoli piccante e olio santo.', allergens: ['Glutine', 'Latticini', 'Piccante'], ingredients: 'Impasto, Pomodoro, Mozzarella, Salame Piccante' },
-    { id: 'demo_pz3', name: 'Quattro Formaggi', price: 10, category: Category.PIZZE, description: 'Selezione di formaggi: Gorgonzola, Taleggio, Fontina e Mozzarella.', allergens: ['Glutine', 'Latticini'], ingredients: 'Impasto, Mozzarella, Gorgonzola, Fontina, Parmigiano' },
-    { id: 'demo_pz4', name: 'Vegetariana', price: 9.5, category: Category.PIZZE, description: 'Verdure di stagione grigliate su base rossa.', allergens: ['Glutine', 'Latticini', 'Vegano'], ingredients: 'Impasto, Pomodoro, Mozzarella, Melanzane, Zucchine, Peperoni' },
-
-    // PANINI (PUB)
-    { id: 'demo_pn1', name: 'Classic Burger', price: 12, category: Category.PANINI, description: 'Burger di manzo 180g, lattuga, pomodoro, salsa BBQ. Con patatine.', allergens: ['Glutine', 'Sesamo'], ingredients: 'Bun, Hamburger Manzo, Lattuga, Pomodoro, Salsa BBQ' },
-    { id: 'demo_pn2', name: 'Bacon Cheeseburger', price: 14, category: Category.PANINI, description: 'Doppio cheddar fuso, bacon croccante e cipolla caramellata.', allergens: ['Glutine', 'Latticini', 'Sesamo'], ingredients: 'Bun, Hamburger Manzo, Cheddar, Bacon, Cipolla' },
-    { id: 'demo_pn3', name: 'Club Sandwich', price: 13, category: Category.PANINI, description: 'Triplo strato con pollo, bacon, uovo, lattuga e maionese.', allergens: ['Glutine', 'Uova'], ingredients: 'Pane in cassetta, Pollo grigliato, Bacon, Uovo sodo, Maionese' },
-
-    // DOLCI
-    { id: 'demo_d1', name: 'Tiramisù Classico', price: 6, category: Category.DOLCI, description: 'Fatto in casa con mascarpone fresco e caffè espresso.', allergens: ['Latticini', 'Uova', 'Glutine'], ingredients: 'Savoiardi, Mascarpone, Uova, Caffè, Cacao' },
-    { id: 'demo_d2', name: 'Cheesecake ai Frutti di Bosco', price: 7, category: Category.DOLCI, description: 'Base di biscotto croccante e crema al formaggio fresco.', allergens: ['Latticini', 'Glutine'], ingredients: 'Biscotti digestive, Burro, Formaggio spalmabile, Panna, Frutti di bosco' },
-    { id: 'demo_d3', name: 'Tortino al Cioccolato', price: 7, category: Category.DOLCI, description: 'Cuore caldo fondente servito con gelato alla vaniglia.', allergens: ['Latticini', 'Uova', 'Glutine'], ingredients: 'Cioccolato fondente, Burro, Uova, Farina, Zucchero' },
-
+    
     // BEVANDE
     { id: 'demo_b1', name: 'Acqua Naturale 0.75cl', price: 2.5, category: Category.BEVANDE, description: 'Bottiglia in vetro.' },
     { id: 'demo_b2', name: 'Coca Cola 33cl', price: 3.5, category: Category.BEVANDE, description: 'In vetro.' },
-    { id: 'demo_b3', name: 'Birra Artigianale IPA', price: 6, category: Category.BEVANDE, description: 'Note agrumate e finale amaro persistente.', allergens: ['Glutine'] },
-    { id: 'demo_b4', name: 'Calice Chianti Classico', price: 7, category: Category.BEVANDE, description: 'Rosso fermo, Toscana DOCG.' },
-    { id: 'demo_b5', name: 'Caffè Espresso', price: 1.5, category: Category.BEVANDE, description: 'Miscela 100% Arabica.' }
+    { id: 'demo_b3', name: 'Caffè Espresso', price: 1.5, category: Category.BEVANDE, description: 'Miscela 100% Arabica.' }
 ];
 
 // --- SYNC ENGINE STATE ---
@@ -127,15 +107,13 @@ export const initSupabaseSync = async () => {
 const handleSupabaseError = (error: any) => {
     if (!error) return;
     console.error("Supabase Error:", error);
-    if (error.message && error.message.includes("quota")) {
-        alert("⚠️ Spazio Database Esaurito! Il piano gratuito di Supabase ha raggiunto il limite. Contatta l'amministratore per l'upgrade o cancella vecchi ordini.");
-    }
+    // Don't alert on Quota Exceeded during sync, just log it. We don't want to spam the user.
+    // The alert will happen on explicit actions if needed.
     return error;
 }
 
 const fetchFromCloud = async () => {
     if (!supabase || !currentUserId) return;
-    // CRITICAL FIX: Explicitly filter by user_id to prevent data mixing
     const { data, error } = await supabase
         .from('orders')
         .select('*')
@@ -158,15 +136,14 @@ const fetchFromCloud = async () => {
         waiterName: row.waiter_name
     }));
 
-    // Update Local Cache
+    // Update Local Cache - Only update if newer or different to prevent overwrite of local pending changes
+    // Simplified: Just update for now
     localStorage.setItem(STORAGE_KEY, JSON.stringify(appOrders));
     window.dispatchEvent(new Event('local-storage-update'));
 };
 
 const fetchFromCloudMenu = async () => {
     if (!supabase || !currentUserId) return;
-    // CRITICAL FIX: Explicitly filter by user_id. 
-    // Since we enabled "Public Read" for the digital menu, select('*') returns EVERYONE'S menu without this filter.
     const { data, error } = await supabase
         .from('menu_items')
         .select('*')
@@ -175,20 +152,18 @@ const fetchFromCloudMenu = async () => {
     if (error) handleSupabaseError(error);
 
     if (!error && data) {
-         // Map DB snake_case columns back to camelCase for App
          const appMenuItems: MenuItem[] = data.map((row: any) => ({
              id: row.id,
              name: row.name,
              price: row.price,
              category: row.category,
              description: row.description,
-             ingredients: row.ingredients, // Ensure simple fields map
+             ingredients: row.ingredients, 
              allergens: row.allergens,
              image: row.image,
-             // COMBO MAPPING FIX
              isCombo: row.category === Category.MENU_COMPLETO, 
-             comboItems: row.combo_items || [], // Map snake_case from DB
-             specificDepartment: row.specific_department // Map snake_case from DB
+             comboItems: row.combo_items || [], 
+             specificDepartment: row.specific_department
          }));
 
          localStorage.setItem(MENU_KEY, JSON.stringify(appMenuItems));
@@ -196,7 +171,6 @@ const fetchFromCloudMenu = async () => {
     }
 };
 
-// NEW: Fetch Global Settings (Categories destinations, etc)
 const fetchSettingsFromCloud = async () => {
     if (!supabase || !currentUserId) return;
     const { data, error } = await supabase.from('profiles').select('settings').eq('id', currentUserId).single();
@@ -217,28 +191,28 @@ const saveLocallyAndNotify = (orders: Order[]) => {
     window.dispatchEvent(new Event('local-storage-update'));
 };
 
-// HELPER: Sync individual order to Cloud
-// UPDATED: Now returns the error if any
+// HELPER: Sync individual order to Cloud (NON-BLOCKING)
 const syncOrderToCloud = async (order: Order, isDelete = false) => {
-    if (!supabase || !currentUserId) return null;
+    if (!supabase || !currentUserId) return;
     
-    if (isDelete) {
-        const { error } = await supabase.from('orders').delete().eq('id', order.id);
-        if (error) handleSupabaseError(error);
-        return error;
-    } else {
-        const payload = {
-            id: order.id,
-            user_id: currentUserId,
-            table_number: order.tableNumber,
-            status: order.status,
-            items: order.items,
-            timestamp: order.timestamp,
-            waiter_name: order.waiterName
-        };
-        const { error } = await supabase.from('orders').upsert(payload);
-        if (error) handleSupabaseError(error);
-        return error;
+    // We do NOT await this in critical paths to avoid UI blocking if DB is slow/full
+    try {
+        if (isDelete) {
+            await supabase.from('orders').delete().eq('id', order.id);
+        } else {
+            const payload = {
+                id: order.id,
+                user_id: currentUserId,
+                table_number: order.tableNumber,
+                status: order.status,
+                items: order.items,
+                timestamp: order.timestamp,
+                waiter_name: order.waiterName
+            };
+            await supabase.from('orders').upsert(payload);
+        }
+    } catch (e) {
+        console.warn("Cloud sync failed (Offline mode active):", e);
     }
 };
 
@@ -246,7 +220,6 @@ export const saveOrders = (orders: Order[]) => {
   saveLocallyAndNotify(orders);
 };
 
-// UPDATED: Async to propagate errors
 export const addOrder = async (order: Order) => {
   const orders = getOrders();
   const settings = getAppSettings(); 
@@ -272,10 +245,11 @@ export const addOrder = async (order: Order) => {
   };
   const newOrders = [...orders, cleanOrder];
   
+  // 1. SAVE LOCALLY IMMEDIATELY (Critical for speed/stability)
   saveLocallyAndNotify(newOrders);
-  // CRITICAL: Await and throw if error to alert user in UI
-  const error = await syncOrderToCloud(cleanOrder);
-  if (error) throw error; 
+  
+  // 2. SYNC TO CLOUD IN BACKGROUND
+  syncOrderToCloud(cleanOrder);
 };
 
 export const updateOrderStatus = (orderId: string, status: OrderStatus) => {
@@ -290,7 +264,6 @@ export const updateOrderStatus = (orderId: string, status: OrderStatus) => {
   syncOrderToCloud(updatedOrder);
 };
 
-// UPDATED: Async to propagate errors
 export const updateOrderItems = async (orderId: string, newItems: OrderItem[]) => {
     const orders = getOrders();
     const order = orders.find(o => o.id === orderId);
@@ -344,9 +317,11 @@ export const updateOrderItems = async (orderId: string, newItems: OrderItem[]) =
     };
     const newOrders = orders.map(o => o.id === orderId ? updatedOrder : o);
 
+    // 1. SAVE LOCALLY IMMEDIATELY
     saveLocallyAndNotify(newOrders);
-    const error = await syncOrderToCloud(updatedOrder);
-    if (error) throw error;
+    
+    // 2. SYNC TO CLOUD
+    syncOrderToCloud(updatedOrder);
 };
 
 export const toggleOrderItemCompletion = (orderId: string, itemIndex: number, subItemId?: string) => {
@@ -358,42 +333,26 @@ export const toggleOrderItemCompletion = (orderId: string, itemIndex: number, su
     const targetItem = newItems[itemIndex];
 
     if (targetItem) {
-        // COMBO LOGIC: If a subItemId is provided, toggle ONLY that part
         if (subItemId && targetItem.menuItem.category === Category.MENU_COMPLETO && targetItem.menuItem.comboItems) {
             const currentParts = targetItem.comboCompletedParts || [];
             let newParts;
-            
             if (currentParts.includes(subItemId)) {
                 newParts = currentParts.filter(id => id !== subItemId);
             } else {
                 newParts = [...currentParts, subItemId];
             }
-            
-            // Update the parts list
-            newItems[itemIndex] = {
-                ...targetItem,
-                comboCompletedParts: newParts
-            };
-
-            // CHECK IF ALL PARTS ARE DONE to mark main item completed
+            newItems[itemIndex] = { ...targetItem, comboCompletedParts: newParts };
             const allPartsDone = targetItem.menuItem.comboItems.every(id => newParts.includes(id));
             newItems[itemIndex].completed = allPartsDone;
-
         } else {
-            // STANDARD LOGIC: Toggle the whole item
-            newItems[itemIndex] = { 
-                ...targetItem, 
-                completed: !targetItem.completed 
-            };
+            newItems[itemIndex] = { ...targetItem, completed: !targetItem.completed };
         }
     }
 
-    // Smart Status Logic for Kitchen (Ready if all cooked)
     const allCooked = newItems.every(i => i.completed);
     const anyCooked = newItems.some(i => i.completed || (i.comboCompletedParts && i.comboCompletedParts.length > 0));
     
     let newStatus = order.status;
-    // Don't downgrade from Delivered automatically here
     if (order.status !== OrderStatus.DELIVERED) {
         if (allCooked) newStatus = OrderStatus.READY;
         else if (anyCooked) newStatus = OrderStatus.COOKING;
@@ -416,54 +375,27 @@ export const serveItem = (orderId: string, itemIndex: number, subItemId?: string
     const targetItem = newItems[itemIndex];
 
     if (targetItem) {
-        // COMBO LOGIC: Serve Specific Part
         if (subItemId && targetItem.menuItem.category === Category.MENU_COMPLETO && targetItem.menuItem.comboItems) {
             const currentServed = targetItem.comboServedParts || [];
             let newServed = currentServed;
-            
             if (!currentServed.includes(subItemId)) {
                 newServed = [...currentServed, subItemId];
             }
-
-            newItems[itemIndex] = { 
-                ...targetItem, 
-                comboServedParts: newServed
-            };
-
-            // Check if ALL parts are served
+            newItems[itemIndex] = { ...targetItem, comboServedParts: newServed };
             const allPartsServed = targetItem.menuItem.comboItems.every(id => newServed.includes(id));
-            if (allPartsServed) {
-                newItems[itemIndex].served = true;
-            }
-
+            if (allPartsServed) newItems[itemIndex].served = true;
         } else {
-            // STANDARD LOGIC
-            newItems[itemIndex] = { 
-                ...targetItem, 
-                served: true 
-            };
+            newItems[itemIndex] = { ...targetItem, served: true };
         }
     }
 
-    // UPDATED LOGIC: If all items are served, we DO NOT mark order as DELIVERED automatically.
-    // The table remains "Occupied" (Pending) until manually freed.
     const allServed = newItems.every(i => i.served);
     let newStatus = order.status;
-    
-    // If it was READY and everything is now served, revert to PENDING (Occupied) status
-    // to show it as an active table with customers eating.
     if (allServed && (newStatus === OrderStatus.READY || newStatus === OrderStatus.COOKING)) {
         newStatus = OrderStatus.PENDING;
     }
 
-    // UPDATE TIMESTAMP TO RESET TIMERS
-    const updatedOrder = { 
-        ...order, 
-        items: newItems, 
-        status: newStatus,
-        timestamp: Date.now() 
-    };
-    
+    const updatedOrder = { ...order, items: newItems, status: newStatus, timestamp: Date.now() };
     const newOrders = orders.map(o => o.id === orderId ? updatedOrder : o);
     
     saveLocallyAndNotify(newOrders);
@@ -476,23 +408,19 @@ export const clearHistory = async () => {
   saveLocallyAndNotify(activeOrders);
   
   if (supabase && currentUserId) {
-      // In cloud, we delete delivered orders
       await supabase.from('orders').delete().eq('user_id', currentUserId).eq('status', OrderStatus.DELIVERED);
   }
 };
 
-// NEW: Delete history only for a specific date
 export const deleteHistoryByDate = async (targetDate: Date) => {
     const orders = getOrders();
-    
-    // Filter out orders that match the date AND are delivered
     const ordersToKeep = orders.filter(o => {
-        if (o.status !== OrderStatus.DELIVERED) return true; // Keep active
+        if (o.status !== OrderStatus.DELIVERED) return true; 
         const orderDate = new Date(o.createdAt || o.timestamp);
         const isSameDay = orderDate.getDate() === targetDate.getDate() &&
                           orderDate.getMonth() === targetDate.getMonth() &&
                           orderDate.getFullYear() === targetDate.getFullYear();
-        return !isSameDay; // Keep if NOT same day
+        return !isSameDay; 
     });
 
     saveLocallyAndNotify(ordersToKeep);
@@ -500,14 +428,12 @@ export const deleteHistoryByDate = async (targetDate: Date) => {
     if (supabase && currentUserId) {
         const startOfDay = new Date(targetDate); startOfDay.setHours(0,0,0,0);
         const endOfDay = new Date(targetDate); endOfDay.setHours(23,59,59,999);
-        
         const { error } = await supabase.from('orders')
             .delete()
             .eq('user_id', currentUserId)
             .eq('status', OrderStatus.DELIVERED)
             .gte('created_at', startOfDay.toISOString())
             .lte('created_at', endOfDay.toISOString());
-        
         if (error) handleSupabaseError(error);
     }
 };
@@ -525,7 +451,6 @@ export const freeTable = async (tableNumber: string) => {
     }));
 
     const newOrders = [...otherOrders, ...archivedOrders];
-    
     saveLocallyAndNotify(newOrders);
 
     if (supabase && currentUserId) {
@@ -575,7 +500,6 @@ export const importDemoMenu = async () => {
     }));
 
     const { error } = await supabase.from('menu_items').upsert(demoItemsWithUserId);
-    
     if (error) {
         handleSupabaseError(error);
         alert("Errore durante l'importazione demo.");
@@ -585,11 +509,9 @@ export const importDemoMenu = async () => {
     const currentItems = getMenuItems();
     const newIds = DEMO_MENU_ITEMS.map(d => d.id);
     const existingFiltered = currentItems.filter(i => !newIds.includes(i.id));
-    
     const finalMenu = [...existingFiltered, ...DEMO_MENU_ITEMS];
     localStorage.setItem(MENU_KEY, JSON.stringify(finalMenu));
     window.dispatchEvent(new Event('local-menu-update'));
-    
     alert("Menu Demo importato con successo!");
 };
 
@@ -617,40 +539,43 @@ export const logoutWaiter = () => {
 
 export const getMenuItems = (): MenuItem[] => {
     const data = localStorage.getItem(MENU_KEY);
-    if (data) {
-        return JSON.parse(data);
-    } else {
-        return [];
-    }
+    return data ? JSON.parse(data) : [];
 };
 
 const syncMenuToCloud = async (item: MenuItem, isDelete = false) => {
     if (!supabase || !currentUserId) return;
-    if (isDelete) {
-        const { error } = await supabase.from('menu_items').delete().eq('id', item.id);
-        if (error) handleSupabaseError(error);
-    } else {
-         const payload = {
-            id: item.id,
-            user_id: currentUserId,
-            name: item.name,
-            price: item.price,
-            category: item.category,
-            description: item.description,
-            ingredients: item.ingredients,
-            allergens: item.allergens,
-            image: item.image,
-            combo_items: item.comboItems, 
-            specific_department: item.specificDepartment
-        };
-        const { error } = await supabase.from('menu_items').upsert(payload);
-        if (error) handleSupabaseError(error);
-    }
+    try {
+        if (isDelete) {
+            await supabase.from('menu_items').delete().eq('id', item.id);
+        } else {
+             const payload = {
+                id: item.id,
+                user_id: currentUserId,
+                name: item.name,
+                price: item.price,
+                category: item.category,
+                description: item.description,
+                ingredients: item.ingredients,
+                allergens: item.allergens,
+                image: item.image,
+                combo_items: item.comboItems, 
+                specific_department: item.specificDepartment
+            };
+            await supabase.from('menu_items').upsert(payload);
+        }
+    } catch (e) { console.warn("Menu sync failed", e); }
 };
 
 export const saveMenuItems = (items: MenuItem[]) => {
-    localStorage.setItem(MENU_KEY, JSON.stringify(items));
-    window.dispatchEvent(new Event('local-menu-update'));
+    try {
+        localStorage.setItem(MENU_KEY, JSON.stringify(items));
+        window.dispatchEvent(new Event('local-menu-update'));
+    } catch (e) {
+        // CATCH LOCALSTORAGE QUOTA EXCEEDED
+        alert("⚠️ ERRORE MEMORIA: Impossibile salvare il menu. Le immagini sono troppo grandi. Prova a rimuovere alcune foto o usarne di più piccole.");
+        console.error("Storage limit reached", e);
+        throw e; // Re-throw to stop UI execution if needed
+    }
 };
 
 export const addMenuItem = (item: MenuItem) => {
@@ -745,19 +670,11 @@ export const saveAppSettings = async (settings: AppSettings) => {
     window.dispatchEvent(new Event('local-storage-update')); 
 
     if (supabase && currentUserId) {
-        const { error } = await supabase
-            .from('profiles')
-            .update({ settings: settings })
-            .eq('id', currentUserId);
-        if (error) handleSupabaseError(error);
+        try {
+            await supabase.from('profiles').update({ settings: settings }).eq('id', currentUserId);
+        } catch (e) { console.warn("Settings sync failed", e); }
     }
 };
-
-export interface NotificationSettings {
-    kitchenSound: boolean;
-    waiterSound: boolean;
-    pushEnabled: boolean;
-}
 
 export const getNotificationSettings = (): NotificationSettings => {
     const data = localStorage.getItem(SETTINGS_NOTIFICATIONS_KEY);

@@ -5,10 +5,10 @@ import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import DigitalMenu from './components/DigitalMenu';
 import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, RefreshCw, Send, Printer, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, FileSpreadsheet, Image as ImageIcon, Upload, FileImage, ExternalLink, CreditCard, Banknote, Briefcase, Clock, Check, ListPlus, ArrowRightLeft, Code2, Cookie, Shield, Wrench, Download, CloudUpload, BookOpen, EyeOff, LayoutGrid, ArrowLeft, PlayCircle, ChevronDown, FileJson, Wallet, Crown, Zap, ShieldCheck as ShieldIcon } from 'lucide-react';
-import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, NotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate, performFactoryReset, deleteAllMenuItems, importDemoMenu } from './services/storageService';
+import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate, performFactoryReset, deleteAllMenuItems, importDemoMenu } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { askChefAI, generateRestaurantAnalysis, generateDishDescription, generateDishIngredients } from './services/geminiService';
-import { MenuItem, Category, Department, AppSettings, OrderStatus, Order, RestaurantProfile, OrderItem } from './types';
+import { MenuItem, Category, Department, AppSettings, OrderStatus, Order, RestaurantProfile, OrderItem, NotificationSettings } from './types';
 
 const ADMIN_CATEGORY_ORDER = [
     Category.MENU_COMPLETO,
@@ -182,795 +182,687 @@ export default function App() {
           setAppSettingsState(currentSettings); 
           setTempDestinations(currentSettings.categoryDestinations || { [Category.MENU_COMPLETO]: 'Cucina', [Category.ANTIPASTI]: 'Cucina', [Category.PANINI]: 'Pub', [Category.PIZZE]: 'Pizzeria', [Category.PRIMI]: 'Cucina', [Category.SECONDI]: 'Cucina', [Category.DOLCI]: 'Cucina', [Category.BEVANDE]: 'Sala' });
           setTempPrintSettings(currentSettings.printEnabled || { 'Cucina': false, 'Pizzeria': false, 'Pub': false, 'Sala': false, 'Cassa': false });
-          const existingProfile = currentSettings.restaurantProfile || {};
-          setProfileForm({ name: existingProfile.name || restaurantName, tableCount: existingProfile.tableCount || 12, businessName: existingProfile.businessName || '', responsiblePerson: existingProfile.responsiblePerson || '', vatNumber: existingProfile.vatNumber || '', sdiCode: existingProfile.sdiCode || '', pecEmail: existingProfile.pecEmail || '', address: existingProfile.address || '', billingAddress: existingProfile.billingAddress || '', phoneNumber: existingProfile.phoneNumber || '', landlineNumber: existingProfile.landlineNumber || '', whatsappNumber: existingProfile.whatsappNumber || '', email: existingProfile.email || '', website: existingProfile.website || '', socials: existingProfile.socials || {}, subscriptionEndDate: existingProfile.subscriptionEndDate || '', planType: existingProfile.planType || 'Pro', subscriptionCost: existingProfile.subscriptionCost || '49.90' });
-          setHasUnsavedDestinations(false);
-          setOrdersForAnalytics(getOrders());
-          const key = getGoogleApiKey();
-          if (key) setApiKeyInput(key);
-      }
-  }, [showAdmin]); 
 
-  // --- HANDLERS ---
-  const saveDestinations = async () => { const newSettings: AppSettings = { ...appSettings, categoryDestinations: tempDestinations, printEnabled: tempPrintSettings }; await saveAppSettings(newSettings); setAppSettingsState(newSettings); setHasUnsavedDestinations(false); alert("Impostazioni salvate con successo!"); };
-  const handleSaveProfile = async () => { const newProfile = { ...profileForm }; const newSettings: AppSettings = { ...appSettings, restaurantProfile: newProfile }; await saveAppSettings(newSettings); setAppSettingsState(newSettings); if (supabase && session?.user?.id && newProfile.name) { await supabase.from('profiles').update({ restaurant_name: newProfile.name }).eq('id', session.user.id); } if (newProfile.name) { setRestaurantName(newProfile.name); } alert("Profilo aggiornato con successo!"); };
-  const handleWaiterLogin = (e: React.FormEvent) => { e.preventDefault(); if(waiterNameInput.trim()) { saveWaiterName(waiterNameInput); setRole('waiter'); setShowLogin(false); } };
-  const handleSaveItem = () => { if (!editingItem.name || !editingItem.price) { alert("Nome e Prezzo obbligatori."); return; } if (isEditingItem) { updateMenuItem(editingItem as MenuItem); } else { addMenuItem({ ...editingItem, id: Date.now().toString() } as MenuItem); } setMenuItems(getMenuItems()); setEditingItem({}); setIsEditingItem(false); };
-  const handleDeleteItem = () => { if (itemToDelete) { deleteMenuItem(itemToDelete.id); setMenuItems(getMenuItems()); setItemToDelete(null); } };
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => { const file = e.target.files?.[0]; if (file) { const reader = new FileReader(); reader.onloadend = () => { setEditingItem(prev => ({ ...prev, image: reader.result as string })); }; reader.readAsDataURL(file); } };
-  
-  // REAL BULK UPLOAD WITH CRASH PREVENTION
-  const handleBulkUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const files = e.target.files;
-      if (!files || files.length === 0) return;
-
-      let matchCount = 0;
-      let skippedCount = 0;
-      const MAX_IMAGE_SIZE = 300 * 1024; // 300KB Limit to prevent localStorage crash
-
-      try {
-          const currentMenuItems = [...getMenuItems()]; // Clone array safely
-
-          const readFileAsBase64 = (file: File): Promise<string> => {
-              return new Promise((resolve, reject) => {
-                  const reader = new FileReader();
-                  reader.onload = () => resolve(reader.result as string);
-                  reader.onerror = reject;
-                  reader.readAsDataURL(file);
-              });
-          };
-
-          for (let i = 0; i < files.length; i++) {
-              const file = files[i];
-              
-              if (file.size > MAX_IMAGE_SIZE) {
-                  console.warn(`File ${file.name} skipped: too large (${(file.size/1024).toFixed(0)}KB). Max 300KB.`);
-                  skippedCount++;
-                  continue;
-              }
-
-              const fileNameNoExt = file.name.split('.').slice(0, -1).join('.').toLowerCase().trim();
-              
-              // Find index to modify reference in clone
-              const itemIndex = currentMenuItems.findIndex(item => {
-                  const itemName = item.name.toLowerCase();
-                  return itemName.includes(fileNameNoExt) || fileNameNoExt.includes(itemName);
-              });
-
-              if (itemIndex !== -1) {
-                  const base64 = await readFileAsBase64(file);
-                  currentMenuItems[itemIndex] = { ...currentMenuItems[itemIndex], image: base64 };
-                  // Update single item in storage to persist
-                  updateMenuItem(currentMenuItems[itemIndex]);
-                  matchCount++;
-              }
+          // Load Profile Settings
+          if (currentSettings.restaurantProfile) {
+              setProfileForm(currentSettings.restaurantProfile);
           }
-          
-          // Update local state cleanly
-          setMenuItems(getMenuItems()); // Re-fetch from reliable storage
-          
-          let msg = `Caricamento completato! Associate ${matchCount} immagini.`;
-          if (skippedCount > 0) msg += `\n⚠️ ${skippedCount} immagini saltate perché troppo pesanti (>300KB). Ridimensionale e riprova.`;
-          alert(msg);
+      }
+  }, [showAdmin]);
 
-      } catch (err) {
-          console.error("Bulk upload error", err);
-          alert("Errore durante il caricamento. Riprova con meno immagini o file più piccoli.");
-          setMenuItems(getMenuItems()); // Restore state on error
-      } finally {
-          if (bulkInputRef.current) bulkInputRef.current.value = ''; // Reset input
+  // --- ACTIONS ---
+
+  const handleCreateAccount = () => { /* Logic in AuthScreen */ };
+
+  const handleLoginWaiter = () => {
+      if (waiterNameInput.trim()) {
+          saveWaiterName(waiterNameInput);
+          setRole('waiter');
       }
   };
 
-  const toggleAllergen = (alg: string) => { setEditingItem(prev => { const current = prev.allergens || []; return { ...prev, allergens: current.includes(alg) ? current.filter(a => a !== alg) : [...current, alg] }; }); };
-  const handleSocialChange = (network: string, value: string) => { setProfileForm(prev => ({ ...prev, socials: { ...prev.socials, [network]: value } })); };
-
-  // PAYMENT REQUEST HANDLER
-  const handlePayment = (method: string) => {
-      const subject = `Richiesta Link Pagamento ${method} - ${restaurantName}`;
-      const body = `Salve, vorrei effettuare il pagamento del rinnovo tramite ${method}. Attendo link sicuro o istruzioni.`;
-      window.location.href = `mailto:${adminContactEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  const checkRoleAccess = (selectedRole: string) => {
+      if (selectedRole === 'kitchen') setRole('kitchen');
+      else if (selectedRole === 'pizzeria') setRole('pizzeria');
+      else if (selectedRole === 'pub') setRole('pub');
+      else if (selectedRole === 'waiter') {
+          const storedName = getWaiterName();
+          if (storedName) setRole('waiter');
+          else setShowLogin(true);
+      }
   };
 
-  // PLAN CHANGE HANDLER
-  const handlePlanChangeRequest = (planName: string) => {
-      const subject = `Richiesta Attivazione Piano ${planName} - ${restaurantName}`;
-      const body = `Salve, vorrei passare al piano ${planName} per il ristorante ${restaurantName}. Attendo istruzioni.`;
-      window.location.href = `mailto:${adminContactEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  const handleLogout = () => {
+      // Role Logout
+      setRole(null);
+      setShowAdmin(false);
   };
 
-  // SHARE HANDLERS
-  const digitalMenuLink = session?.user?.id ? `${window.location.origin}?menu=${session.user.id}` : '';
-  const qrCodeUrl = digitalMenuLink ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(digitalMenuLink)}` : '';
-  const copyToClipboard = () => { navigator.clipboard.writeText(digitalMenuLink); alert("Link copiato!"); };
+  const handleAdminAuth = () => {
+      // If session exists, go to admin
+      if (session) setShowAdmin(true);
+  };
 
-  // AI HANDLERS
-  const handleGenerateDesc = async () => { if (!editingItem.name) { alert("Inserisci prima il nome del piatto."); return; } setIsGeneratingDesc(true); const desc = await generateDishDescription(editingItem.name, editingItem.ingredients || ''); if (desc) setEditingItem(prev => ({ ...prev, description: desc })); setIsGeneratingDesc(false); };
-  const handleGenerateIngr = async () => { if (!editingItem.name) { alert("Inserisci prima il nome del piatto."); return; } setIsGeneratingIngr(true); const ingr = await generateDishIngredients(editingItem.name); if (ingr) setEditingItem(prev => ({ ...prev, ingredients: ingr })); setIsGeneratingIngr(false); };
+  // --- MENU MANAGEMENT ---
+  const handleSaveItem = () => {
+      if (!editingItem.name || !editingItem.price) return;
+      
+      const itemToSave: MenuItem = {
+          id: editingItem.id || Date.now().toString(),
+          name: editingItem.name,
+          price: parseFloat(editingItem.price.toString()),
+          category: editingItem.category || Category.ANTIPASTI,
+          description: editingItem.description || '',
+          ingredients: editingItem.ingredients || '',
+          allergens: editingItem.allergens || [],
+          image: editingItem.image,
+          isCombo: editingItem.category === Category.MENU_COMPLETO,
+          comboItems: editingItem.comboItems || [],
+          specificDepartment: editingItem.specificDepartment
+      };
 
-  if (publicMenuId) { return <DigitalMenu restaurantId={publicMenuId} />; }
-  if (loadingSession) { return <div className="min-h-screen bg-slate-900 flex items-center justify-center"><Loader className="animate-spin text-orange-500" size={48} /></div>; }
-  if (!session) { return <AuthScreen />; }
+      if (isEditingItem && editingItem.id) {
+          updateMenuItem(itemToSave);
+      } else {
+          addMenuItem(itemToSave);
+      }
+      
+      setMenuItems(getMenuItems());
+      setEditingItem({});
+      setIsEditingItem(false);
+  };
 
-  return (
-    <div className="min-h-screen bg-slate-900 font-sans text-white">
-        
-        {/* MODAL ADMIN */}
-        {showAdmin && (
-            <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
-                <div className="bg-slate-950 w-full max-w-6xl h-[90vh] rounded-[2rem] border border-slate-800 shadow-2xl flex overflow-hidden">
-                    
-                    {/* SIDEBAR */}
-                    <div className="w-64 bg-slate-900 border-r border-slate-800 p-6 flex flex-col gap-2 overflow-y-auto">
-                        <div className="mb-6 flex items-center gap-3">
-                            <div className="bg-orange-500 p-2 rounded-xl"><ChefHat size={24} className="text-white"/></div>
-                            <span className="font-black text-lg tracking-tight">RistoSync</span>
-                        </div>
-                        
-                        <button onClick={() => setAdminTab('menu')} className={`text-left px-4 py-3 rounded-xl font-bold flex items-center gap-3 transition-all ${adminTab === 'menu' ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Utensils size={18}/> Gestione Menu</button>
-                        <button onClick={() => setAdminTab('profile')} className={`text-left px-4 py-3 rounded-xl font-bold flex items-center gap-3 transition-all ${adminTab === 'profile' ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Store size={18}/> Profilo Ristorante</button>
-                        <button onClick={() => setAdminTab('notif')} className={`text-left px-4 py-3 rounded-xl font-bold flex items-center gap-3 transition-all ${adminTab === 'notif' ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Bell size={18}/> Notifiche & Reparti</button>
-                        <button onClick={() => setAdminTab('analytics')} className={`text-left px-4 py-3 rounded-xl font-bold flex items-center gap-3 transition-all ${adminTab === 'analytics' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><BarChart3 size={18}/> Statistiche</button>
-                        <button onClick={() => setAdminTab('ai')} className={`text-left px-4 py-3 rounded-xl font-bold flex items-center gap-3 transition-all ${adminTab === 'ai' ? 'bg-pink-600 text-white shadow-lg shadow-pink-600/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Sparkles size={18}/> AI Intelligence</button>
-                        <button onClick={() => setAdminTab('share')} className={`text-left px-4 py-3 rounded-xl font-bold flex items-center gap-3 transition-all ${adminTab === 'share' ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-600/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><QrCode size={18}/> Menu Digitale</button>
-                        <button onClick={() => setAdminTab('subscription')} className={`text-left px-4 py-3 rounded-xl font-bold flex items-center gap-3 transition-all ${adminTab === 'subscription' ? 'bg-green-600 text-white shadow-lg shadow-green-600/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><CreditCard size={18}/> Abbonamento</button>
-                        <button onClick={() => setAdminTab('info')} className={`text-left px-4 py-3 rounded-xl font-bold flex items-center gap-3 transition-all ${adminTab === 'info' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}><Info size={18}/> Info & Supporto</button>
-                        
-                        <div className="mt-auto pt-6 border-t border-slate-800">
-                            <button onClick={() => setShowAdmin(false)} className="w-full py-3 rounded-xl border border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800 font-bold flex items-center justify-center gap-2 transition-colors"><ArrowLeft size={18}/> Esci da Admin</button>
-                        </div>
-                    </div>
+  const handleDeleteItem = (id: string) => {
+      deleteMenuItem(id);
+      setMenuItems(getMenuItems());
+      setItemToDelete(null);
+  };
+  
+  const confirmDelete = (item: MenuItem) => {
+      setItemToDelete(item);
+  };
 
-                    {/* CONTENT AREA */}
-                    <div className="flex-1 overflow-y-auto bg-slate-950 p-8 custom-scroll relative">
-                        
-                        {/* 1. MENU MANAGER TAB */}
-                        {adminTab === 'menu' && (
-                            <div className="animate-fade-in pb-20">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h3 className="text-xl font-bold text-white flex items-center gap-2"><Utensils className="text-orange-500"/> Gestione Menu</h3>
-                                    <div className="flex gap-2">
-                                        <button onClick={() => setShowDeleteAllMenuModal(true)} className="px-4 py-2 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white rounded-xl text-xs font-bold border border-red-500/30 transition-colors flex items-center gap-2"><Trash2 size={14}/> Reset Totale</button>
-                                        <button onClick={importDemoMenu} className="px-4 py-2 bg-slate-800 text-slate-300 hover:text-white rounded-xl text-xs font-bold border border-slate-700">Importa Demo</button>
-                                        
-                                        {/* BULK UPLOAD BUTTON (REAL) */}
-                                        <div className="relative">
-                                            <button onClick={() => bulkInputRef.current?.click()} className="px-4 py-2 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white rounded-xl text-xs font-bold border border-blue-500/30 transition-colors flex items-center gap-2"><Upload size={14}/> Caricamento Massivo</button>
-                                            <input type="file" ref={bulkInputRef} onChange={handleBulkUpload} className="hidden" multiple accept="image/*"/>
-                                        </div>
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+              // Resize image before saving to avoid LocalStorage quota issues
+              const img = new Image();
+              img.src = reader.result as string;
+              img.onload = () => {
+                  const canvas = document.createElement('canvas');
+                  const MAX_WIDTH = 800;
+                  const scaleSize = MAX_WIDTH / img.width;
+                  canvas.width = MAX_WIDTH;
+                  canvas.height = img.height * scaleSize;
+                  const ctx = canvas.getContext('2d');
+                  ctx?.drawImage(img, 0, 0, canvas.width, canvas.height);
+                  const resizedBase64 = canvas.toDataURL('image/jpeg', 0.7); // Compress
+                  setEditingItem(prev => ({ ...prev, image: resizedBase64 }));
+              };
+          };
+          reader.readAsDataURL(file);
+      }
+  };
 
-                                        <button onClick={() => { setEditingItem({}); setIsEditingItem(false); }} className="px-4 py-2 bg-green-600 hover:bg-green-500 text-white rounded-xl text-sm font-bold flex items-center gap-2 shadow-lg"><Plus size={18}/> Nuovo Piatto</button>
-                                    </div>
-                                </div>
+  const handleBulkImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) {
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+              try {
+                  const data = JSON.parse(evt.target?.result as string);
+                  if (Array.isArray(data)) {
+                      data.forEach((item: any) => {
+                          if (item.name && item.price && item.category) {
+                             addMenuItem({
+                                 id: Date.now().toString() + Math.random(),
+                                 name: item.name,
+                                 price: parseFloat(item.price),
+                                 category: item.category,
+                                 description: item.description,
+                                 ingredients: item.ingredients,
+                                 allergens: item.allergens || [],
+                                 image: item.image,
+                                 isCombo: item.category === Category.MENU_COMPLETO,
+                                 comboItems: item.comboItems || [],
+                                 specificDepartment: item.specificDepartment
+                             });
+                          }
+                      });
+                      setMenuItems(getMenuItems());
+                      alert(`Importati ${data.length} piatti!`);
+                  }
+              } catch (err) {
+                  alert("Errore nel file JSON");
+              }
+          };
+          reader.readAsText(file);
+      }
+  };
 
-                                {/* TABLE COUNT (MOVED HERE) */}
-                                <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 mb-6 flex items-center gap-4">
-                                    <div className="p-3 bg-slate-800 rounded-lg text-slate-400"><LayoutGrid size={24}/></div>
-                                    <div className="flex-1">
-                                        <h4 className="text-sm font-bold text-white">Configurazione Sala</h4>
-                                        <p className="text-xs text-slate-400">Imposta il numero totale di tavoli visibili nel pad cameriere.</p>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                        <input type="number" min="1" max="100" value={profileForm.tableCount || 12} onChange={e => setProfileForm({...profileForm, tableCount: parseInt(e.target.value) || 1})} className="w-24 bg-slate-950 border border-slate-700 rounded-xl py-3 px-4 text-white font-black text-lg outline-none text-center"/>
-                                        <button onClick={handleSaveProfile} className="bg-blue-600 hover:bg-blue-500 text-white p-3 rounded-xl font-bold transition-colors"><Save size={20}/></button>
-                                    </div>
-                                </div>
+  const exportMenu = () => {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(menuItems, null, 2));
+      const downloadAnchorNode = document.createElement('a');
+      downloadAnchorNode.setAttribute("href", dataStr);
+      downloadAnchorNode.setAttribute("download", "menu_ristosync.json");
+      document.body.appendChild(downloadAnchorNode);
+      downloadAnchorNode.click();
+      downloadAnchorNode.remove();
+  };
 
-                                {/* EDIT FORM */}
-                                { (isEditingItem || Object.keys(editingItem).length > 0) && (
-                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 mb-8 animate-slide-up shadow-xl">
-                                        <div className="flex justify-between items-center mb-4"><h4 className="font-bold text-lg">{isEditingItem ? 'Modifica Piatto' : 'Nuovo Piatto'}</h4><button onClick={() => { setEditingItem({}); setIsEditingItem(false); }} className="text-slate-500 hover:text-white"><X size={20}/></button></div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <div className="md:col-span-2 flex gap-4 items-start">
-                                                <div className="w-24 h-24 bg-slate-800 rounded-xl border border-slate-700 flex items-center justify-center relative overflow-hidden group shrink-0">
-                                                    {editingItem.image ? <img src={editingItem.image} className="w-full h-full object-cover"/> : <ImageIcon size={24} className="text-slate-500"/>}
-                                                    <input type="file" ref={fileInputRef} onChange={handleImageUpload} className="hidden" accept="image/*"/>
-                                                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer" onClick={() => fileInputRef.current?.click()}><Upload size={20} className="text-white"/></div>
-                                                </div>
-                                                <div className="flex-1 space-y-4">
-                                                    <input type="text" placeholder="Nome Piatto" value={editingItem.name || ''} onChange={e => setEditingItem({ ...editingItem, name: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-bold"/>
-                                                    <div className="flex gap-2">
-                                                        {/* CUSTOM SELECT */}
-                                                        <div className="relative flex-1">
-                                                            <select 
-                                                                value={editingItem.category || Category.ANTIPASTI} 
-                                                                onChange={e => setEditingItem({ ...editingItem, category: e.target.value as Category })} 
-                                                                className="appearance-none w-full bg-slate-950 border border-slate-700 rounded-xl p-3 pr-10 text-white focus:border-orange-500 outline-none"
-                                                            >
-                                                                {Object.values(Category).map(c => <option key={c} value={c}>{c}</option>)}
-                                                            </select>
-                                                            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" size={16} />
-                                                        </div>
-                                                        <input type="number" placeholder="Prezzo" value={editingItem.price || ''} onChange={e => setEditingItem({ ...editingItem, price: parseFloat(e.target.value) })} className="w-24 bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-bold text-right"/>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="md:col-span-2">
-                                                <label className="text-xs font-bold text-slate-500 uppercase mb-1 flex justify-between">Ingredienti {isGeneratingIngr && <span className="text-orange-400 animate-pulse">Generazione...</span>} {!isGeneratingIngr && <button onClick={handleGenerateIngr} className="text-orange-400 hover:text-orange-300 flex items-center gap-1"><Sparkles size={10}/> AI Generate</button>}</label>
-                                                <input type="text" placeholder="Es. Pomodoro, Mozzarella, Basilico" value={editingItem.ingredients || ''} onChange={e => setEditingItem({ ...editingItem, ingredients: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm"/>
-                                            </div>
-                                            <div className="md:col-span-2">
-                                                <label className="text-xs font-bold text-slate-500 uppercase mb-1 flex justify-between">Descrizione {isGeneratingDesc && <span className="text-blue-400 animate-pulse">Scrittura...</span>} {!isGeneratingDesc && <button onClick={handleGenerateDesc} className="text-blue-400 hover:text-blue-300 flex items-center gap-1"><Sparkles size={10}/> AI Generate</button>}</label>
-                                                <textarea placeholder="Descrizione accattivante per il menu..." value={editingItem.description || ''} onChange={e => setEditingItem({ ...editingItem, description: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm h-20"/>
-                                            </div>
-                                            <div className="md:col-span-2">
-                                                <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Allergeni</label>
-                                                <div className="flex flex-wrap gap-2">
-                                                    {ALLERGENS_CONFIG.map(alg => (
-                                                        <button key={alg.id} onClick={() => toggleAllergen(alg.id)} className={`px-3 py-1.5 rounded-lg border text-xs font-bold flex items-center gap-2 transition-all ${editingItem.allergens?.includes(alg.id) ? 'bg-orange-500/20 border-orange-500 text-orange-400' : 'bg-slate-950 border-slate-700 text-slate-400 hover:border-slate-500'}`}>
-                                                            <alg.icon size={12}/> {alg.label}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <button onClick={handleSaveItem} className="w-full mt-6 bg-green-600 hover:bg-green-500 text-white font-bold py-3 rounded-xl shadow-lg">SALVA PIATTO</button>
-                                    </div>
-                                )}
-                                {/* MENU LIST WITH GRAY BOXES */}
-                                <div className="space-y-6">
-                                    {ADMIN_CATEGORY_ORDER.map(cat => {
-                                        const items = menuItems.filter(i => i.category === cat);
-                                        if (items.length === 0) return null;
-                                        return (
-                                            <div key={cat} className="bg-slate-900/50 rounded-2xl p-4 border border-slate-800">
-                                                <h4 className="text-slate-400 font-bold uppercase text-xs mb-3 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-orange-500"></div> {cat}</h4>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                    {items.map(item => (
-                                                        <div key={item.id} className="bg-slate-800 p-3 rounded-xl border border-slate-700 flex justify-between items-center group hover:border-slate-600 transition-colors shadow-sm">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="w-10 h-10 rounded-lg bg-slate-700 flex items-center justify-center overflow-hidden">{item.image ? <img src={item.image} className="w-full h-full object-cover"/> : <Utensils size={16} className="text-slate-500"/>}</div>
-                                                                <div><div className="font-bold text-sm text-white">{item.name}</div><div className="text-xs text-slate-400">€ {item.price.toFixed(2)}</div></div>
-                                                            </div>
-                                                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                                <button onClick={() => { setEditingItem(item); setIsEditingItem(true); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className="p-2 bg-blue-600/20 text-blue-400 rounded-lg hover:bg-blue-600 hover:text-white"><Edit2 size={14}/></button>
-                                                                <button onClick={() => setItemToDelete(item)} className="p-2 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600 hover:text-white"><Trash2 size={14}/></button>
-                                                            </div>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-                                {itemToDelete && (
-                                    <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center p-4">
-                                        <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-sm text-center">
-                                            <h3 className="text-xl font-bold text-white mb-2">Eliminare {itemToDelete.name}?</h3>
-                                            <p className="text-slate-400 text-sm mb-6">L'azione è irreversibile.</p>
-                                            <div className="flex gap-3"><button onClick={() => setItemToDelete(null)} className="flex-1 py-3 bg-slate-800 rounded-xl font-bold">Annulla</button><button onClick={handleDeleteItem} className="flex-1 py-3 bg-red-600 hover:bg-red-500 rounded-xl font-bold text-white">Elimina</button></div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
+  const generateDesc = async () => {
+      if (!editingItem.name) return;
+      setIsGeneratingDesc(true);
+      const desc = await generateDishDescription(editingItem.name, editingItem.ingredients || '');
+      if (desc) setEditingItem(prev => ({ ...prev, description: desc }));
+      setIsGeneratingDesc(false);
+  };
+  
+  const generateIngr = async () => {
+      if (!editingItem.name) return;
+      setIsGeneratingIngr(true);
+      const ingr = await generateDishIngredients(editingItem.name);
+      if (ingr) setEditingItem(prev => ({ ...prev, ingredients: ingr }));
+      setIsGeneratingIngr(false);
+  };
 
-                        {/* 2. PROFILE TAB - (Unchanged) */}
-                        {adminTab === 'profile' && (
-                            <div className="max-w-2xl mx-auto pb-20 animate-fade-in">
-                                <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Store className="text-slate-400"/> Dati Attività & Configurazione</h3>
-                                <div className="space-y-6">
-                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-                                        <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Account Principale</label>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                            <div>
-                                                <label className="text-[10px] font-bold text-blue-400 uppercase mb-1 block flex items-center gap-1"><Lock size={10}/> Email Login</label>
-                                                <input type="text" value={session?.user?.email || 'Non disponibile'} disabled className="w-full bg-slate-950/50 border border-slate-700/50 rounded-xl p-3 text-slate-400 text-sm cursor-not-allowed font-mono" />
-                                            </div>
-                                            <div>
-                                                <label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">ID Tenant</label>
-                                                <input type="text" value={session?.user?.id || '...'} disabled className="w-full bg-slate-950/50 border border-slate-700/50 rounded-xl p-3 text-slate-500 text-xs cursor-not-allowed font-mono" />
-                                            </div>
-                                        </div>
-                                        <label className="block text-slate-400 text-xs font-bold uppercase mb-2">Insegna Ristorante</label>
-                                        <div className="relative mb-4"><ChefHat className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18}/><input type="text" value={profileForm.name || ''} onChange={e => setProfileForm({...profileForm, name: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-12 pr-4 text-white font-bold text-lg outline-none" placeholder="Il Tuo Ristorante"/></div>
-                                    </div>
-                                    
-                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h4 className="text-slate-300 font-bold mb-4 flex items-center gap-2"><Briefcase size={18}/> Dati Fiscali</h4><div className="grid grid-cols-1 gap-4"><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Ragione Sociale</label><input type="text" value={profileForm.businessName || ''} onChange={e => setProfileForm({...profileForm, businessName: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Es. Rossi S.r.l."/></div><div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Responsabile</label><input type="text" value={profileForm.responsiblePerson || ''} onChange={e => setProfileForm({...profileForm, responsiblePerson: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Nome Cognome"/></div><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">P.IVA / CF</label><input type="text" value={profileForm.vatNumber || ''} onChange={e => setProfileForm({...profileForm, vatNumber: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm font-mono"/></div></div>
-                                    <div className="grid grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Codice SDI</label><input type="text" value={profileForm.sdiCode || ''} onChange={e => setProfileForm({...profileForm, sdiCode: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm font-mono uppercase" placeholder="XXXXXXX"/></div><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">PEC</label><input type="text" value={profileForm.pecEmail || ''} onChange={e => setProfileForm({...profileForm, pecEmail: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm font-mono"/></div></div>
-                                    <div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Indirizzo Sede Legale</label><input type="text" value={profileForm.address || ''} onChange={e => setProfileForm({...profileForm, address: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Via Roma 1, Milano"/></div><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Indirizzo Fatturazione (Opzionale)</label><input type="text" value={profileForm.billingAddress || ''} onChange={e => setProfileForm({...profileForm, billingAddress: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Se diverso dalla sede legale"/></div></div></div>
-                                    
-                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h4 className="text-slate-300 font-bold mb-4 flex items-center gap-2"><PhoneCall size={18}/> Contatti Pubblici</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-4"><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Email Contatto</label><input type="email" value={profileForm.email || ''} onChange={e => setProfileForm({...profileForm, email: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm"/></div><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Cellulare</label><input type="text" value={profileForm.phoneNumber || ''} onChange={e => setProfileForm({...profileForm, phoneNumber: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm"/></div><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">WhatsApp</label><input type="text" value={profileForm.whatsappNumber || ''} onChange={e => setProfileForm({...profileForm, whatsappNumber: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm"/></div><div><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Telefono Fisso</label><input type="text" value={profileForm.landlineNumber || ''} onChange={e => setProfileForm({...profileForm, landlineNumber: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm"/></div><div className="col-span-full"><label className="text-[10px] font-bold text-slate-500 uppercase mb-1 block">Sito Web</label><input type="text" value={profileForm.website || ''} onChange={e => setProfileForm({...profileForm, website: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm text-blue-400" placeholder="https://"/></div></div></div>
-                                    
-                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h4 className="text-slate-300 font-bold mb-4 flex items-center gap-2"><Share2 size={18}/> Social Networks</h4><div className="space-y-3"><div className="flex items-center gap-3"><Instagram className="text-pink-500"/><input type="text" value={profileForm.socials?.instagram || ''} onChange={e => handleSocialChange('instagram', e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Link Instagram"/></div><div className="flex items-center gap-3"><Facebook className="text-blue-600"/><input type="text" value={profileForm.socials?.facebook || ''} onChange={e => handleSocialChange('facebook', e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Link Facebook"/></div><div className="flex items-center gap-3"><Store className="text-blue-400"/><input type="text" value={profileForm.socials?.google || ''} onChange={e => handleSocialChange('google', e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Link Google Business"/></div><div className="flex items-center gap-3"><Compass className="text-green-500"/><input type="text" value={profileForm.socials?.tripadvisor || ''} onChange={e => handleSocialChange('tripadvisor', e.target.value)} className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-white text-sm" placeholder="Link TripAdvisor"/></div></div></div>
-                                    
-                                    {/* DANGER ZONE - MOVED HERE */}
-                                    <div className="bg-slate-900 p-6 rounded-2xl border border-red-500/20 text-left mt-6">
-                                        <h4 className="font-bold text-white mb-4 flex items-center gap-2 text-red-400"><Settings size={16}/> Zona Pericolosa</h4>
-                                        <div className="flex gap-3">
-                                            <button onClick={() => { if(confirm("Vuoi resettare tutte le impostazioni locali?")){ localStorage.clear(); window.location.reload(); } }} className="flex-1 py-3 bg-red-600/10 hover:bg-red-600 text-red-400 hover:text-white text-xs font-bold uppercase tracking-widest rounded-xl border border-red-500/30 transition-all flex items-center justify-center gap-2"><RefreshCw size={14}/> Factory Reset</button>
-                                        </div>
-                                    </div>
+  const handleDeleteAllMenu = async () => {
+      if (confirm("SEI SICURO? Cancellerai TUTTO il menu. Questa azione non è reversibile.")) {
+          await deleteAllMenuItems();
+          setMenuItems([]);
+          setShowDeleteAllMenuModal(false);
+      }
+  };
 
-                                    <div className="pt-4 border-t border-slate-800"><button onClick={handleSaveProfile} className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-green-600/20 active:scale-95 transition-all"><Save size={20}/> SALVA PROFILO</button></div>
-                                </div>
-                            </div>
-                        )}
+  // --- ANALYTICS ---
+  const handleGenerateAnalysis = async () => {
+      if (ordersForAnalytics.length === 0) {
+          setAiAnalysisResult("Nessun dato disponibile per questa data.");
+          return;
+      }
+      setIsAnalyzing(true);
+      const stats = {
+          totalRevenue: ordersForAnalytics.reduce((acc, o) => acc + o.items.reduce((s, i) => s + i.menuItem.price * i.quantity, 0), 0),
+          totalItems: ordersForAnalytics.reduce((acc, o) => acc + o.items.reduce((s, i) => s + i.quantity, 0), 0),
+          avgWait: 25, // Mock
+          topDishes: ["Carbonara", "Filetto"] // Mock
+      };
+      const result = await generateRestaurantAnalysis(stats, selectedDate.toLocaleDateString());
+      setAiAnalysisResult(result);
+      setIsAnalyzing(false);
+  };
+  
+  // --- SETTINGS ---
+  const handleSaveNotifSettings = () => {
+      saveNotificationSettings(notifSettings);
+      alert("Impostazioni salvate!");
+  };
 
-                        {/* 3. NOTIFICATION & DEPARTMENTS TAB - (Unchanged) */}
-                        {adminTab === 'notif' && (
-                            <div className="max-w-2xl mx-auto space-y-8 pb-20 animate-fade-in">
-                                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><ArrowRightLeft className="text-purple-500"/> Smistamento Reparti</h3><p className="text-slate-400 text-sm mb-6">Decidi in quale monitor inviare gli ordini per ogni categoria.</p>
-                                    <div className="space-y-4">
-                                        {ADMIN_CATEGORY_ORDER.map(cat => (
-                                            <div key={cat} className="flex items-center justify-between p-3 bg-slate-950 rounded-xl border border-slate-800">
-                                                <span className="font-bold text-sm text-slate-300">{cat}</span>
-                                                <div className="relative">
-                                                    <select 
-                                                        value={tempDestinations[cat] || 'Cucina'} 
-                                                        onChange={(e) => { const newDest = { ...tempDestinations, [cat]: e.target.value as Department }; setTempDestinations(newDest); setHasUnsavedDestinations(true); }} 
-                                                        className="appearance-none bg-slate-800 text-white text-xs font-bold py-2 pl-3 pr-8 rounded-lg border border-slate-700 outline-none focus:border-purple-500"
-                                                    >
-                                                        <option value="Cucina">Cucina</option>
-                                                        <option value="Pizzeria">Pizzeria</option>
-                                                        <option value="Pub">Pub / Bar</option>
-                                                        <option value="Sala">Sala (Auto)</option>
-                                                    </select>
-                                                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={12}/>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Printer className="text-blue-500"/> Stampa Scontrini (Beta)</h3><div className="space-y-3">{Object.keys(tempPrintSettings).map(key => (<div key={key} className="flex items-center justify-between p-3 bg-slate-950 rounded-xl border border-slate-800"><span className="font-bold text-sm text-slate-300">Stampa in {key}</span><button onClick={() => { const newSettings = { ...tempPrintSettings, [key]: !tempPrintSettings[key] }; setTempPrintSettings(newSettings); setHasUnsavedDestinations(true); }} className={`w-12 h-6 rounded-full p-1 transition-colors ${tempPrintSettings[key] ? 'bg-green-600' : 'bg-slate-700'}`}><div className={`w-4 h-4 rounded-full bg-white transition-transform ${tempPrintSettings[key] ? 'translate-x-6' : ''}`}></div></button></div>))}</div></div>
-                                {hasUnsavedDestinations && (<div className="sticky bottom-6"><button onClick={saveDestinations} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 rounded-xl shadow-lg animate-bounce flex items-center justify-center gap-2"><Save size={20}/> SALVA MODIFICHE</button></div>)}
-                            </div>
-                        )}
+  const handleSaveAppSettings = async () => {
+      const newSettings: AppSettings = {
+          categoryDestinations: tempDestinations,
+          printEnabled: tempPrintSettings,
+          restaurantProfile: {
+              ...appSettings.restaurantProfile,
+              ...profileForm // Merge Profile Form Data
+          }
+      };
+      await saveAppSettings(newSettings);
+      setAppSettingsState(newSettings);
+      setHasUnsavedDestinations(false);
+      alert("Configurazione salvata con successo!");
+  };
 
-                        {/* 4. ANALYTICS TAB (ENHANCED) */}
-                        {adminTab === 'analytics' && (
-                            <div className="space-y-6 pb-20 animate-fade-in">
-                                <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-slate-900 p-6 rounded-2xl border border-slate-800">
-                                    <div><h3 className="text-xl font-bold text-white">Report Giornaliero</h3><p className="text-slate-400 text-sm">Analisi incassi e performance.</p></div>
-                                    <div className="flex items-center bg-slate-950 rounded-xl p-1 border border-slate-700">
-                                        <button onClick={() => setSelectedDate(d => { const n = new Date(d); n.setDate(n.getDate()-1); return n; })} className="p-3 hover:bg-slate-800 rounded-lg"><ChevronLeft/></button>
-                                        <div className="px-6 font-bold text-white flex items-center gap-2"><Calendar size={18} className="text-emerald-500"/> {selectedDate.toLocaleDateString()}</div>
-                                        <button onClick={() => setSelectedDate(d => { const n = new Date(d); n.setDate(n.getDate()+1); return n; })} className="p-3 hover:bg-slate-800 rounded-lg"><ChevronRight/></button>
-                                    </div>
-                                </div>
-                                {/* STATS CARDS */}
-                                {(() => {
-                                    const dailyOrders = ordersForAnalytics.filter(o => {
-                                        const d = new Date(o.createdAt || o.timestamp);
-                                        return d.getDate() === selectedDate.getDate() && d.getMonth() === selectedDate.getMonth() && d.getFullYear() === selectedDate.getFullYear() && o.status === OrderStatus.DELIVERED;
-                                    });
-                                    const revenue = dailyOrders.reduce((acc, o) => acc + o.items.reduce((sum, i) => sum + (i.menuItem.price * i.quantity), 0), 0);
-                                    const totalDishes = dailyOrders.reduce((acc, o) => acc + o.items.reduce((sum, i) => sum + i.quantity, 0), 0);
-                                    const avgOrder = dailyOrders.length ? (revenue / dailyOrders.length) : 0;
-                                    
-                                    // NEW: Top Dishes Calculation
-                                    const itemCounts: Record<string, number> = {};
-                                    dailyOrders.forEach(o => o.items.forEach(i => {
-                                        itemCounts[i.menuItem.name] = (itemCounts[i.menuItem.name] || 0) + i.quantity;
-                                    }));
-                                    const topDishes = Object.entries(itemCounts).sort((a,b) => b[1] - a[1]).slice(0, 3);
+  const handleSaveApiKey = async () => {
+      await saveGoogleApiKey(apiKeyInput);
+      alert("API Key salvata!");
+  };
 
-                                    // NEW: Avg Time Calculation (Delivery Time - Creation Time)
-                                    const totalTime = dailyOrders.reduce((acc, o) => acc + ((o.timestamp - (o.createdAt || o.timestamp)) / 60000), 0);
-                                    const avgWait = dailyOrders.length ? Math.round(totalTime / dailyOrders.length) : 0;
+  const handlePrintQR = () => {
+      const url = `${window.location.origin}?menu=${session?.user?.id}`;
+      const win = window.open('', '', 'width=600,height=600');
+      if (win) {
+          win.document.write(`
+            <html>
+                <head><title>QR Menu</title><style>body{font-family:sans-serif;text-align:center;padding:50px;} h1{font-size:30px;} .url{margin-top:20px;font-size:20px;font-weight:bold;}</style></head>
+                <body>
+                    <h1>Scansiona per il Menu</h1>
+                    <img src="https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(url)}" />
+                    <div class="url">${restaurantName}</div>
+                    <p>Powered by RistoSync</p>
+                    <script>window.print();</script>
+                </body>
+            </html>
+          `);
+          win.document.close();
+      }
+  };
 
-                                    return (
-                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 relative overflow-hidden"><div className="absolute top-0 right-0 p-4 opacity-10"><DollarSign size={80} className="text-emerald-500"/></div><p className="text-slate-400 text-xs font-bold uppercase mb-2">Incasso Totale</p><p className="text-4xl font-black text-white">€ {revenue.toFixed(2)}</p></div>
-                                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 relative overflow-hidden"><div className="absolute top-0 right-0 p-4 opacity-10"><Receipt size={80} className="text-blue-500"/></div><p className="text-slate-400 text-xs font-bold uppercase mb-2">Scontrini Emessi</p><p className="text-4xl font-black text-white">{dailyOrders.length}</p></div>
-                                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 relative overflow-hidden"><div className="absolute top-0 right-0 p-4 opacity-10"><TrendingUp size={80} className="text-purple-500"/></div><p className="text-slate-400 text-xs font-bold uppercase mb-2">Scontrino Medio</p><p className="text-4xl font-black text-white">€ {avgOrder.toFixed(2)}</p></div>
-                                            
-                                            {/* NEW METRICS */}
-                                            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 relative overflow-hidden"><div className="absolute top-0 right-0 p-4 opacity-10"><Clock size={80} className="text-orange-500"/></div><p className="text-slate-400 text-xs font-bold uppercase mb-2">Attesa Media</p><p className="text-4xl font-black text-white">{avgWait} <span className="text-lg text-slate-500">min</span></p></div>
-                                            <div className="md:col-span-2 bg-slate-900 p-6 rounded-2xl border border-slate-800">
-                                                <p className="text-slate-400 text-xs font-bold uppercase mb-3 flex items-center gap-2"><Star size={14} className="text-yellow-500"/> Piatti Più Venduti</p>
-                                                {topDishes.length > 0 ? (
-                                                    <div className="space-y-3">
-                                                        {topDishes.map(([name, count], i) => (
-                                                            <div key={name} className="flex justify-between items-center bg-slate-950 p-2 rounded-lg border border-slate-800">
-                                                                <div className="flex items-center gap-3">
-                                                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs ${i===0?'bg-yellow-500 text-black':i===1?'bg-slate-400 text-black':'bg-orange-700 text-white'}`}>{i+1}</div>
-                                                                    <span className="font-bold text-sm">{name}</span>
-                                                                </div>
-                                                                <span className="font-bold text-slate-400 text-sm">{count} <span className="text-[10px] uppercase">ordini</span></span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                ) : <p className="text-slate-500 text-sm italic">Dati non sufficienti</p>}
-                                            </div>
+  // RENDER LOGIC
 
-                                            <div className="col-span-full bg-slate-900 p-6 rounded-2xl border border-slate-800">
-                                                <div className="flex justify-between items-center mb-4"><h4 className="font-bold flex items-center gap-2"><Sparkles className="text-pink-500"/> Analisi AI Manager</h4><button onClick={async () => { setIsAnalyzing(true); const res = await generateRestaurantAnalysis({ totalRevenue: revenue, totalItems: totalDishes, topDishes: topDishes.map(t=>t[0]), avgWait: avgWait }, selectedDate.toLocaleDateString()); setAiAnalysisResult(res); setIsAnalyzing(false); }} className="px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-lg text-xs font-bold shadow-lg flex items-center gap-2">{isAnalyzing ? <Loader className="animate-spin" size={14}/> : <Bot size={14}/>} Genera Analisi</button></div>
-                                                <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-sm leading-relaxed text-slate-300 min-h-[80px]">{aiAnalysisResult || 'Clicca su "Genera Analisi" per ricevere consigli dal tuo AI Manager.'}</div>
-                                            </div>
-                                        </div>
-                                    );
-                                })()}
-                            </div>
-                        )}
+  // 1. PUBLIC DIGITAL MENU
+  if (publicMenuId) {
+      return <DigitalMenu restaurantId={publicMenuId} />;
+  }
 
-                        {/* 5. AI INTELLIGENCE TAB - (Unchanged) */}
-                        {adminTab === 'ai' && (
-                            <div className="max-w-xl mx-auto space-y-8 pb-20 animate-fade-in text-center">
-                                <div className="w-20 h-20 bg-pink-500/20 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse"><Sparkles size={40} className="text-pink-500"/></div>
-                                <h3 className="text-2xl font-black text-white">Gemini AI Intelligence</h3>
-                                <p className="text-slate-400">Inserisci la tua API Key di Google Gemini per abilitare:<br/>- Generazione descrizioni piatti<br/>- Analisi incassi giornaliera<br/>- Chat Assistant per i camerieri</p>
-                                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 text-left">
-                                    <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Google Gemini API Key</label>
-                                    <div className="flex gap-2">
-                                        <div className="relative flex-1">
-                                            <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
-                                            <input type="password" value={apiKeyInput} onChange={e => setApiKeyInput(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-10 pr-4 text-white font-mono" placeholder="AIza..."/>
-                                        </div>
-                                        <button onClick={async () => { await saveGoogleApiKey(apiKeyInput); alert("Key Salvata!"); }} className="bg-pink-600 hover:bg-pink-500 text-white px-6 rounded-xl font-bold shadow-lg">Salva</button>
-                                    </div>
-                                    <p className="text-[10px] text-slate-500 mt-4">La chiave viene salvata nel database sicuro di RistoSync. Non condividerla con nessuno.</p>
-                                </div>
-                            </div>
-                        )}
+  // 2. AUTH SCREEN
+  if (loadingSession) {
+      return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white"><Loader className="animate-spin text-orange-500" size={48}/></div>;
+  }
 
-                        {/* 6. SHARE / QR CODE TAB (WITH PHONE PREVIEW) */}
-                        {adminTab === 'share' && (
-                            <div className="flex flex-col xl:flex-row gap-8 pb-20 animate-fade-in">
-                                <div className="flex-1 space-y-8">
-                                    <div><h3 className="text-2xl font-black text-white mb-2">Menu Digitale</h3><p className="text-slate-400 text-sm">Fai scansionare questo QR Code ai clienti.</p></div>
-                                    <div className="bg-white p-6 rounded-3xl shadow-2xl inline-block mx-auto xl:mx-0">
-                                        {qrCodeUrl ? <img src={qrCodeUrl} alt="Menu QR" className="w-64 h-64 mix-blend-multiply"/> : <div className="w-64 h-64 flex items-center justify-center bg-slate-100 text-slate-400 text-xs">QR non disponibile</div>}
-                                    </div>
-                                    <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 text-left space-y-4">
-                                        <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Link Pubblico</label><div className="flex gap-2"><input type="text" value={digitalMenuLink} readOnly className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-slate-400 text-xs font-mono"/><button onClick={copyToClipboard} className="p-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl border border-slate-700"><Copy size={16}/></button></div></div>
-                                        <button onClick={() => window.open(digitalMenuLink, '_blank')} className="w-full py-4 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2"><ExternalLink size={20}/> APRI MENU DIGITALE</button>
-                                    </div>
-                                </div>
-                                
-                                {/* PHONE MOCKUP PREVIEW */}
-                                <div className="flex-shrink-0 flex justify-center xl:justify-start">
-                                    <div className="relative border-[8px] border-slate-800 bg-slate-900 rounded-[3rem] h-[650px] w-[320px] shadow-2xl overflow-hidden ring-4 ring-slate-900/50">
-                                        <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-32 h-6 bg-slate-800 rounded-b-xl z-30"></div>
-                                        <div className="h-full w-full bg-slate-50 overflow-hidden">
-                                            {/* Render DigitalMenu in Preview Mode */}
-                                            <DigitalMenu restaurantId={session.user.id} isPreview={true} activeMenuData={menuItems} activeRestaurantName={restaurantName} />
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+  if (!session) {
+      return <AuthScreen />;
+  }
 
-                        {/* 7. SUBSCRIPTION TAB (NEW 3-CARD LAYOUT) */}
-                        {adminTab === 'subscription' && (
-                            <div className="max-w-6xl mx-auto space-y-8 pb-20 animate-fade-in">
-                                
-                                {/* HEADER */}
-                                <div className="text-center mb-8">
-                                    <h3 className="text-3xl font-black text-white mb-2">Scegli il tuo Piano</h3>
-                                    <p className="text-slate-400 text-sm">Gestisci il tuo abbonamento RistoSync.</p>
-                                    {/* CURRENT STATUS BADGE */}
-                                    <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-full border border-slate-700 mt-4">
-                                        <div className={`w-2 h-2 rounded-full ${subscriptionExpired ? 'bg-red-500' : 'bg-green-500 animate-pulse'}`}></div>
-                                        <span className="text-xs font-bold text-white uppercase tracking-wider">
-                                            Stato: {subscriptionExpired ? 'SCADUTO' : appSettings.restaurantProfile?.planType || 'Trial'}
-                                        </span>
-                                    </div>
-                                </div>
+  // 3. SUPER ADMIN DASHBOARD
+  if (isSuperAdmin && adminViewMode === 'dashboard') {
+      return <SuperAdminDashboard onEnterApp={() => setAdminViewMode('app')} />;
+  }
 
-                                {/* PLANS GRID */}
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    {/* TRIAL */}
-                                    <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 flex flex-col relative overflow-hidden group hover:border-blue-500 transition-all">
-                                        <div className="absolute top-0 right-0 p-4 opacity-10"><Sparkles size={80} className="text-blue-500"/></div>
-                                        <h4 className="text-xl font-black text-white mb-2">Trial</h4>
-                                        <p className="text-slate-400 text-xs mb-6 h-10">Prova tutte le funzionalità gratuitamente per iniziare.</p>
-                                        <div className="text-3xl font-black text-white mb-6">Gratis <span className="text-sm font-medium text-slate-500">/ 15 gg</span></div>
-                                        <button onClick={() => handlePlanChangeRequest('Trial')} className="w-full py-3 rounded-xl border border-slate-600 text-slate-300 font-bold hover:bg-slate-800 hover:text-white transition-colors">Richiedi Trial</button>
-                                        <ul className="mt-6 space-y-3">
-                                            <li className="flex items-center gap-2 text-xs text-slate-300"><Check size={14} className="text-blue-500"/> Accesso completo</li>
-                                            <li className="flex items-center gap-2 text-xs text-slate-300"><Check size={14} className="text-blue-500"/> Cloud Sync</li>
-                                            <li className="flex items-center gap-2 text-xs text-slate-300"><Check size={14} className="text-blue-500"/> Supporto Base</li>
-                                        </ul>
-                                    </div>
+  // 4. SUSPENDED / BANNED SCREENS
+  if (isBanned) return (
+      <div className="min-h-screen bg-red-950 flex flex-col items-center justify-center text-white p-8 text-center">
+          <Shield size={64} className="mb-6 text-red-500" />
+          <h1 className="text-4xl font-black mb-4">ACCOUNT BLOCCATO</h1>
+          <p className="text-xl mb-8">Il tuo account è stato disabilitato permanentemente per violazione dei termini.</p>
+          <button onClick={signOut} className="bg-red-700 hover:bg-red-600 px-8 py-3 rounded-xl font-bold">Esci</button>
+      </div>
+  );
 
-                                    {/* STANDARD (HIGHLIGHTED) */}
-                                    <div className="bg-gradient-to-b from-slate-800 to-slate-900 border-2 border-indigo-500 rounded-3xl p-6 flex flex-col relative overflow-hidden shadow-2xl shadow-indigo-900/20 transform scale-105 z-10">
-                                        <div className="absolute top-0 right-0 bg-indigo-500 text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl uppercase tracking-widest">Consigliato</div>
-                                        <h4 className="text-xl font-black text-white mb-2">Standard</h4>
-                                        <p className="text-indigo-200 text-xs mb-6 h-10">La soluzione completa per gestire il tuo locale senza limiti.</p>
-                                        <div className="text-3xl font-black text-white mb-6">€ {appSettings.restaurantProfile?.subscriptionCost || '49.90'} <span className="text-sm font-medium text-slate-500">/ mese</span></div>
-                                        <button onClick={() => handlePlanChangeRequest('Standard')} className="w-full py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-lg shadow-indigo-500/20 transition-all flex items-center justify-center gap-2">
-                                            <Zap size={16}/> Attiva Standard
-                                        </button>
-                                        <ul className="mt-6 space-y-3">
-                                            <li className="flex items-center gap-2 text-xs text-white font-bold"><Check size={14} className="text-indigo-400"/> Ordini Illimitati</li>
-                                            <li className="flex items-center gap-2 text-xs text-white font-bold"><Check size={14} className="text-indigo-400"/> Menu Digitale QR</li>
-                                            <li className="flex items-center gap-2 text-xs text-white font-bold"><Check size={14} className="text-indigo-400"/> AI Assistant</li>
-                                            <li className="flex items-center gap-2 text-xs text-white font-bold"><Check size={14} className="text-indigo-400"/> Multi-Device Sync</li>
-                                        </ul>
-                                    </div>
+  if (isSuspended) return (
+      <div className="min-h-screen bg-orange-950 flex flex-col items-center justify-center text-white p-8 text-center">
+          <Clock size={64} className="mb-6 text-orange-500" />
+          <h1 className="text-4xl font-black mb-4">SERVIZIO SOSPESO</h1>
+          <p className="text-xl mb-8">Il tuo abbonamento risulta sospeso o scaduto.</p>
+          <div className="bg-slate-900 p-6 rounded-2xl border border-slate-700 max-w-md w-full mb-8 text-left">
+              <p className="font-bold text-slate-300 mb-2">Contatta l'amministrazione:</p>
+              <div className="flex items-center gap-2 text-white mb-1"><Mail size={16} /> {adminContactEmail}</div>
+              <div className="flex items-center gap-2 text-white"><PhoneCall size={16} /> {adminPhone}</div>
+          </div>
+          <p className="text-sm text-slate-400 mb-8">Effettua il bonifico all'IBAN: <span className="font-mono text-white block mt-1 bg-black/30 p-2 rounded select-all">{adminIban}</span> Intestato a: {adminHolder}</p>
+          <button onClick={signOut} className="bg-orange-600 hover:bg-orange-500 px-8 py-3 rounded-xl font-bold">Esci</button>
+      </div>
+  );
 
-                                    {/* PREMIUM */}
-                                    <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 flex flex-col relative overflow-hidden group hover:border-amber-500 transition-all">
-                                        <div className="absolute top-0 right-0 p-4 opacity-10"><Crown size={80} className="text-amber-500"/></div>
-                                        <h4 className="text-xl font-black text-white mb-2">Premium</h4>
-                                        <p className="text-slate-400 text-xs mb-6 h-10">Per chi vuole il massimo: personalizzazioni e supporto dedicato.</p>
-                                        <div className="text-3xl font-black text-white mb-6">€ 149.90 <span className="text-sm font-medium text-slate-500">/ mese</span></div>
-                                        <button onClick={() => handlePlanChangeRequest('Premium')} className="w-full py-3 rounded-xl border border-slate-600 text-amber-400 font-bold hover:bg-slate-800 hover:text-amber-300 transition-colors">Richiedi Premium</button>
-                                        <ul className="mt-6 space-y-3">
-                                            <li className="flex items-center gap-2 text-xs text-slate-300"><Check size={14} className="text-amber-500"/> Tutto incluso Standard</li>
-                                            <li className="flex items-center gap-2 text-xs text-slate-300"><Check size={14} className="text-amber-500"/> Logo Personalizzato</li>
-                                            <li className="flex items-center gap-2 text-xs text-slate-300"><Check size={14} className="text-amber-500"/> Assistenza Prioritaria 24/7</li>
-                                            <li className="flex items-center gap-2 text-xs text-slate-300"><Check size={14} className="text-amber-500"/> Setup Iniziale Menu</li>
-                                        </ul>
-                                    </div>
-                                </div>
+  // 5. ROLE SELECTION (HOME)
+  if (!role && !showAdmin) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-white p-6 flex flex-col font-sans relative overflow-hidden">
+        {/* BACKGROUND EFFECTS */}
+        <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-800 to-slate-950 pointer-events-none"></div>
+        <div className="absolute top-[-10%] right-[-5%] w-96 h-96 bg-orange-600/10 rounded-full blur-3xl"></div>
+        <div className="absolute bottom-[-10%] left-[-5%] w-96 h-96 bg-blue-600/10 rounded-full blur-3xl"></div>
 
-                                {/* PAYMENT METHODS (UPDATED TO EMAIL REQUEST) */}
-                                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-                                    <h4 className="font-bold text-white mb-6 flex items-center gap-2">Metodi di Pagamento</h4>
-                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                        <button onClick={() => handlePayment('Carta di Credito')} className="bg-slate-950 border border-slate-700 hover:border-slate-500 p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1 active:scale-95 group">
-                                            <CreditCard size={24} className="text-white group-hover:text-blue-400"/> <span className="text-xs font-bold">Richiedi Link Carta</span>
-                                        </button>
-                                        <button onClick={() => handlePayment('PayPal')} className="bg-slate-950 border border-slate-700 hover:border-blue-500 p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1 active:scale-95">
-                                            <div className="font-black italic text-blue-500 text-lg">Pay<span className="text-blue-400">Pal</span></div> <span className="text-xs font-bold">Richiedi PayPal</span>
-                                        </button>
-                                        <button onClick={() => handlePayment('Apple Pay')} className="bg-slate-950 border border-slate-700 hover:border-white p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1 active:scale-95 group">
-                                            <div className="font-bold text-white text-lg group-hover:text-gray-300">Apple Pay</div> <span className="text-xs font-bold">Richiedi Link</span>
-                                        </button>
-                                        <button onClick={() => handlePayment('Google Pay')} className="bg-slate-950 border border-slate-700 hover:border-green-500 p-4 rounded-2xl flex flex-col items-center gap-2 transition-all hover:-translate-y-1 active:scale-95 group">
-                                            <div className="font-bold text-white text-lg"><span className="text-blue-500 group-hover:text-blue-400">G</span>Pay</div> <span className="text-xs font-bold">Richiedi Link</span>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                {/* BANK TRANSFER SECTION (DYNAMIC) */}
-                                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
-                                    <h4 className="font-bold text-white mb-6 flex items-center gap-2"><Banknote size={20} className="text-emerald-500"/> Coordinate Bancarie</h4>
-                                    
-                                    <div className="space-y-4">
-                                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 flex justify-between items-center group">
-                                            <div>
-                                                <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">IBAN</p>
-                                                <p className="font-mono text-white text-sm md:text-base tracking-wider">{adminIban}</p>
-                                            </div>
-                                            <button onClick={() => {navigator.clipboard.writeText(adminIban); alert("IBAN Copiato")}} className="text-slate-500 hover:text-white"><Copy size={18}/></button>
-                                        </div>
-                                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800">
-                                            <p className="text-[10px] uppercase font-bold text-slate-500 mb-1">Intestatario</p>
-                                            <p className="text-white font-bold">{adminHolder}</p>
-                                        </div>
-                                        <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 border-l-4 border-l-orange-500">
-                                            <p className="text-[10px] uppercase font-bold text-orange-500 mb-1">Causale Obbligatoria</p>
-                                            <p className="text-white text-sm font-medium">Rinnovo mese di {new Date().toLocaleString('it-IT', { month: 'long' })} per il ristorante {restaurantName}</p>
-                                        </div>
-                                    </div>
-
-                                    {/* SEND RECEIPT BUTTON */}
-                                    <div className="mt-6 pt-6 border-t border-slate-800 flex justify-between items-center">
-                                        <div className="text-xs text-slate-400 max-w-[200px]">Hai effettuato il bonifico? Invia la contabile per l'attivazione immediata.</div>
-                                        <a 
-                                            href={`mailto:${adminContactEmail}?subject=Invio Contabile Bonifico - ${restaurantName}&body=In allegato la contabile del bonifico per il rinnovo mese di ${new Date().toLocaleString('it-IT', { month: 'long' })}.`}
-                                            className="bg-slate-800 hover:bg-slate-700 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 border border-slate-700 transition-colors"
-                                        >
-                                            <Mail size={18}/> Invia Contabile
-                                        </a>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* 8. INFO TAB (ENHANCED) */}
-                        {adminTab === 'info' && (
-                            <div className="max-w-xl mx-auto text-center space-y-8 pb-20 animate-fade-in">
-                                <div className="w-24 h-24 bg-slate-800 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-xl"><ChefHat size={48} className="text-orange-500"/></div>
-                                <div><h3 className="text-3xl font-black text-white">RistoSync AI</h3><p className="text-slate-400 mt-2">Versione 2.5.0 (Cloud Sync)</p></div>
-                                <div className="grid grid-cols-2 gap-4 text-left">
-                                    <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800"><h4 className="font-bold text-white mb-2">Supporto Tecnico</h4><p className="text-sm text-slate-400">{adminContactEmail}</p><p className="text-sm text-slate-400 mt-1">{adminPhone}</p></div>
-                                    <div className="bg-slate-900 p-5 rounded-2xl border border-slate-800">
-                                        <h4 className="font-bold text-white mb-2">Legal & Privacy</h4>
-                                        <button onClick={() => setShowPrivacyModal(true)} className="text-sm text-blue-400 hover:underline flex items-center gap-1"><FileText size={14}/> Privacy & Cookie Policy</button>
-                                        <a href="#" className="text-sm text-blue-400 hover:underline block mt-1">Termini di Servizio</a>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-                    </div>
+        {/* HEADER */}
+        <div className="relative z-10 flex justify-between items-center mb-12">
+            <div className="flex items-center gap-4">
+                <div className="w-16 h-16 bg-gradient-to-br from-orange-500 to-red-600 rounded-2xl flex items-center justify-center shadow-lg shadow-orange-600/20 transform rotate-3">
+                    <ChefHat size={36} className="text-white drop-shadow-md" />
+                </div>
+                <div>
+                    <h1 className="text-4xl font-black tracking-tight flex items-center gap-2">
+                        Risto<span className="text-transparent bg-clip-text bg-gradient-to-r from-orange-400 to-red-500">Sync</span>
+                        <span className="text-xs bg-slate-800 text-slate-400 px-2 py-1 rounded-md border border-slate-700 font-mono tracking-widest">PRO</span>
+                    </h1>
+                    <p className="text-slate-400 font-medium text-sm mt-1 flex items-center gap-2">
+                        {restaurantName} <span className="w-1 h-1 bg-slate-500 rounded-full"></span> {new Date().toLocaleDateString()}
+                    </p>
                 </div>
             </div>
-        )}
-
-        {/* PRIVACY & TERMS MODAL */}
-        {showPrivacyModal && (
-            <div className="fixed inset-0 z-[80] bg-black/90 flex items-center justify-center p-6 animate-fade-in">
-                <div className="bg-slate-900 w-full max-w-2xl h-[80vh] rounded-3xl border border-slate-800 shadow-2xl flex flex-col relative overflow-hidden">
-                    <div className="p-6 border-b border-slate-800 flex justify-between items-center bg-slate-950">
-                        <h2 className="text-xl font-bold text-white flex items-center gap-2"><ShieldIcon className="text-green-500"/> Privacy & Termini di Servizio</h2>
-                        <button onClick={() => setShowPrivacyModal(false)} className="p-2 bg-slate-800 rounded-full text-slate-400 hover:text-white"><X size={20}/></button>
-                    </div>
-                    <div className="flex-1 overflow-y-auto p-8 text-slate-300 text-sm leading-relaxed custom-scroll">
-                        <h3 className="text-white font-bold text-lg mb-2">Fornitore del Servizio</h3>
-                        <p className="mb-4">
-                            Il servizio <strong>RistoSync AI</strong> è erogato da:<br/>
-                            <strong>Massimo Castro</strong><br/>
-                            Email: {adminContactEmail}<br/>
-                            Telefono: {adminPhone}
-                        </p>
-
-                        <h3 className="text-white font-bold text-lg mb-2">Termini di Pagamento</h3>
-                        <p className="mb-4">
-                            L'abbonamento al servizio è mensile o annuale. Il pagamento deve essere effettuato tramite bonifico bancario alle seguenti coordinate:<br/>
-                            <strong>IBAN:</strong> {adminIban}<br/>
-                            <strong>Intestatario:</strong> {adminHolder}<br/>
-                            Il mancato pagamento comporta la sospensione dell'account dopo 5 giorni dalla scadenza.
-                        </p>
-
-                        <h3 className="text-white font-bold text-lg mb-2">Informativa Privacy (GDPR)</h3>
-                        <p className="mb-4">
-                            RistoSync AI rispetta la tua privacy. I dati raccolti (email, nome ristorante, menu) sono utilizzati esclusivamente per erogare il servizio di gestione comande. 
-                            I dati sono salvati su database sicuri (Supabase) e non vengono ceduti a terzi per scopi di marketing.
-                        </p>
-                        
-                        <h3 className="text-white font-bold text-lg mb-2">Cookie Policy</h3>
-                        <p className="mb-4">
-                            Utilizziamo solo cookie tecnici essenziali per il funzionamento dell'app (autenticazione, preferenze locali come lingua e tema). 
-                            Non utilizziamo cookie di profilazione o tracciamento pubblicitario.
-                        </p>
-                        
-                        <h3 className="text-white font-bold text-lg mb-2">Diritti dell'Utente</h3>
-                        <p className="mb-4">
-                            Puoi richiedere la cancellazione completa del tuo account e dei tuoi dati in qualsiasi momento contattando il supporto tecnico a: {adminContactEmail}.
-                        </p>
-                        
-                        <div className="p-4 bg-slate-800 rounded-xl border border-slate-700 mt-6">
-                            <p className="text-xs text-slate-400">Ultimo aggiornamento: 25 Ottobre 2023</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        )}
-
-        {/* ROLE SELECTION SCREEN WITH FLOATING HAT */}
-        {!role && !showAdmin && !isSuspended && !subscriptionExpired && (
-            <div className="flex flex-col items-center justify-center min-h-screen p-6 relative overflow-hidden">
-                <style>{`
-                  @keyframes float { 0% { transform: translateY(0px) rotate(0deg); } 50% { transform: translateY(-15px) rotate(5deg); } 100% { transform: translateY(0px) rotate(0deg); } }
-                  .animate-float { animation: float 6s ease-in-out infinite; }
-                `}</style>
-                <div className="absolute top-0 left-0 w-full h-full bg-[url('https://images.unsplash.com/photo-1514362545857-3bc165497db5?ixlib=rb-1.2.1&auto=format&fit=crop&w=1950&q=80')] bg-cover bg-center opacity-10 blur-xl"></div>
-                
-                {/* SETTINGS BUTTON TOP RIGHT */}
-                <button onClick={() => setShowAdmin(true)} className="absolute top-6 right-6 p-3 bg-slate-800/80 backdrop-blur rounded-full text-slate-400 hover:text-white border border-slate-700 shadow-lg hover:rotate-90 transition-all z-20">
-                    <Settings size={24} />
+            
+            <div className="flex gap-4">
+                <button 
+                    onClick={handleAdminAuth} 
+                    className="group bg-slate-800 hover:bg-slate-700 p-4 rounded-2xl transition-all duration-300 border border-slate-700 hover:border-slate-500 flex flex-col items-center gap-1 shadow-lg active:scale-95"
+                    title="Impostazioni Admin"
+                >
+                    <Settings className="text-slate-400 group-hover:text-white group-hover:rotate-45 transition-transform" size={24} />
+                    <span className="text-[10px] uppercase font-bold text-slate-500 group-hover:text-slate-300">Admin</span>
                 </button>
+                <button 
+                    onClick={signOut} 
+                    className="group bg-slate-800 hover:bg-red-900/20 p-4 rounded-2xl transition-all duration-300 border border-slate-700 hover:border-red-500/50 flex flex-col items-center gap-1 shadow-lg active:scale-95"
+                    title="Esci"
+                >
+                    <LogOut className="text-slate-400 group-hover:text-red-400" size={24} />
+                    <span className="text-[10px] uppercase font-bold text-slate-500 group-hover:text-red-400">Esci</span>
+                </button>
+            </div>
+        </div>
 
-                <div className="relative z-10 text-center mb-10">
-                    {/* ANIMATED FLOATING ICON */}
-                    <div className="w-24 h-24 bg-gradient-to-br from-orange-400 to-orange-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-orange-500/30 animate-float transform rotate-3">
-                        <ChefHat size={48} className="text-white drop-shadow-md" />
-                    </div>
-                    
-                    <h1 className="text-6xl font-black text-white mb-2 tracking-tight drop-shadow-lg">Risto<span className="text-orange-500">Sync</span></h1>
-                    <p className="text-xl text-slate-300 font-medium tracking-wide">{restaurantName}</p>
-                    <div className="mt-6 inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-bold uppercase tracking-wider backdrop-blur-sm">
-                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div> Sistema Operativo
-                    </div>
+        {/* SUBSCRIPTION BANNER */}
+        {subscriptionExpired && (
+            <div className="relative z-10 mb-8 bg-red-600/10 border border-red-500/30 p-4 rounded-2xl flex items-center justify-between animate-pulse">
+                <div className="flex items-center gap-3 text-red-400 font-bold">
+                    <AlertTriangle size={24}/>
+                    <span>Abbonamento Scaduto! Rinnova per continuare a usare tutte le funzioni.</span>
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl relative z-10">
-                    {/* KITCHEN BUTTON */}
-                    <button onClick={() => setRole('kitchen')} className="group relative overflow-hidden rounded-3xl bg-slate-800/80 backdrop-blur-md border border-slate-700 p-8 hover:border-orange-500 transition-all duration-300 hover:shadow-[0_0_40px_rgba(249,115,22,0.15)] flex flex-col items-center gap-4 text-center hover:-translate-y-1">
-                        <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        <div className="w-24 h-24 bg-slate-900 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform border border-slate-700 group-hover:border-orange-500/50 shadow-xl">
-                            <ChefHat size={48} className="text-orange-500" />
-                        </div>
-                        <div>
-                            <h2 className="text-2xl font-black text-white mb-1 group-hover:text-orange-400 transition-colors">Cucina</h2>
-                            <p className="text-slate-400 text-sm">Visualizza comande (16:9)</p>
-                        </div>
-                    </button>
-
-                    {/* WAITER BUTTON */}
-                    <button onClick={() => { if(getWaiterName()){ setRole('waiter'); } else { setShowLogin(true); } }} className="group relative overflow-hidden rounded-3xl bg-slate-800/80 backdrop-blur-md border border-slate-700 p-8 hover:border-blue-500 transition-all duration-300 hover:shadow-[0_0_40px_rgba(59,130,246,0.15)] flex flex-col items-center gap-4 text-center hover:-translate-y-1">
-                        <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        <div className="w-24 h-24 bg-slate-900 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform border border-slate-700 group-hover:border-blue-500/50 shadow-xl">
-                            <Smartphone size={48} className="text-blue-500" />
-                        </div>
-                        <div>
-                            <h2 className="text-2xl font-black text-white mb-1 group-hover:text-blue-400 transition-colors">Sala</h2>
-                            <p className="text-slate-400 text-sm">Prendi ordini (Mobile)</p>
-                        </div>
-                    </button>
-
-                    {/* PIZZERIA BUTTON */}
-                    <button onClick={() => setRole('pizzeria')} className="group relative overflow-hidden rounded-3xl bg-slate-800/80 backdrop-blur-md border border-slate-700 p-8 hover:border-red-500 transition-all duration-300 hover:shadow-[0_0_40px_rgba(239,68,68,0.15)] flex flex-col items-center gap-4 text-center md:col-span-2 lg:col-span-1 hover:-translate-y-1">
-                        <div className="absolute inset-0 bg-gradient-to-br from-red-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform border border-slate-700 group-hover:border-red-500/50 shadow-xl">
-                            <Pizza size={40} className="text-red-500" />
-                        </div>
-                        <div>
-                            <h2 className="text-xl font-black text-white mb-1 group-hover:text-red-400 transition-colors">Pizzeria</h2>
-                        </div>
-                    </button>
-
-                    {/* PUB BUTTON */}
-                    <button onClick={() => setRole('pub')} className="group relative overflow-hidden rounded-3xl bg-slate-800/80 backdrop-blur-md border border-slate-700 p-8 hover:border-amber-500 transition-all duration-300 hover:shadow-[0_0_40px_rgba(245,158,11,0.15)] flex flex-col items-center gap-4 text-center md:col-span-2 lg:col-span-1 hover:-translate-y-1">
-                        <div className="absolute inset-0 bg-gradient-to-br from-amber-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                        <div className="w-20 h-20 bg-slate-900 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform border border-slate-700 group-hover:border-amber-500/50 shadow-xl">
-                            <Sandwich size={40} className="text-amber-500" />
-                        </div>
-                        <div>
-                            <h2 className="text-xl font-black text-white mb-1 group-hover:text-amber-400 transition-colors">Pub / Bar</h2>
-                        </div>
-                    </button>
-                </div>
-
-                {isSuperAdmin && (
-                    <button onClick={() => setAdminViewMode(prev => prev === 'dashboard' ? 'app' : 'dashboard')} className="mt-8 text-slate-500 text-xs uppercase tracking-widest hover:text-white transition-colors">
-                        {adminViewMode === 'dashboard' ? 'Switch to App Mode' : 'Switch to Super Admin'}
-                    </button>
-                )}
+                <button onClick={() => setShowAdmin(true)} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-red-500">Rinnova</button>
             </div>
         )}
+
+        {daysRemaining !== null && daysRemaining <= 5 && !subscriptionExpired && (
+            <div className="relative z-10 mb-8 bg-orange-600/10 border border-orange-500/30 p-4 rounded-2xl flex items-center justify-between">
+                <div className="flex items-center gap-3 text-orange-400 font-bold">
+                    <Clock size={24}/>
+                    <span>Abbonamento in scadenza tra {daysRemaining} giorni.</span>
+                </div>
+                <button onClick={() => setShowAdmin(true)} className="bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-orange-500">Gestisci</button>
+            </div>
+        )}
+
+        {/* ROLE CARDS */}
+        <div className="relative z-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
+          {/* WAITER CARD */}
+          <button onClick={() => checkRoleAccess('waiter')} className="group relative h-80 bg-slate-800 rounded-[2rem] border border-slate-700 p-8 flex flex-col items-center justify-center gap-6 transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl hover:shadow-blue-500/10 hover:border-blue-500/50 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-blue-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div className="w-24 h-24 bg-slate-900 rounded-full flex items-center justify-center border-2 border-slate-700 group-hover:border-blue-500 group-hover:scale-110 transition-all shadow-inner">
+              <Smartphone size={40} className="text-slate-400 group-hover:text-blue-500 transition-colors" />
+            </div>
+            <div className="text-center relative z-10">
+              <h2 className="text-2xl font-black text-white mb-2 group-hover:text-blue-400 transition-colors">SALA</h2>
+              <p className="text-slate-400 text-sm font-medium">Prendi comande al tavolo</p>
+            </div>
+          </button>
+
+          {/* KITCHEN CARD */}
+          <button onClick={() => checkRoleAccess('kitchen')} className="group relative h-80 bg-slate-800 rounded-[2rem] border border-slate-700 p-8 flex flex-col items-center justify-center gap-6 transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl hover:shadow-orange-500/10 hover:border-orange-500/50 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-orange-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div className="w-24 h-24 bg-slate-900 rounded-full flex items-center justify-center border-2 border-slate-700 group-hover:border-orange-500 group-hover:scale-110 transition-all shadow-inner">
+              <ChefHat size={40} className="text-slate-400 group-hover:text-orange-500 transition-colors" />
+            </div>
+            <div className="text-center relative z-10">
+              <h2 className="text-2xl font-black text-white mb-2 group-hover:text-orange-400 transition-colors">CUCINA</h2>
+              <p className="text-slate-400 text-sm font-medium">Gestisci ordini food</p>
+            </div>
+          </button>
+
+          {/* PIZZERIA CARD */}
+          <button onClick={() => checkRoleAccess('pizzeria')} className="group relative h-80 bg-slate-800 rounded-[2rem] border border-slate-700 p-8 flex flex-col items-center justify-center gap-6 transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl hover:shadow-red-500/10 hover:border-red-500/50 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-red-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div className="w-24 h-24 bg-slate-900 rounded-full flex items-center justify-center border-2 border-slate-700 group-hover:border-red-500 group-hover:scale-110 transition-all shadow-inner">
+              <Pizza size={40} className="text-slate-400 group-hover:text-red-500 transition-colors" />
+            </div>
+            <div className="text-center relative z-10">
+              <h2 className="text-2xl font-black text-white mb-2 group-hover:text-red-400 transition-colors">PIZZERIA</h2>
+              <p className="text-slate-400 text-sm font-medium">Ordini forno e pizze</p>
+            </div>
+          </button>
+
+          {/* PUB/BAR CARD */}
+          <button onClick={() => checkRoleAccess('pub')} className="group relative h-80 bg-slate-800 rounded-[2rem] border border-slate-700 p-8 flex flex-col items-center justify-center gap-6 transition-all duration-300 hover:-translate-y-2 hover:shadow-2xl hover:shadow-amber-500/10 hover:border-amber-500/50 overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-b from-amber-600/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+            <div className="w-24 h-24 bg-slate-900 rounded-full flex items-center justify-center border-2 border-slate-700 group-hover:border-amber-500 group-hover:scale-110 transition-all shadow-inner">
+              <Sandwich size={40} className="text-slate-400 group-hover:text-amber-500 transition-colors" />
+            </div>
+            <div className="text-center relative z-10">
+              <h2 className="text-2xl font-black text-white mb-2 group-hover:text-amber-400 transition-colors">PUB / BAR</h2>
+              <p className="text-slate-400 text-sm font-medium">Panini e Bevande</p>
+            </div>
+          </button>
+        </div>
 
         {/* WAITER LOGIN MODAL */}
         {showLogin && (
-            <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-6 animate-fade-in">
-                <div className="bg-slate-900 border border-slate-700 p-8 rounded-3xl w-full max-w-sm shadow-2xl relative overflow-hidden">
-                    <button onClick={() => setShowLogin(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white"><X size={20}/></button>
+            <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-fade-in">
+                <div className="bg-slate-900 border border-slate-700 p-8 rounded-[2rem] shadow-2xl w-full max-w-sm relative animate-slide-up">
+                    <button onClick={() => setShowLogin(false)} className="absolute top-4 right-4 text-slate-500 hover:text-white transition-colors"><X size={24} /></button>
                     <div className="text-center mb-6">
-                        <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-600/30 rotate-3">
-                            <User size={32} className="text-white"/>
+                        <div className="w-16 h-16 bg-blue-600/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <User size={32} className="text-blue-500" />
                         </div>
-                        <h2 className="text-2xl font-black text-white">Chi sei?</h2>
-                        <p className="text-slate-400 text-sm">Inserisci il tuo nome per iniziare il servizio</p>
+                        <h2 className="text-2xl font-bold text-white">Chi sei?</h2>
+                        <p className="text-slate-400 text-sm mt-1">Inserisci il tuo nome per iniziare</p>
                     </div>
-                    <form onSubmit={handleWaiterLogin}>
-                        <input type="text" value={waiterNameInput} onChange={(e) => setWaiterNameInput(e.target.value)} placeholder="Nome Cameriere" className="w-full bg-slate-950 border border-slate-700 rounded-xl p-4 text-white text-center font-bold text-lg mb-4 focus:border-blue-500 outline-none transition-colors" autoFocus />
-                        <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-600/20 active:scale-95 transition-all">INIZIA TURNO</button>
-                    </form>
+                    <input 
+                        type="text" 
+                        value={waiterNameInput}
+                        onChange={(e) => setWaiterNameInput(e.target.value)}
+                        placeholder="Es. Marco"
+                        className="w-full bg-slate-950 border border-slate-700 text-white px-4 py-4 rounded-xl mb-4 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all font-bold text-center text-lg"
+                        autoFocus
+                    />
+                    <button onClick={handleLoginWaiter} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20">
+                        Inizia Turno <ArrowRight size={20} />
+                    </button>
                 </div>
             </div>
         )}
+      </div>
+    );
+  }
 
-        {/* DELETE ALL CONFIRMATION MODAL */}
-        {showDeleteAllMenuModal && (
-            <div className="fixed inset-0 z-[70] bg-black/90 flex items-center justify-center p-6 animate-fade-in">
-                <div className="bg-slate-900 border border-red-600 rounded-3xl p-8 w-full max-w-sm text-center shadow-2xl shadow-red-900/50">
-                    <AlertTriangle size={48} className="text-red-500 mx-auto mb-4"/>
-                    <h3 className="text-2xl font-black text-white mb-2">Reset Totale Menu?</h3>
-                    <p className="text-slate-400 mb-6">Stai per cancellare TUTTI i piatti dal menu. Questa azione non può essere annullata.</p>
-                    <button onClick={async () => { await deleteAllMenuItems(); setMenuItems([]); setShowDeleteAllMenuModal(false); alert("Menu resettato."); }} className="w-full py-4 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl mb-3">CONFERMA RESET</button>
-                    <button onClick={() => setShowDeleteAllMenuModal(false)} className="w-full py-4 bg-slate-800 text-slate-400 font-bold rounded-xl">Annulla</button>
-                </div>
-            </div>
-        )}
+  // 6. OPERATIONAL SCREENS
+  if (role === 'kitchen') return <KitchenDisplay onExit={() => setRole(null)} department="Cucina" />;
+  if (role === 'pizzeria') return <KitchenDisplay onExit={() => setRole(null)} department="Pizzeria" />;
+  if (role === 'pub') return <KitchenDisplay onExit={() => setRole(null)} department="Pub" />;
+  if (role === 'waiter') return <WaiterPad onExit={() => setRole(null)} />;
 
-        {/* APP VIEWS */}
-        {role === 'waiter' && <WaiterPad onExit={() => setRole(null)} />}
-        {role === 'kitchen' && <KitchenDisplay onExit={() => setRole(null)} department="Cucina" />}
-        {role === 'pizzeria' && <KitchenDisplay onExit={() => setRole(null)} department="Pizzeria" />}
-        {role === 'pub' && <KitchenDisplay onExit={() => setRole(null)} department="Pub" />}
+  // 7. ADMIN PANEL
+  if (showAdmin) {
+      return (
+          <div className="min-h-screen bg-slate-950 text-white font-sans flex flex-col md:flex-row">
+              
+              {/* ADMIN SIDEBAR */}
+              <div className="w-full md:w-72 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 h-screen sticky top-0">
+                  <div className="p-6 border-b border-slate-800 flex items-center gap-3">
+                      <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center shadow-lg">
+                          <ChefHat size={20} className="text-white" />
+                      </div>
+                      <h1 className="font-black text-xl tracking-tight">Risto<span className="text-orange-500">Sync</span></h1>
+                  </div>
+                  
+                  <nav className="flex-1 overflow-y-auto p-4 space-y-2">
+                      <button onClick={() => setAdminTab('profile')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${adminTab === 'profile' ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                          <Store size={18} /> Profilo Ristorante
+                      </button>
+                      <button onClick={() => setAdminTab('menu')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${adminTab === 'menu' ? 'bg-orange-600 text-white shadow-lg shadow-orange-900/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                          <Utensils size={18} /> Gestione Menu
+                      </button>
+                      <button onClick={() => setAdminTab('subscription')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${adminTab === 'subscription' ? 'bg-green-600 text-white shadow-lg shadow-green-900/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                          <CreditCard size={18} /> Abbonamento
+                      </button>
+                      <button onClick={() => setAdminTab('analytics')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${adminTab === 'analytics' ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                          <BarChart3 size={18} /> Statistiche
+                      </button>
+                      <button onClick={() => setAdminTab('ai')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${adminTab === 'ai' ? 'bg-pink-600 text-white shadow-lg shadow-pink-900/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                          <Bot size={18} /> AI Intelligence
+                      </button>
+                      <button onClick={() => setAdminTab('info')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${adminTab === 'info' ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-900/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                          <Settings size={18} /> Configurazione
+                      </button>
+                  </nav>
 
-        {/* SUPER ADMIN DASHBOARD */}
-        {isSuperAdmin && adminViewMode === 'dashboard' && !role && !showAdmin && (
-            <div className="fixed inset-0 z-[100] bg-slate-900 overflow-auto">
-                <SuperAdminDashboard onEnterApp={() => setAdminViewMode('app')} />
-            </div>
-        )}
+                  <div className="p-4 border-t border-slate-800">
+                       <button onClick={() => setShowAdmin(false)} className="w-full flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 py-3 rounded-xl font-bold transition-colors">
+                           <ArrowLeft size={18}/> Torna alla Home
+                       </button>
+                  </div>
+              </div>
 
-        {/* SUSPENDED SCREEN */}
-        {(isSuspended || isBanned || subscriptionExpired) && !isSuperAdmin && (
-            <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col items-center justify-center p-8 text-center">
-                <div className="w-24 h-24 bg-red-600/20 rounded-full flex items-center justify-center mb-6 animate-pulse">
-                    <Lock size={48} className="text-red-500" />
-                </div>
-                <h1 className="text-4xl font-black text-white mb-4">
-                    {isBanned ? 'ACCOUNT BLOCCATO' : subscriptionExpired ? 'ABBONAMENTO SCADUTO' : 'SERVIZIO SOSPESO'}
-                </h1>
-                <p className="text-slate-400 text-lg max-w-md mb-8">
-                    {isBanned ? 'Il tuo account è stato disabilitato permanentemente per violazione dei termini.' : subscriptionExpired ? 'Il tuo periodo di prova o abbonamento è terminato. Rinnova per continuare.' : 'Contatta l\'amministratore per regolarizzare la tua posizione e riattivare il servizio.'}
-                </p>
-                <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 max-w-sm w-full">
-                    <p className="text-xs font-bold text-slate-500 uppercase mb-2">Supporto Clienti</p>
-                    <p className="text-white font-bold text-lg flex items-center justify-center gap-2 mb-1"><PhoneCall size={18}/> {adminPhone}</p>
-                    <p className="text-blue-400 text-sm">{adminContactEmail}</p>
-                </div>
-                <button onClick={signOut} className="mt-8 text-slate-500 hover:text-white flex items-center gap-2 font-bold"><LogOut size={18}/> Esci dall'account</button>
-            </div>
-        )}
-    </div>
-  );
+              {/* MAIN CONTENT AREA */}
+              <div className="flex-1 h-screen overflow-y-auto bg-slate-950 p-6 md:p-10">
+                  
+                  {/* --- TAB: MENU MANAGER --- */}
+                  {adminTab === 'menu' && (
+                      <div className="max-w-6xl mx-auto animate-fade-in">
+                          <div className="flex justify-between items-center mb-8">
+                              <div>
+                                  <h2 className="text-3xl font-black text-white mb-2">Gestione Menu</h2>
+                                  <p className="text-slate-400">Aggiungi, modifica o rimuovi piatti dal tuo menu digitale.</p>
+                              </div>
+                              <div className="flex gap-3">
+                                  <button onClick={handlePrintQR} className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 border border-slate-700 transition-colors"><QrCode size={18}/> Stampa QR</button>
+                                  <button onClick={() => { setEditingItem({}); setIsEditingItem(false); }} className="bg-orange-600 hover:bg-orange-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-orange-600/20 transition-transform active:scale-95"><Plus size={20}/> Nuovo Piatto</button>
+                              </div>
+                          </div>
+                          
+                          {/* QUICK ACTIONS */}
+                          <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 flex gap-4 mb-8 overflow-x-auto">
+                              <button onClick={() => bulkInputRef.current?.click()} className="flex items-center gap-2 bg-blue-600/20 text-blue-400 px-4 py-2 rounded-lg font-bold hover:bg-blue-600/30 transition-colors whitespace-nowrap"><Upload size={16}/> Importa JSON</button>
+                              <input type="file" ref={bulkInputRef} onChange={handleBulkImport} accept=".json" className="hidden" />
+                              <button onClick={exportMenu} className="flex items-center gap-2 bg-green-600/20 text-green-400 px-4 py-2 rounded-lg font-bold hover:bg-green-600/30 transition-colors whitespace-nowrap"><Download size={16}/> Esporta JSON</button>
+                              <button onClick={importDemoMenu} className="flex items-center gap-2 bg-purple-600/20 text-purple-400 px-4 py-2 rounded-lg font-bold hover:bg-purple-600/30 transition-colors whitespace-nowrap"><Sparkles size={16}/> Carica Menu Demo</button>
+                              <button onClick={() => setShowDeleteAllMenuModal(true)} className="flex items-center gap-2 bg-red-600/20 text-red-400 px-4 py-2 rounded-lg font-bold hover:bg-red-600/30 transition-colors whitespace-nowrap ml-auto"><Trash2 size={16}/> Svuota Menu</button>
+                          </div>
+
+                          {/* EDITOR FORM */}
+                          <div className="bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-800 shadow-2xl mb-10 relative overflow-hidden">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
+                                  <div className="space-y-4">
+                                      <div>
+                                          <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Nome Piatto</label>
+                                          <input type="text" placeholder="Es. Spaghetti Carbonara" value={editingItem.name || ''} onChange={e => setEditingItem({ ...editingItem, name: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold focus:border-orange-500 outline-none transition-colors" />
+                                      </div>
+                                      <div className="grid grid-cols-2 gap-4">
+                                          <div>
+                                              <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Prezzo (€)</label>
+                                              <input type="number" placeholder="0.00" value={editingItem.price || ''} onChange={e => setEditingItem({ ...editingItem, price: parseFloat(e.target.value) })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white font-mono font-bold focus:border-orange-500 outline-none transition-colors" />
+                                          </div>
+                                          <div>
+                                              <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Categoria</label>
+                                              <select value={editingItem.category || Category.ANTIPASTI} onChange={e => setEditingItem({ ...editingItem, category: e.target.value as Category })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold focus:border-orange-500 outline-none transition-colors appearance-none">
+                                                  {Object.values(Category).map(c => <option key={c} value={c}>{c}</option>)}
+                                              </select>
+                                          </div>
+                                      </div>
+                                      
+                                      {/* COMBO SELECTION LOGIC */}
+                                      {editingItem.category === Category.MENU_COMPLETO && (
+                                          <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
+                                              <label className="text-xs font-bold text-orange-400 uppercase mb-2 block flex items-center gap-2"><ListPlus size={14}/> Seleziona Piatti Inclusi</label>
+                                              <div className="max-h-40 overflow-y-auto custom-scroll space-y-2">
+                                                  {menuItems.filter(i => i.category !== Category.MENU_COMPLETO).map(opt => (
+                                                      <label key={opt.id} className="flex items-center gap-3 p-2 hover:bg-slate-700 rounded-lg cursor-pointer">
+                                                          <input 
+                                                              type="checkbox" 
+                                                              checked={editingItem.comboItems?.includes(opt.id) || false}
+                                                              onChange={(e) => {
+                                                                  const current = editingItem.comboItems || [];
+                                                                  if (e.target.checked) setEditingItem({ ...editingItem, comboItems: [...current, opt.id] });
+                                                                  else setEditingItem({ ...editingItem, comboItems: current.filter(id => id !== opt.id) });
+                                                              }}
+                                                              className="w-4 h-4 rounded border-slate-600 bg-slate-900 text-orange-500 focus:ring-orange-500"
+                                                          />
+                                                          <span className="text-sm text-slate-300">{opt.name}</span>
+                                                      </label>
+                                                  ))}
+                                              </div>
+                                          </div>
+                                      )}
+
+                                      {/* SPECIFIC DESTINATION OVERRIDE */}
+                                      <div>
+                                          <label className="text-xs font-bold text-slate-500 uppercase mb-1 block flex items-center gap-2"><MapPin size={12}/> Destinazione Specifica (Opzionale)</label>
+                                          <select value={editingItem.specificDepartment || ''} onChange={e => setEditingItem({ ...editingItem, specificDepartment: e.target.value as Department | undefined })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-slate-300 text-sm focus:border-blue-500 outline-none transition-colors">
+                                              <option value="">Usa Default Categoria</option>
+                                              <option value="Cucina">Cucina</option>
+                                              <option value="Pizzeria">Pizzeria</option>
+                                              <option value="Pub">Pub</option>
+                                              <option value="Sala">Sala (Bar)</option>
+                                          </select>
+                                      </div>
+                                  </div>
+
+                                  <div className="space-y-4">
+                                      <div>
+                                          <div className="flex justify-between items-center mb-1">
+                                              <label className="text-xs font-bold text-slate-500 uppercase">Ingredienti</label>
+                                              <button onClick={generateIngr} disabled={isGeneratingIngr || !editingItem.name} className="text-[10px] bg-purple-600/20 text-purple-400 px-2 py-1 rounded hover:bg-purple-600/30 transition-colors flex items-center gap-1 disabled:opacity-50"><Sparkles size={10}/> AI MAGIC</button>
+                                          </div>
+                                          <textarea placeholder="Elenco ingredienti..." value={editingItem.ingredients || ''} onChange={e => setEditingItem({ ...editingItem, ingredients: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm min-h-[80px] focus:border-orange-500 outline-none transition-colors resize-none" />
+                                      </div>
+                                      <div>
+                                          <div className="flex justify-between items-center mb-1">
+                                              <label className="text-xs font-bold text-slate-500 uppercase">Descrizione</label>
+                                              <button onClick={generateDesc} disabled={isGeneratingDesc || !editingItem.name} className="text-[10px] bg-purple-600/20 text-purple-400 px-2 py-1 rounded hover:bg-purple-600/30 transition-colors flex items-center gap-1 disabled:opacity-50"><Sparkles size={10}/> AI MAGIC</button>
+                                          </div>
+                                          <textarea placeholder="Descrizione del piatto..." value={editingItem.description || ''} onChange={e => setEditingItem({ ...editingItem, description: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm min-h-[80px] focus:border-orange-500 outline-none transition-colors resize-none" />
+                                      </div>
+                                      
+                                      <div>
+                                          <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Allergeni</label>
+                                          <div className="flex flex-wrap gap-2">
+                                              {ALLERGENS_CONFIG.map(alg => (
+                                                  <button 
+                                                      key={alg.id}
+                                                      onClick={() => {
+                                                          const current = editingItem.allergens || [];
+                                                          if (current.includes(alg.id)) setEditingItem({ ...editingItem, allergens: current.filter(a => a !== alg.id) });
+                                                          else setEditingItem({ ...editingItem, allergens: [...current, alg.id] });
+                                                      }}
+                                                      className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${editingItem.allergens?.includes(alg.id) ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'bg-slate-950 text-slate-500 border border-slate-800 hover:border-slate-600'}`}
+                                                  >
+                                                      <alg.icon size={12}/> {alg.label}
+                                                  </button>
+                                              ))}
+                                          </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-4">
+                                          <div className="relative w-20 h-20 bg-slate-950 rounded-xl border border-slate-700 flex items-center justify-center overflow-hidden shrink-0 group">
+                                              {editingItem.image ? <img src={editingItem.image} alt="Preview" className="w-full h-full object-cover" /> : <ImageIcon className="text-slate-600" size={24} />}
+                                              <input type="file" ref={fileInputRef} onChange={handleImageUpload} className="hidden" accept="image/*" />
+                                              <div onClick={() => fileInputRef.current?.click()} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity"><Upload className="text-white" size={20}/></div>
+                                          </div>
+                                          <div className="flex-1">
+                                              <p className="text-xs text-slate-500 mb-2">Carica foto del piatto (max 1MB). Formato quadrato consigliato.</p>
+                                          </div>
+                                      </div>
+                                  </div>
+                              </div>
+                              
+                              <div className="mt-8 pt-6 border-t border-slate-800 flex justify-end gap-3 relative z-10">
+                                  <button onClick={() => { setEditingItem({}); setIsEditingItem(false); }} className="px-6 py-3 rounded-xl font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">Annulla</button>
+                                  <button onClick={handleSaveItem} disabled={!editingItem.name || !editingItem.price} className="px-8 py-3 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-bold shadow-lg shadow-orange-600/20 transition-all active:scale-95 flex items-center gap-2">
+                                      <Save size={18}/> {isEditingItem ? 'Aggiorna Piatto' : 'Salva Piatto'}
+                                  </button>
+                              </div>
+                          </div>
+
+                          {/* MENU LIST */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                              {menuItems.map(item => (
+                                  <div key={item.id} className="bg-slate-900 rounded-2xl border border-slate-800 p-5 hover:border-slate-600 transition-all group relative overflow-hidden">
+                                      <div className="flex justify-between items-start mb-3">
+                                          <div className="flex gap-3">
+                                              {item.image && <div className="w-12 h-12 rounded-lg bg-slate-800 overflow-hidden shrink-0"><img src={item.image} className="w-full h-full object-cover"/></div>}
+                                              <div>
+                                                  <h3 className="font-bold text-white text-lg leading-tight">{item.name}</h3>
+                                                  <p className="text-orange-400 font-mono font-bold">€ {item.price.toFixed(2)}</p>
+                                              </div>
+                                          </div>
+                                          <span className="text-[10px] font-bold uppercase bg-slate-800 text-slate-400 px-2 py-1 rounded border border-slate-700">{item.category}</span>
+                                      </div>
+                                      <div className="flex justify-end gap-2 mt-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                                          <button onClick={() => { setEditingItem(item); setIsEditingItem(true); window.scrollTo({top:0, behavior:'smooth'}); }} className="p-2 bg-blue-600/20 text-blue-400 rounded-lg hover:bg-blue-600 hover:text-white transition-colors"><Edit2 size={16}/></button>
+                                          <button onClick={() => confirmDelete(item)} className="p-2 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600 hover:text-white transition-colors"><Trash2 size={16}/></button>
+                                      </div>
+                                  </div>
+                              ))}
+                          </div>
+                      </div>
+                  )}
+                  
+                  {/* --- TAB: PROFILE --- */}
+                  {adminTab === 'profile' && (
+                      <div className="max-w-4xl mx-auto animate-fade-in">
+                          <h2 className="text-3xl font-black text-white mb-8">Profilo Ristorante</h2>
+                          <div className="bg-slate-900 p-8 rounded-3xl border border-slate-800 shadow-2xl space-y-8">
+                              {/* ANAGRAFICA */}
+                              <div>
+                                  <h3 className="text-sm font-bold text-orange-500 uppercase mb-4 flex items-center gap-2"><Store size={16}/> Dati Generali</h3>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                      <div><label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Nome Insegna</label><input type="text" value={profileForm.name || ''} onChange={e => setProfileForm({...profileForm, name: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-bold"/></div>
+                                      <div><label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Numero Tavoli</label><input type="number" value={profileForm.tableCount || 12} onChange={e => setProfileForm({...profileForm, tableCount: parseInt(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-mono font-bold"/></div>
+                                      <div><label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Ragione Sociale</label><input type="text" value={profileForm.businessName || ''} onChange={e => setProfileForm({...profileForm, businessName: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white"/></div>
+                                      <div><label className="text-xs text-slate-500 font-bold uppercase mb-1 block">P.IVA</label><input type="text" value={profileForm.vatNumber || ''} onChange={e => setProfileForm({...profileForm, vatNumber: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-mono"/></div>
+                                  </div>
+                              </div>
+                              
+                              {/* SOCIALS */}
+                              <div>
+                                  <h3 className="text-sm font-bold text-blue-500 uppercase mb-4 flex items-center gap-2"><Share2 size={16}/> Social Links</h3>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                      <div className="flex items-center bg-slate-950 border border-slate-700 rounded-xl px-3"><Instagram size={16} className="text-pink-500"/><input type="text" placeholder="Instagram URL" value={profileForm.socials?.instagram || ''} onChange={e => setProfileForm({...profileForm, socials: {...profileForm.socials, instagram: e.target.value}})} className="bg-transparent border-none text-white text-sm p-3 w-full outline-none"/></div>
+                                      <div className="flex items-center bg-slate-950 border border-slate-700 rounded-xl px-3"><Facebook size={16} className="text-blue-600"/><input type="text" placeholder="Facebook URL" value={profileForm.socials?.facebook || ''} onChange={e => setProfileForm({...profileForm, socials: {...profileForm.socials, facebook: e.target.value}})} className="bg-transparent border-none text-white text-sm p-3 w-full outline-none"/></div>
+                                      <div className="flex items-center bg-slate-950 border border-slate-700 rounded-xl px-3"><Store size={16} className="text-blue-400"/><input type="text" placeholder="Google Business URL" value={profileForm.socials?.google || ''} onChange={e => setProfileForm({...profileForm, socials: {...profileForm.socials, google: e.target.value}})} className="bg-transparent border-none text-white text-sm p-3 w-full outline-none"/></div>
+                                      <div className="flex items-center bg-slate-950 border border-slate-700 rounded-xl px-3"><Compass size={16} className="text-green-500"/><input type="text" placeholder="TripAdvisor URL" value={profileForm.socials?.tripadvisor || ''} onChange={e => setProfileForm({...profileForm, socials: {...profileForm.socials, tripadvisor: e.target.value}})} className="bg-transparent border-none text-white text-sm p-3 w-full outline-none"/></div>
+                                  </div>
+                              </div>
+
+                              <div className="flex justify-end pt-6 border-t border-slate-800">
+                                  <button onClick={handleSaveAppSettings} className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-600/20 active:scale-95 transition-all"><Save size={18}/> Salva Profilo</button>
+                              </div>
+                          </div>
+                      </div>
+                  )}
+              </div>
+          </div>
+      );
+  }
+  
+  return null;
 }

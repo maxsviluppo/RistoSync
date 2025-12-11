@@ -1,4 +1,5 @@
 
+
 export enum OrderStatus {
   PENDING = 'In Attesa',
   COOKING = 'In Preparazione',
@@ -18,6 +19,12 @@ export enum Category {
 }
 
 export type Department = 'Cucina' | 'Sala' | 'Pizzeria' | 'Pub';
+
+export interface NotificationSettings {
+  kitchenSound: boolean;
+  waiterSound: boolean;
+  pushEnabled: boolean;
+}
 
 export interface SocialLinks {
   facebook?: string;

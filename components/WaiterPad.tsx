@@ -182,7 +182,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
           await addOrder(newOrder);
         }
         
-        // SUCCESS PATH
+        // SUCCESS PATH (Even if DB fails, local is saved)
         setCart([]);
         setShowConfirmModal(false);
         setSelectedTable(null); 
@@ -190,24 +190,11 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
         setTimeout(() => loadData(), 100);
         
     } catch (error: any) {
+        // This catch block might not even be hit given the change in storageService,
+        // but just in case of catastrophic failure in local storage logic:
         console.error("Errore invio ordine:", error);
-        
-        // CRITICAL FIX: If error is Quota or RLS, assume Local Save worked (it runs first in storageService)
-        // and allow user to continue.
-        const isQuotaError = error.message && (error.message.includes("quota") || error.message.includes("row level security") || error.message.includes("network"));
-        
-        if (isQuotaError) {
-            alert("⚠️ Ordine salvato in LOCALE (Memoria Cloud piena o errore rete). L'ordine apparirà in cucina ma non è sincronizzato.");
-            setCart([]);
-            setShowConfirmModal(false);
-            setSelectedTable(null); 
-            setView('tables');
-            setTimeout(() => loadData(), 100);
-        } else {
-            let msg = `Errore DB: ${error.message || "Errore sconosciuto"}`;
-            alert(msg);
-            setShowConfirmModal(false);
-        }
+        alert(`Errore locale: ${error.message}`);
+        setShowConfirmModal(false);
     } finally {
         setIsSending(false);
     }
