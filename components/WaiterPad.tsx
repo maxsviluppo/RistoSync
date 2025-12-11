@@ -10,7 +10,7 @@ import {
   LogOut, Plus, Search, Utensils, CheckCircle, 
   ChevronLeft, Trash2, User, Clock, 
   DoorOpen, ChefHat, Pizza, Sandwich, 
-  Wine, CakeSlice, UtensilsCrossed, Send as SendIcon, CheckSquare, Square, BellRing, X 
+  Wine, CakeSlice, UtensilsCrossed, Send as SendIcon, CheckSquare, Square, BellRing, X, ArrowLeft 
 } from 'lucide-react';
 
 interface WaiterPadProps {
@@ -140,17 +140,20 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       setShowConfirmModal(true);
   };
 
-  // Actual execution logic - Wrapped in Try/Catch/Finally to ensure it doesn't hang
+  // Actual execution logic - Updated to avoid errors
   const finalizeOrder = () => {
     try {
         if (!selectedTable) {
-            alert("Errore: Tavolo non selezionato.");
             return;
         }
         if (cart.length === 0) return;
 
-        if (activeTableOrder) {
-          updateOrderItems(activeTableOrder.id, cart);
+        // Re-fetch current orders to ensure we have the latest active order ID
+        const currentOrders = getOrders();
+        const currentActiveOrder = currentOrders.find(o => o.tableNumber === selectedTable && o.status !== OrderStatus.DELIVERED);
+
+        if (currentActiveOrder) {
+          updateOrderItems(currentActiveOrder.id, cart);
         } else {
           const newOrder: Order = {
             id: Date.now().toString(),
@@ -165,9 +168,8 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
         }
     } catch (error) {
         console.error("Errore invio ordine:", error);
-        alert("Errore durante l'invio dell'ordine. Riprova.");
     } finally {
-        // Always reset UI state to prevent freezing
+        // Always reset UI state
         setCart([]);
         setShowConfirmModal(false);
         setView('tables');
@@ -183,6 +185,13 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
   const handleServeItem = (orderId: string, itemIdx: number) => {
       serveItem(orderId, itemIdx);
+  };
+  
+  const handleBackFromMenu = () => {
+      // Clear cart to avoid confusion or keep it? 
+      // User asked to "annulla" the add operation, so we clear.
+      setCart([]);
+      setView('tables');
   };
 
   const filteredItems = menuItems.filter(item => {
@@ -282,10 +291,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                                      );
                                                  })}
                                              </div>
-                                             <div className="mt-4 pt-4 border-t border-slate-800 flex justify-between items-center">
-                                                 <span className="font-bold text-lg">Totale</span>
-                                                 <span className="font-black text-2xl text-green-400">€ {activeTableOrder.items.reduce((acc, i) => acc + (i.menuItem.price * i.quantity), 0).toFixed(2)}</span>
-                                             </div>
+                                             {/* Removed Total Price Section */}
                                          </div>
                                      </div>
                                  ) : (
@@ -340,17 +346,22 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
             <div className="flex flex-col h-full overflow-hidden">
                 {/* FIXED HEADER WRAPPER - STAYS AT TOP */}
                 <div className="shrink-0 bg-slate-900 z-20 shadow-md">
-                    {/* Category Nav */}
-                    <div className="bg-slate-800 p-2 overflow-x-auto whitespace-nowrap border-b border-slate-700 flex gap-2 no-scrollbar">
-                        {CATEGORIES.map(cat => (
-                            <button 
-                                key={cat} 
-                                onClick={() => setActiveCategory(cat)}
-                                className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-bold transition-colors ${activeCategory === cat ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-700 text-slate-400'}`}
-                            >
-                                {getCategoryIcon(cat)} {cat}
-                            </button>
-                        ))}
+                    {/* Category Nav with BACK BUTTON */}
+                    <div className="bg-slate-800 p-2 border-b border-slate-700 flex items-center gap-2">
+                        <button onClick={handleBackFromMenu} className="p-3 bg-slate-700 text-slate-300 rounded-xl font-bold border border-slate-600 hover:bg-slate-600 hover:text-white shrink-0">
+                            <ArrowLeft size={18}/>
+                        </button>
+                        <div className="flex-1 overflow-x-auto whitespace-nowrap flex gap-2 no-scrollbar">
+                            {CATEGORIES.map(cat => (
+                                <button 
+                                    key={cat} 
+                                    onClick={() => setActiveCategory(cat)}
+                                    className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-bold transition-colors ${activeCategory === cat ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-700 text-slate-400'}`}
+                                >
+                                    {getCategoryIcon(cat)} {cat}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     {/* Search Bar */}
@@ -386,7 +397,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                     {item.category === Category.BEVANDE ? <Wine size={20}/> : <Utensils size={20}/>}
                                 </div>
                                 
-                                {/* LARGE GRADIENT TITLE */}
+                                {/* LARGE GRADIENT TITLE - NO PRICE */}
                                 <div className="w-full">
                                     <h3 className="font-black text-xl leading-none bg-gradient-to-br from-white to-slate-500 bg-clip-text text-transparent break-words hyphens-auto text-left">
                                         {item.name}
@@ -433,7 +444,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                             <div className="flex justify-between items-start">
                                 <div>
                                     <h3 className="font-bold text-lg">{item.menuItem.name}</h3>
-                                    <p className="text-blue-400 font-mono text-sm">€ {item.menuItem.price.toFixed(2)}</p>
+                                    {/* Removed Price Display */}
                                 </div>
                                 <div className="flex items-center gap-3 bg-slate-900 rounded-lg p-1 border border-slate-700">
                                     <button onClick={() => updateCartQuantity(idx, -1)} className="w-8 h-8 flex items-center justify-center bg-slate-800 hover:bg-red-500/20 hover:text-red-400 rounded-md transition-colors font-bold">-</button>
@@ -458,8 +469,8 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
                 <div className="fixed bottom-6 left-4 right-4 bg-slate-800 border border-slate-700 p-4 rounded-3xl shadow-2xl z-40">
                     <div className="flex justify-between items-center mb-4 px-2">
-                        <span className="text-slate-400 font-bold uppercase text-xs">Totale Stimato</span>
-                        <span className="text-3xl font-black text-white">€ {cart.reduce((a, b) => a + (b.menuItem.price * b.quantity), 0).toFixed(2)}</span>
+                        <span className="text-slate-400 font-bold uppercase text-xs">Totale Piatti</span>
+                        <span className="text-3xl font-black text-white">{cart.reduce((a, b) => a + b.quantity, 0)}</span>
                     </div>
                     <button onClick={requestSendOrder} disabled={cart.length === 0} className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-4 rounded-xl font-black text-xl shadow-lg shadow-blue-600/20 transition-transform active:scale-95 flex items-center justify-center gap-3">
                          <CheckCircle size={24}/> CONFERMA ORDINE

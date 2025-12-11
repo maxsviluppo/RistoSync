@@ -435,11 +435,15 @@ export const serveItem = (orderId: string, itemIndex: number, subItemId?: string
         }
     }
 
-    // If all items are served, mark order as DELIVERED
+    // UPDATED LOGIC: If all items are served, we DO NOT mark order as DELIVERED automatically.
+    // The table remains "Occupied" (Pending) until manually freed.
     const allServed = newItems.every(i => i.served);
     let newStatus = order.status;
-    if (allServed) {
-        newStatus = OrderStatus.DELIVERED;
+    
+    // If it was READY and everything is now served, revert to PENDING (Occupied) status
+    // to show it as an active table with customers eating.
+    if (allServed && (newStatus === OrderStatus.READY || newStatus === OrderStatus.COOKING)) {
+        newStatus = OrderStatus.PENDING;
     }
 
     // UPDATE TIMESTAMP TO RESET TIMERS
