@@ -19,49 +19,6 @@ const CATEGORY_PRIORITY: Record<Category, number> = {
 const THRESHOLD_WARNING = 15;
 const THRESHOLD_CRITICAL = 25;
 
-const playNotificationSound = (type: 'new' | 'ready' | 'alert') => {
-    try {
-        const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-        if (!AudioContext) return;
-        const ctx = new AudioContext();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-
-        const now = ctx.currentTime;
-
-        if (type === 'new') {
-            osc.type = 'square';
-            osc.frequency.setValueAtTime(440, now);
-            osc.frequency.setValueAtTime(554, now + 0.1); 
-            gain.gain.setValueAtTime(0.1, now);
-            gain.gain.linearRampToValueAtTime(0, now + 0.3);
-            osc.start();
-            osc.stop(now + 0.3);
-        } else if (type === 'ready') {
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(523.25, now);
-            osc.frequency.exponentialRampToValueAtTime(1046.5, now + 0.1); 
-            gain.gain.setValueAtTime(0.05, now);
-            gain.gain.exponentialRampToValueAtTime(0.001, now + 1);
-            osc.start();
-            osc.stop(now + 1);
-        } else if (type === 'alert') {
-            // Aggressive Alarm for Critical Delay
-            osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(800, now);
-            osc.frequency.linearRampToValueAtTime(400, now + 0.5);
-            
-            gain.gain.setValueAtTime(0.3, now);
-            gain.gain.linearRampToValueAtTime(0, now + 0.5);
-            
-            osc.start();
-            osc.stop(now + 0.5);
-        }
-    } catch (e) { console.error("Audio error", e); }
-};
-
 // --- RECEIPT GENERATOR ---
 const generateReceiptHtml = (items: OrderItem[], dept: string, table: string, waiter: string, restaurantName: string, allMenuItems: MenuItem[]) => {
     const time = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
@@ -196,7 +153,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
   };
 
   const showNotification = (msg: string, type: 'info' | 'success' | 'alert') => { setNotification({ msg, type }); setTimeout(() => setNotification(null), 5000); };
-  const handleCriticalDelay = (tableNum: string) => { playNotificationSound('alert'); };
+  const handleCriticalDelay = (tableNum: string) => { /* NO AUDIO */ };
 
   const loadOrders = () => {
     const allOrders = getOrders();
@@ -215,7 +172,6 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
 
         if (relevantNewOrders.length > 0) {
             const newOrder = relevantNewOrders[0];
-            playNotificationSound('new');
             showNotification(`Nuovo Ordine ${department}: Tavolo ${newOrder.tableNumber}`, 'info');
 
             // --- AUTO PRINT LOGIC ---
@@ -238,13 +194,6 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
                 }
             }
         }
-        sorted.forEach(newOrder => {
-            const oldOrder = prevOrders.find(o => o.id === newOrder.id);
-            if (oldOrder && oldOrder.status !== OrderStatus.READY && newOrder.status === OrderStatus.READY) {
-                playNotificationSound('ready');
-                showNotification(`Tavolo ${newOrder.tableNumber} è PRONTO!`, 'success');
-            }
-        });
     }
     if (isFirstLoad.current) isFirstLoad.current = false;
     previousOrdersRef.current = sorted;
