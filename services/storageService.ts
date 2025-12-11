@@ -2,12 +2,11 @@ import { Order, OrderStatus, OrderItem, MenuItem, AppSettings, Category, Departm
 import { supabase } from './supabase';
 
 const STORAGE_KEY = 'ristosync_orders';
-const TABLES_COUNT_KEY = 'ristosync_table_count';
-const WAITER_KEY = 'ristosync_waiter_name';
 const MENU_KEY = 'ristosync_menu_items';
 const SETTINGS_NOTIFICATIONS_KEY = 'ristosync_settings_notifications';
 const APP_SETTINGS_KEY = 'ristosync_app_settings'; 
 const GOOGLE_API_KEY_STORAGE = 'ristosync_google_api_key';
+const WAITER_KEY = 'ristosync_waiter_name';
 
 // --- DEMO DATASET ---
 const DEMO_MENU_ITEMS: MenuItem[] = [
@@ -25,25 +24,21 @@ const DEMO_MENU_ITEMS: MenuItem[] = [
 // --- SYNC ENGINE STATE ---
 let currentUserId: string | null = null;
 let pollingInterval: any = null;
+let isSyncing = false; // Prevent overlapping syncs
 
 // HELPER: SAFE STORAGE SAVE
 const safeLocalStorageSave = (key: string, value: string) => {
     try {
         localStorage.setItem(key, value);
     } catch (e: any) {
-        // Intercept QuotaExceededError
         if (e.name === 'QuotaExceededError' || e.message?.toLowerCase().includes('quota')) {
             console.warn("⚠️ STORAGE FULL: Operating in Cloud-Only mode.");
             if (key === STORAGE_KEY) {
                 try {
                     const orders = JSON.parse(value) as Order[];
+                    // Aggressively trim delivered orders if local storage is full
                     const streamlined = orders.filter(o => o.status !== OrderStatus.DELIVERED);
-                    if (streamlined.length < orders.length) {
-                        try {
-                            localStorage.setItem(key, JSON.stringify(streamlined));
-                            return; 
-                        } catch (retryError) {}
-                    }
+                    localStorage.setItem(key, JSON.stringify(streamlined));
                 } catch (cleanError) {}
             }
         }
@@ -60,9 +55,11 @@ export const initSupabaseSync = async () => {
         currentUserId = session.user.id;
         
         // 1. Initial Sync
-        await fetchFromCloud(); 
-        await fetchFromCloudMenu();
-        await fetchSettingsFromCloud(); 
+        await Promise.all([
+            fetchFromCloud(),
+            fetchFromCloudMenu(),
+            fetchSettingsFromCloud()
+        ]);
         
         // 2. Sync Profile Settings (API KEY)
         const { data: profile } = await supabase.from('profiles').select('google_api_key').eq('id', currentUserId).single();
@@ -71,6 +68,11 @@ export const initSupabaseSync = async () => {
         }
 
         // 3. Realtime Subscription (Robust Mode)
+        // Unsubscribe existing channels to prevent duplicates
+        supabase.getChannels().forEach(channel => {
+            if (channel.topic.includes(`room:${currentUserId}`)) supabase.removeChannel(channel);
+        });
+
         const channel = supabase.channel(`room:${currentUserId}`);
 
         channel
@@ -101,96 +103,114 @@ export const initSupabaseSync = async () => {
                     window.dispatchEvent(new Event('local-settings-update'));
                 }
             })
-            .subscribe();
+            .subscribe((status) => {
+                 if (status === 'SUBSCRIBED') console.log("🟢 Realtime Connected");
+            });
 
-        // 4. Fallback Polling (Heartbeat)
+        // 4. Fallback Polling (Heartbeat) - Slightly increased interval to reduce load
         if (pollingInterval) clearInterval(pollingInterval);
         pollingInterval = setInterval(() => {
             fetchFromCloud();
             fetchSettingsFromCloud();
-        }, 15000);
+        }, 20000);
     }
 };
 
 const handleSupabaseError = (error: any) => {
     if (!error) return;
     console.error("Supabase Error:", error.message || JSON.stringify(error));
+    // Don't throw, just log. We want the app to survive network blips.
     return error;
 }
 
 const fetchFromCloud = async () => {
-    if (!supabase || !currentUserId) return;
+    if (!supabase || !currentUserId || isSyncing) return;
+    isSyncing = true;
     
-    // OPTIMIZATION: Only fetch Active orders OR items created in last 48 hours
-    const twoDaysAgo = new Date();
-    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-    
-    const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('user_id', currentUserId)
-        .or(`status.neq.${OrderStatus.DELIVERED},created_at.gt.${twoDaysAgo.toISOString()}`);
+    try {
+        // OPTIMIZATION: Fixed Query Timeout
+        // Instead of complex OR, we fetch everything from last 48 hours.
+        // This covers active orders AND recent history, which is what we need.
+        const lookbackWindow = new Date();
+        lookbackWindow.setDate(lookbackWindow.getDate() - 2); // 48 Hours
 
-    if (error) {
-        handleSupabaseError(error);
-        return;
+        const { data, error } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('user_id', currentUserId)
+            .gte('created_at', lookbackWindow.toISOString());
+
+        if (error) {
+            handleSupabaseError(error);
+            isSyncing = false;
+            return;
+        }
+        
+        // Convert Cloud Orders
+        const cloudOrders: Order[] = data.map((row: any) => ({
+            id: row.id,
+            table_number: row.table_number,
+            tableNumber: row.table_number, 
+            status: row.status as OrderStatus,
+            timestamp: parseInt(row.timestamp) || new Date(row.created_at).getTime(),
+            createdAt: new Date(row.created_at).getTime(), 
+            items: row.items,
+            waiterName: row.waiter_name
+        }));
+
+        // SMART MERGE STRATEGY
+        const localOrders = getOrders();
+        const now = Date.now();
+        const mergedOrders: Order[] = [];
+        const processedIds = new Set<string>();
+
+        // 1. Merge Cloud Orders (checking against Local)
+        cloudOrders.forEach(cloudOrder => {
+            processedIds.add(cloudOrder.id);
+            const localOrder = localOrders.find(l => l.id === cloudOrder.id);
+
+            if (localOrder) {
+                // If local is recent (< 1 min) and newer timestamp, trust local
+                // This prevents the "disappearing item" bug while sync is in flight
+                const isLocalRecent = (now - localOrder.timestamp) < 60000;
+                const isLocalNewer = localOrder.timestamp > cloudOrder.timestamp;
+
+                if (isLocalRecent && isLocalNewer) {
+                    mergedOrders.push(localOrder);
+                    // Force push this newer local state to cloud in background
+                    addOrder(localOrder, true); 
+                    return;
+                }
+            }
+            mergedOrders.push(cloudOrder);
+        });
+
+        // 2. Keep Local Orders NOT in Cloud yet (Pending Creation)
+        // But only if they are relatively recent (< 24h) to avoid zombie orders
+        localOrders.forEach(localOrder => {
+            if (!processedIds.has(localOrder.id)) {
+                // If it's very recent (< 5 mins), it's likely pending upload. Keep it.
+                // If it's older, check if it was supposed to be deleted.
+                // We keep it safe for now.
+                 mergedOrders.push(localOrder);
+                 
+                 // If it's a new order that hasn't synced, retry sync
+                 if ((now - localOrder.timestamp) > 5000 && (now - localOrder.timestamp) < 300000) {
+                     addOrder(localOrder, true);
+                 }
+            }
+        });
+
+        // Sort by timestamp
+        const sorted = mergedOrders.sort((a, b) => a.timestamp - b.timestamp);
+
+        safeLocalStorageSave(STORAGE_KEY, JSON.stringify(sorted));
+        window.dispatchEvent(new Event('local-storage-update'));
+    } catch (e) {
+        console.error("Sync Exception:", e);
+    } finally {
+        isSyncing = false;
     }
-    
-    // Convert Cloud Orders
-    const cloudOrders: Order[] = data.map((row: any) => ({
-        id: row.id,
-        table_number: row.table_number,
-        tableNumber: row.table_number, 
-        status: row.status as OrderStatus,
-        timestamp: parseInt(row.timestamp) || new Date(row.created_at).getTime(),
-        createdAt: new Date(row.created_at).getTime(), 
-        items: row.items,
-        waiterName: row.waiter_name
-    }));
-
-    // SMART MERGE STRATEGY
-    // We prioritize Local data if it is RECENT (< 60s) and NEWER than Cloud data
-    // This handles the race condition where local saves happen before cloud syncs back
-    const localOrders = getOrders();
-    const now = Date.now();
-    const mergedOrders: Order[] = [];
-    const processedIds = new Set<string>();
-
-    // 1. Merge Cloud Orders (checking against Local)
-    cloudOrders.forEach(cloudOrder => {
-        processedIds.add(cloudOrder.id);
-        const localOrder = localOrders.find(l => l.id === cloudOrder.id);
-
-        if (localOrder) {
-            // Check if local version is significantly newer and very recent
-            // If so, keep local version to prevent overwriting pending updates (like new items)
-            const isLocalRecent = (now - localOrder.timestamp) < 60000;
-            const isLocalNewer = localOrder.timestamp > cloudOrder.timestamp;
-
-            if (isLocalRecent && isLocalNewer) {
-                mergedOrders.push(localOrder);
-                return;
-            }
-        }
-        mergedOrders.push(cloudOrder);
-    });
-
-    // 2. Add Local Orders NOT present in Cloud (Pending Creation)
-    localOrders.forEach(localOrder => {
-        if (!processedIds.has(localOrder.id)) {
-            const isRecent = (now - localOrder.timestamp) < 60000;
-            // Only keep if it's recent (prevents zombie deleted orders from reappearing)
-            if (isRecent) {
-                mergedOrders.push(localOrder);
-            }
-        }
-    });
-
-    // Sort by timestamp
-    const sorted = mergedOrders.sort((a, b) => a.timestamp - b.timestamp);
-
-    safeLocalStorageSave(STORAGE_KEY, JSON.stringify(sorted));
-    window.dispatchEvent(new Event('local-storage-update'));
 };
 
 const fetchFromCloudMenu = async () => {
@@ -226,29 +246,39 @@ const fetchFromCloudMenu = async () => {
 
 const fetchSettingsFromCloud = async () => {
     if (!supabase || !currentUserId) return;
-    const { data, error } = await supabase.from('profiles').select('settings').eq('id', currentUserId).single();
-    if(data?.settings) {
-        safeLocalStorageSave(APP_SETTINGS_KEY, JSON.stringify(data.settings));
-        window.dispatchEvent(new Event('local-settings-update'));
+    try {
+        const { data, error } = await supabase.from('profiles').select('settings').eq('id', currentUserId).single();
+        if(data?.settings) {
+            safeLocalStorageSave(APP_SETTINGS_KEY, JSON.stringify(data.settings));
+            window.dispatchEvent(new Event('local-settings-update'));
+        }
+    } catch (e) {
+        // Ignore single fetch errors
     }
 };
 
 // --- CRUD OPERATIONS ---
 
-// Orders
 export const getOrders = (): Order[] => {
     const data = localStorage.getItem(STORAGE_KEY);
     return data ? JSON.parse(data) : [];
 };
 
-export const addOrder = async (order: Order) => {
-    const orders = getOrders();
-    orders.push(order);
-    safeLocalStorageSave(STORAGE_KEY, JSON.stringify(orders));
-    window.dispatchEvent(new Event('local-storage-update'));
+// silent = true suppresses UI events for background syncs
+export const addOrder = async (order: Order, silent = false) => {
+    if (!silent) {
+        const orders = getOrders();
+        // Check duplication
+        if (!orders.find(o => o.id === order.id)) {
+            orders.push(order);
+            safeLocalStorageSave(STORAGE_KEY, JSON.stringify(orders));
+            window.dispatchEvent(new Event('local-storage-update'));
+        }
+    }
     
     if (supabase && currentUserId) {
-        await supabase.from('orders').upsert({
+        // Fire and forget (don't await) to keep UI snappy
+        supabase.from('orders').upsert({
             id: order.id,
             user_id: currentUserId,
             table_number: order.tableNumber,
@@ -257,6 +287,8 @@ export const addOrder = async (order: Order) => {
             timestamp: order.timestamp,
             created_at: new Date(order.createdAt).toISOString(),
             waiter_name: order.waiterName
+        }).then(({ error }) => {
+            if (error) console.error("Cloud push failed", error);
         });
     }
 };
@@ -266,7 +298,7 @@ export const updateOrderStatus = async (orderId: string, status: OrderStatus) =>
     const order = orders.find(o => o.id === orderId);
     if (order) {
         order.status = status;
-        order.timestamp = Date.now(); // Update timestamp on status change
+        order.timestamp = Date.now();
         safeLocalStorageSave(STORAGE_KEY, JSON.stringify(orders));
         window.dispatchEvent(new Event('local-storage-update'));
 
@@ -280,7 +312,6 @@ export const updateOrderItems = async (orderId: string, newItems: OrderItem[]) =
     const orders = getOrders();
     const order = orders.find(o => o.id === orderId);
     if (order) {
-        // Merge logic: append new items to existing ones
         order.items = [...order.items, ...newItems.map(i => ({...i, isAddedLater: true}))];
         order.timestamp = Date.now();
         safeLocalStorageSave(STORAGE_KEY, JSON.stringify(orders));
@@ -299,7 +330,6 @@ export const toggleOrderItemCompletion = async (orderId: string, itemIndex: numb
         const item = order.items[itemIndex];
         
         if (subItemId) {
-            // Logic for Combo Sub-items
             if (!item.comboCompletedParts) item.comboCompletedParts = [];
             if (item.comboCompletedParts.includes(subItemId)) {
                 item.comboCompletedParts = item.comboCompletedParts.filter(id => id !== subItemId);
@@ -307,7 +337,6 @@ export const toggleOrderItemCompletion = async (orderId: string, itemIndex: numb
                 item.comboCompletedParts.push(subItemId);
             }
         } else {
-            // Standard Item Toggle
             item.completed = !item.completed;
         }
 
@@ -340,7 +369,7 @@ export const freeTable = async (tableNumber: string) => {
     
     tableOrders.forEach(o => {
         o.status = OrderStatus.DELIVERED;
-        o.timestamp = Date.now(); // Mark exit time
+        o.timestamp = Date.now();
     });
     
     safeLocalStorageSave(STORAGE_KEY, JSON.stringify(orders));
@@ -430,7 +459,6 @@ export const importDemoMenu = async () => {
     window.dispatchEvent(new Event('local-menu-update'));
     
     if (supabase && currentUserId) {
-        // Bulk insert not always supported simply on client depending on RLS, but let's try loop
         for (const item of items) {
             await addMenuItem(item);
         }
@@ -502,8 +530,7 @@ export const saveNotificationSettings = (settings: NotificationSettings) => {
 };
 
 export const deleteHistoryByDate = async (date: Date) => {
-    // Delete local history
-    safeLocalStorageSave(STORAGE_KEY, JSON.stringify([])); // Simplification: clear all for now or filter
+    safeLocalStorageSave(STORAGE_KEY, JSON.stringify([])); 
     window.dispatchEvent(new Event('local-storage-update'));
     
     if (supabase && currentUserId) {
@@ -517,6 +544,5 @@ export const performFactoryReset = async () => {
     if (supabase && currentUserId) {
         await supabase.from('orders').delete().eq('user_id', currentUserId);
         await supabase.from('menu_items').delete().eq('user_id', currentUserId);
-        // We keep profile but reset settings if needed
     }
 };

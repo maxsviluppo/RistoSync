@@ -113,7 +113,16 @@ export default function App() {
       if (publicMenuId) { setLoadingSession(false); return; }
       if (!supabase) { setLoadingSession(false); return; }
 
-      const timer = setTimeout(() => { setLoadingSession((prev) => { if (prev) return false; return prev; }); }, 5000); 
+      // SAFETY TIMEOUT: Force stop loading after 5 seconds if Supabase hangs
+      const safetyTimer = setTimeout(() => { 
+          setLoadingSession((prev) => { 
+              if (prev) {
+                  console.warn("⚠️ Session check timed out. Forcing app load.");
+                  return false; 
+              }
+              return prev; 
+          }); 
+      }, 5000); 
 
       const checkUserStatus = async (user: any) => {
           try {
@@ -145,7 +154,10 @@ export default function App() {
                   return true; 
               }
               return true; 
-          } catch (e) { return true; }
+          } catch (e) { 
+              console.error("Status check failed", e);
+              return true; // Fail safe allow entry if DB is just busy
+          }
       };
 
       supabase.auth.getSession().then(async ({ data: { session } }) => {
@@ -157,11 +169,11 @@ export default function App() {
       });
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-          if (session) { checkUserStatus(session.user); setSession(session); initSupabaseSync(); }
+          if (session) { await checkUserStatus(session.user); setSession(session); initSupabaseSync(); }
           else { setSession(null); setIsSuspended(false); setIsBanned(false); }
           setLoadingSession(false);
       });
-      return () => { clearTimeout(timer); subscription.unsubscribe(); };
+      return () => { clearTimeout(safetyTimer); subscription.unsubscribe(); };
   }, [publicMenuId]);
 
   useEffect(() => {
