@@ -140,29 +140,38 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
       setShowConfirmModal(true);
   };
 
-  // Actual execution logic
+  // Actual execution logic - Wrapped in Try/Catch/Finally to ensure it doesn't hang
   const finalizeOrder = () => {
-    if (!selectedTable || cart.length === 0) return;
+    try {
+        if (!selectedTable) {
+            alert("Errore: Tavolo non selezionato.");
+            return;
+        }
+        if (cart.length === 0) return;
 
-    if (activeTableOrder) {
-      updateOrderItems(activeTableOrder.id, cart);
-    } else {
-      const newOrder: Order = {
-        id: Date.now().toString(),
-        tableNumber: selectedTable,
-        items: cart,
-        status: OrderStatus.PENDING,
-        timestamp: Date.now(),
-        createdAt: Date.now(),
-        waiterName: waiterName || 'Staff'
-      };
-      addOrder(newOrder);
+        if (activeTableOrder) {
+          updateOrderItems(activeTableOrder.id, cart);
+        } else {
+          const newOrder: Order = {
+            id: Date.now().toString(),
+            tableNumber: selectedTable,
+            items: cart,
+            status: OrderStatus.PENDING,
+            timestamp: Date.now(),
+            createdAt: Date.now(),
+            waiterName: waiterName || 'Staff'
+          };
+          addOrder(newOrder);
+        }
+    } catch (error) {
+        console.error("Errore invio ordine:", error);
+        alert("Errore durante l'invio dell'ordine. Riprova.");
+    } finally {
+        // Always reset UI state to prevent freezing
+        setCart([]);
+        setShowConfirmModal(false);
+        setView('tables');
     }
-    
-    // Reset and Close
-    setCart([]);
-    setShowConfirmModal(false);
-    setView('tables');
   };
 
   const handleFreeTable = () => {
@@ -366,22 +375,22 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                             <button 
                                 key={item.id} 
                                 onClick={() => addToCart(item)}
-                                className="flex flex-col h-32 bg-slate-800 p-3 rounded-2xl border border-slate-700 hover:bg-slate-750 active:scale-[0.98] transition-all relative group shadow-sm overflow-hidden"
+                                className="flex flex-col h-32 bg-slate-800 p-4 rounded-2xl border border-slate-700 hover:bg-slate-750 active:scale-[0.98] transition-all relative group shadow-sm overflow-hidden justify-between"
                             >
                                 <div className="absolute top-2 right-2 p-1.5 bg-blue-600 rounded-full text-white shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-10">
                                     <Plus size={16}/>
                                 </div>
                                 
-                                <div className="flex justify-between items-start w-full mb-1">
-                                    <div className="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center font-bold text-slate-500 shrink-0">
-                                        {item.category === Category.BEVANDE ? <Wine size={16}/> : <Utensils size={16}/>}
-                                    </div>
-                                    <span className="font-black text-sm text-blue-400">€{item.price.toFixed(0)}</span>
+                                {/* ICON ONLY TOP LEFT */}
+                                <div className="w-10 h-10 rounded-xl bg-slate-700/50 flex items-center justify-center font-bold text-slate-400 shrink-0">
+                                    {item.category === Category.BEVANDE ? <Wine size={20}/> : <Utensils size={20}/>}
                                 </div>
                                 
-                                <div className="flex-1 flex flex-col justify-center text-left w-full">
-                                    <h3 className="font-bold text-sm leading-tight text-white line-clamp-2">{item.name}</h3>
-                                    {item.description && <p className="text-slate-500 text-[10px] line-clamp-1 mt-0.5">{item.description}</p>}
+                                {/* LARGE GRADIENT TITLE */}
+                                <div className="w-full">
+                                    <h3 className="font-black text-xl leading-none bg-gradient-to-br from-white to-slate-500 bg-clip-text text-transparent break-words hyphens-auto text-left">
+                                        {item.name}
+                                    </h3>
                                 </div>
                             </button>
                         ))}
