@@ -1,8 +1,22 @@
 import { createClient } from '@supabase/supabase-js';
 
-// VITE_SUPABASE_URL e VITE_SUPABASE_KEY devono essere impostati nelle variabili d'ambiente (es. su Vercel o file .env)
-const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
-const supabaseKey = process.env.VITE_SUPABASE_KEY || '';
+const SUPABASE_URL_KEY = 'ristosync_supabase_url';
+const SUPABASE_KEY_KEY = 'ristosync_supabase_key';
+
+// 1. Cerca nelle variabili d'ambiente (Priorità Alta)
+const envUrl = process.env.VITE_SUPABASE_URL;
+const envKey = process.env.VITE_SUPABASE_KEY;
+
+// Funzione helper per verificare se una stringa è valida e non è un placeholder
+const isValid = (val: string | undefined) => val && val.length > 5 && !val.includes('your-project');
+
+// 2. Cerca nel LocalStorage (Fallback per anteprime/demo)
+const localUrl = localStorage.getItem(SUPABASE_URL_KEY);
+const localKey = localStorage.getItem(SUPABASE_KEY_KEY);
+
+// 3. Determina le credenziali finali
+const supabaseUrl = isValid(envUrl) ? envUrl : localUrl;
+const supabaseKey = isValid(envKey) ? envKey : localKey;
 
 export const SUPER_ADMIN_EMAIL = 'castro.massimo@yahoo.com'; 
 
@@ -13,6 +27,20 @@ export const supabase = (supabaseUrl && supabaseKey)
 
 export const isSupabaseConfigured = () => {
     return !!supabase;
+};
+
+// --- CONFIG MANAGEMENT UTILS ---
+export const saveSupabaseConfig = (url: string, key: string) => {
+    if (!url || !key) return;
+    localStorage.setItem(SUPABASE_URL_KEY, url.trim());
+    localStorage.setItem(SUPABASE_KEY_KEY, key.trim());
+    window.location.reload(); // Ricarica per reinizializzare il client
+};
+
+export const resetSupabaseConfig = () => {
+    localStorage.removeItem(SUPABASE_URL_KEY);
+    localStorage.removeItem(SUPABASE_KEY_KEY);
+    window.location.reload();
 };
 
 // Funzioni Auth Helper

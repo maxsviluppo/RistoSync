@@ -235,7 +235,7 @@ export const saveOrders = (orders: Order[]) => {
 
 export const addOrder = (order: Order) => {
   const orders = getOrders();
-  const settings = getAppSettings(); // Get settings
+  const settings = getAppSettings(); // Get settings (will use default if null)
   const now = Date.now();
 
   const cleanOrder: Order = {
@@ -244,7 +244,9 @@ export const addOrder = (order: Order) => {
       createdAt: now, // Explicitly set creation time
       items: order.items.map(i => {
           // AUTO-COMPLETE logic for Sala items
-          const isSala = settings.categoryDestinations[i.menuItem.category] === 'Sala';
+          // Use safe access to categoryDestinations
+          const dest = settings.categoryDestinations ? settings.categoryDestinations[i.menuItem.category] : 'Cucina';
+          const isSala = dest === 'Sala';
           
           return { 
               ...i, 
@@ -308,7 +310,9 @@ export const updateOrderItems = (orderId: string, newItems: OrderItem[]) => {
             };
         } else {
             // ADD NEW ITEM: Append to list
-            const isSala = settings.categoryDestinations[newItem.menuItem.category] === 'Sala';
+            const dest = settings.categoryDestinations ? settings.categoryDestinations[newItem.menuItem.category] : 'Cucina';
+            const isSala = dest === 'Sala';
+            
             mergedItems.push({
                 ...newItem,
                 completed: isSala,
@@ -616,11 +620,13 @@ export const importDemoMenu = async () => {
 
 // --- DYNAMIC TABLE COUNT ---
 export const getTableCount = (): number => {
-    const count = localStorage.getItem(TABLES_COUNT_KEY);
-    return count ? parseInt(count, 10) : 12; 
+    const settings = getAppSettings();
+    return settings.restaurantProfile?.tableCount || 12;
 };
 
 export const saveTableCount = (count: number) => {
+    // This is handled via saveAppSettings in App.tsx to ensure cloud sync
+    // We update local cache immediately for reactivity if needed
     localStorage.setItem(TABLES_COUNT_KEY, count.toString());
     window.dispatchEvent(new Event('local-storage-update'));
 };
@@ -741,7 +747,9 @@ const DEFAULT_SETTINGS: AppSettings = {
         'Sala': false,
         'Cassa': false // NEW: Default to false
     },
-    restaurantProfile: {}
+    restaurantProfile: {
+        tableCount: 12
+    }
 };
 
 export const getAppSettings = (): AppSettings => {
@@ -776,6 +784,8 @@ export const saveAppSettings = async (settings: AppSettings) => {
     // 1. Save Local
     localStorage.setItem(APP_SETTINGS_KEY, JSON.stringify(settings));
     window.dispatchEvent(new Event('local-settings-update'));
+    // Trigger local storage update for WaiterPad to pick up new table count immediately
+    window.dispatchEvent(new Event('local-storage-update')); 
 
     // 2. Sync to Cloud Profile
     if (supabase && currentUserId) {
