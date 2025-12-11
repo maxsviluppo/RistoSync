@@ -1,7 +1,8 @@
+
 import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { Order, OrderStatus, Category, AppSettings, Department, OrderItem, MenuItem } from '../types';
-import { getOrders, updateOrderStatus, toggleOrderItemCompletion, getAppSettings, getMenuItems } from '../services/storageService';
-import { Clock, CheckCircle, ChefHat, Bell, User, LogOut, Square, CheckSquare, AlertOctagon, Timer, PlusCircle, History, Calendar, ChevronLeft, ChevronRight, DollarSign, UtensilsCrossed, Receipt, Pizza, ArrowRightLeft, Utensils, CakeSlice, Wine, Sandwich, ListPlus } from 'lucide-react';
+import { getOrders, updateOrderStatus, toggleOrderItemCompletion, getAppSettings, getMenuItems, forceCloudSync } from '../services/storageService';
+import { Clock, CheckCircle, ChefHat, Bell, User, LogOut, Square, CheckSquare, AlertOctagon, Timer, PlusCircle, History, Calendar, ChevronLeft, ChevronRight, DollarSign, UtensilsCrossed, Receipt, Pizza, ArrowRightLeft, Utensils, CakeSlice, Wine, Sandwich, ListPlus, RefreshCw } from 'lucide-react';
 
 const CATEGORY_PRIORITY: Record<Category, number> = {
     [Category.MENU_COMPLETO]: 0,
@@ -162,6 +163,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
   const [appSettings, setAppSettings] = useState<AppSettings>(getAppSettings());
   const [notification, setNotification] = useState<{msg: string, type: 'info' | 'success' | 'alert'} | null>(null);
   const [allMenuItems, setAllMenuItems] = useState<MenuItem[]>([]); // New: Full menu reference for combo lookup
+  const [isSyncing, setIsSyncing] = useState(false);
   
   // Analytics State
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -255,6 +257,13 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
     setOrders(sorted);
   };
 
+  const handleForceSync = async () => {
+      setIsSyncing(true);
+      await forceCloudSync();
+      loadOrders();
+      setTimeout(() => setIsSyncing(false), 500);
+  };
+
   useEffect(() => {
     loadOrders();
     const handleStorageChange = (e: StorageEvent) => { if (e.key === 'ristosync_orders') loadOrders(); };
@@ -346,6 +355,9 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
         </div>
         <div className="flex gap-4 items-center">
             {isAutoPrintActive && (<div className="flex items-center gap-2 px-3 py-1 bg-green-900/30 border border-green-500/30 rounded-lg text-green-400 text-xs font-bold uppercase animate-pulse"><Receipt size={14}/> Auto-Print ON</div>)}
+            <button onClick={handleForceSync} className={`p-2.5 rounded-lg border border-slate-700 hover:text-white transition-colors ${isSyncing ? 'bg-blue-600 text-white animate-spin' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`} title="Sincronizza Ora">
+                <RefreshCw size={20}/>
+            </button>
             <div className="bg-slate-800 px-4 py-2 rounded-lg border border-slate-700"><span className={`text-2xl font-mono font-bold ${isPizzeria ? 'text-red-400' : isPub ? 'text-amber-400' : 'text-orange-400'}`}>{new Date().toLocaleTimeString('it-IT', {hour: '2-digit', minute:'2-digit'})}</span></div>
             <button onClick={onExit} className="bg-slate-800 text-slate-400 hover:text-white p-2.5 rounded-lg"><LogOut size={20} /></button>
         </div>

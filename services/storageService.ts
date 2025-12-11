@@ -25,6 +25,7 @@ const DEMO_MENU_ITEMS: MenuItem[] = [
 let currentUserId: string | null = null;
 let pollingInterval: any = null;
 let isSyncing = false; // Prevent overlapping syncs
+let realtimeChannel: any = null;
 
 // HELPER: SAFE STORAGE SAVE
 const safeLocalStorageSave = (key: string, value: string) => {
@@ -55,6 +56,16 @@ const ensureUserId = async () => {
     return currentUserId;
 };
 
+const broadcastUpdate = async (type: 'orders' | 'menu') => {
+    if (realtimeChannel && currentUserId) {
+        await realtimeChannel.send({
+            type: 'broadcast',
+            event: 'sync_update',
+            payload: { type }
+        });
+    }
+};
+
 // Initialize Realtime Subscription
 export const initSupabaseSync = async () => {
     if (!supabase) return;
@@ -62,7 +73,7 @@ export const initSupabaseSync = async () => {
     await ensureUserId();
     
     if (currentUserId) {
-        // 1. Initial Sync - FIRE AND FORGET (Non-Blocking)
+        // 1. Initial Sync
         Promise.all([
             fetchFromCloud(),
             fetchFromCloudMenu(),
@@ -74,55 +85,53 @@ export const initSupabaseSync = async () => {
              if (data?.google_api_key) safeLocalStorageSave(GOOGLE_API_KEY_STORAGE, data.google_api_key);
         });
 
-        // 3. Realtime Subscription (Robust Mode)
-        supabase.getChannels().forEach(channel => {
-            if (channel.topic.includes(`room:${currentUserId}`)) supabase.removeChannel(channel);
-        });
+        // 3. Realtime Subscription (Robust Mode with Broadcast)
+        if (realtimeChannel) await supabase.removeChannel(realtimeChannel);
 
-        const channel = supabase.channel(`room:${currentUserId}`);
+        realtimeChannel = supabase.channel(`room:${currentUserId}`);
 
-        channel
+        realtimeChannel
             .on('postgres_changes', { 
                 event: '*', 
                 schema: 'public', 
                 table: 'orders'
-                // REMOVED FILTER to rely on RLS and avoid type mismatches
-            }, (payload) => {
-                console.log("🔔 Realtime Order Update:", payload.eventType);
+            }, () => {
+                console.log("🔔 DB Order Update");
                 fetchFromCloud(); 
             })
             .on('postgres_changes', { 
                 event: '*', 
                 schema: 'public', 
                 table: 'menu_items'
-                // REMOVED FILTER
             }, () => {
-                console.log("🔔 Realtime Menu Update");
+                console.log("🔔 DB Menu Update");
                 fetchFromCloudMenu();
             })
-            .on('postgres_changes', {
-                event: 'UPDATE',
-                schema: 'public',
-                table: 'profiles',
-                filter: `id=eq.${currentUserId}`
-            }, (payload) => {
-                if (payload.new.settings) {
-                    safeLocalStorageSave(APP_SETTINGS_KEY, JSON.stringify(payload.new.settings));
-                    window.dispatchEvent(new Event('local-settings-update'));
-                }
+            .on('broadcast', { event: 'sync_update' }, (payload: any) => {
+                console.log("📡 Broadcast Received:", payload);
+                if (payload.payload?.type === 'orders') fetchFromCloud();
+                if (payload.payload?.type === 'menu') fetchFromCloudMenu();
             })
-            .subscribe((status) => {
-                 if (status === 'SUBSCRIBED') console.log("🟢 Realtime Connected for User:", currentUserId);
-                 else if (status === 'CHANNEL_ERROR') console.error("🔴 Realtime Connection Error");
+            .subscribe((status: string) => {
+                 if (status === 'SUBSCRIBED') console.log("🟢 Realtime Connected");
             });
 
-        // 4. Fallback Polling (Heartbeat) - 10s for faster sync recovery
+        // 4. Fallback Polling (Heartbeat) - 10s
         if (pollingInterval) clearInterval(pollingInterval);
         pollingInterval = setInterval(() => {
             fetchFromCloud();
             fetchSettingsFromCloud();
         }, 10000);
     }
+};
+
+export const forceCloudSync = async () => {
+    console.log("🔄 Forcing Cloud Sync...");
+    await ensureUserId();
+    await fetchFromCloud();
+    await fetchFromCloudMenu();
+    await fetchSettingsFromCloud();
+    return true;
 };
 
 const handleSupabaseError = (error: any) => {
@@ -139,13 +148,14 @@ const fetchFromCloud = async () => {
     isSyncing = true;
     
     try {
-        // OPTIMIZATION: Fetch last 48 hours to avoid timeout on large tables
+        // OPTIMIZATION: Fetch last 48 hours
         const lookbackWindow = new Date();
         lookbackWindow.setDate(lookbackWindow.getDate() - 2); 
 
         const { data, error } = await supabase
             .from('orders')
             .select('*')
+            // Using RLS, so filter should be implicit, but keeping for safety
             .eq('user_id', currentUserId)
             .gte('created_at', lookbackWindow.toISOString());
 
@@ -158,7 +168,7 @@ const fetchFromCloud = async () => {
         // Convert Cloud Orders
         const cloudOrders: Order[] = data.map((row: any) => ({
             id: row.id,
-            tableNumber: row.table_number, // Ensure snake_case mapping
+            tableNumber: row.table_number, 
             status: row.status as OrderStatus,
             timestamp: parseInt(row.timestamp) || new Date(row.created_at).getTime(),
             createdAt: new Date(row.created_at).getTime(), 
@@ -178,14 +188,11 @@ const fetchFromCloud = async () => {
             const localOrder = localOrders.find(l => l.id === cloudOrder.id);
 
             if (localOrder) {
-                // TRUST CLOUD UNLESS LOCAL IS FRESHLY MODIFIED (Active Editing)
-                // Reduced window to 10s to prefer Cloud truth
                 const isLocalRecent = (now - localOrder.timestamp) < 10000;
                 const isLocalNewer = localOrder.timestamp > cloudOrder.timestamp;
 
                 if (isLocalRecent && isLocalNewer) {
                     mergedOrders.push(localOrder);
-                    // Force push this newer local state to cloud immediately
                     addOrder(localOrder, true); 
                     return;
                 }
@@ -193,20 +200,17 @@ const fetchFromCloud = async () => {
             mergedOrders.push(cloudOrder);
         });
 
-        // 2. Keep Local Orders NOT in Cloud yet (Pending Creation)
+        // 2. Keep Local Orders NOT in Cloud yet
         localOrders.forEach(localOrder => {
             if (!processedIds.has(localOrder.id)) {
                  mergedOrders.push(localOrder);
-                 // Retry sync for pending items older than 3s
                  if ((now - localOrder.timestamp) > 3000 && (now - localOrder.timestamp) < 300000) {
                      addOrder(localOrder, true);
                  }
             }
         });
 
-        // Sort by timestamp
         const sorted = mergedOrders.sort((a, b) => a.timestamp - b.timestamp);
-
         safeLocalStorageSave(STORAGE_KEY, JSON.stringify(sorted));
         window.dispatchEvent(new Event('local-storage-update'));
     } catch (e) {
@@ -270,7 +274,6 @@ export const getOrders = (): Order[] => {
     return data ? JSON.parse(data) : [];
 };
 
-// silent = true suppresses UI events for background syncs
 export const addOrder = async (order: Order, silent = false) => {
     if (!silent) {
         const orders = getOrders();
@@ -283,7 +286,6 @@ export const addOrder = async (order: Order, silent = false) => {
     
     await ensureUserId();
     if (supabase && currentUserId) {
-        // Fire and forget, but with error logging
         supabase.from('orders').upsert({
             id: order.id,
             user_id: currentUserId,
@@ -295,6 +297,7 @@ export const addOrder = async (order: Order, silent = false) => {
             waiter_name: order.waiterName
         }).then(({ error }) => {
             if (error) console.error("Cloud push failed for order", order.id, error);
+            else broadcastUpdate('orders'); // BROADCAST SUCCESS
         });
     }
 };
@@ -311,6 +314,7 @@ export const updateOrderStatus = async (orderId: string, status: OrderStatus) =>
         await ensureUserId();
         if (supabase && currentUserId) {
              await supabase.from('orders').update({ status: status, timestamp: order.timestamp }).eq('id', orderId);
+             broadcastUpdate('orders');
         }
     }
 };
@@ -327,6 +331,7 @@ export const updateOrderItems = async (orderId: string, newItems: OrderItem[]) =
         await ensureUserId();
         if (supabase && currentUserId) {
              await supabase.from('orders').update({ items: order.items, timestamp: order.timestamp }).eq('id', orderId);
+             broadcastUpdate('orders');
         }
     }
 };
@@ -354,6 +359,7 @@ export const toggleOrderItemCompletion = async (orderId: string, itemIndex: numb
         await ensureUserId();
         if (supabase && currentUserId) {
              await supabase.from('orders').update({ items: order.items }).eq('id', orderId);
+             broadcastUpdate('orders');
         }
     }
 };
@@ -369,6 +375,7 @@ export const serveItem = async (orderId: string, itemIndex: number) => {
         await ensureUserId();
         if (supabase && currentUserId) {
              await supabase.from('orders').update({ items: order.items }).eq('id', orderId);
+             broadcastUpdate('orders');
         }
     }
 };
@@ -390,6 +397,7 @@ export const freeTable = async (tableNumber: string) => {
         for (const o of tableOrders) {
             await supabase.from('orders').update({ status: OrderStatus.DELIVERED, timestamp: o.timestamp }).eq('id', o.id);
         }
+        broadcastUpdate('orders');
     }
 };
 
@@ -420,6 +428,7 @@ export const addMenuItem = async (item: MenuItem) => {
             combo_items: item.comboItems,
             specific_department: item.specificDepartment
         });
+        broadcastUpdate('menu');
     }
 };
 
@@ -444,6 +453,7 @@ export const updateMenuItem = async (item: MenuItem) => {
                 combo_items: item.comboItems,
                 specific_department: item.specificDepartment
             }).eq('id', item.id);
+            broadcastUpdate('menu');
         }
     }
 };
@@ -456,6 +466,7 @@ export const deleteMenuItem = async (id: string) => {
     await ensureUserId();
     if (supabase && currentUserId) {
         await supabase.from('menu_items').delete().eq('id', id);
+        broadcastUpdate('menu');
     }
 };
 
@@ -465,6 +476,7 @@ export const deleteAllMenuItems = async () => {
     await ensureUserId();
     if (supabase && currentUserId) {
         await supabase.from('menu_items').delete().eq('user_id', currentUserId);
+        broadcastUpdate('menu');
     }
 };
 
@@ -478,6 +490,7 @@ export const importDemoMenu = async () => {
         for (const item of items) {
             await addMenuItem(item);
         }
+        broadcastUpdate('menu');
     }
 };
 
@@ -554,6 +567,7 @@ export const deleteHistoryByDate = async (date: Date) => {
     await ensureUserId();
     if (supabase && currentUserId) {
         await supabase.from('orders').delete().eq('user_id', currentUserId).lt('created_at', date.toISOString());
+        broadcastUpdate('orders');
     }
 };
 
@@ -564,5 +578,6 @@ export const performFactoryReset = async () => {
     if (supabase && currentUserId) {
         await supabase.from('orders').delete().eq('user_id', currentUserId);
         await supabase.from('menu_items').delete().eq('user_id', currentUserId);
+        broadcastUpdate('orders');
     }
 };
