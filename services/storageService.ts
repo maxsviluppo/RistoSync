@@ -1,3 +1,4 @@
+
 import { Order, OrderStatus, OrderItem, MenuItem, AppSettings, Category, Department, NotificationSettings } from '../types';
 import { supabase } from './supabase';
 
@@ -45,15 +46,23 @@ const safeLocalStorageSave = (key: string, value: string) => {
     }
 };
 
+const ensureUserId = async () => {
+    if (currentUserId) return currentUserId;
+    if (!supabase) return null;
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.user?.id) {
+        currentUserId = data.session.user.id;
+    }
+    return currentUserId;
+};
+
 // Initialize Realtime Subscription
 export const initSupabaseSync = async () => {
     if (!supabase) return;
 
-    // Get Current User
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-        currentUserId = session.user.id;
-        
+    await ensureUserId();
+    
+    if (currentUserId) {
         // 1. Initial Sync
         await Promise.all([
             fetchFromCloud(),
@@ -68,7 +77,6 @@ export const initSupabaseSync = async () => {
         }
 
         // 3. Realtime Subscription (Robust Mode)
-        // Unsubscribe existing channels to prevent duplicates
         supabase.getChannels().forEach(channel => {
             if (channel.topic.includes(`room:${currentUserId}`)) supabase.removeChannel(channel);
         });
@@ -79,17 +87,19 @@ export const initSupabaseSync = async () => {
             .on('postgres_changes', { 
                 event: '*', 
                 schema: 'public', 
-                table: 'orders',
-                filter: `user_id=eq.${currentUserId}` 
-            }, () => {
+                table: 'orders'
+                // REMOVED FILTER to rely on RLS and avoid type mismatches
+            }, (payload) => {
+                console.log("🔔 Realtime Order Update:", payload.eventType);
                 fetchFromCloud(); 
             })
             .on('postgres_changes', { 
                 event: '*', 
                 schema: 'public', 
-                table: 'menu_items',
-                filter: `user_id=eq.${currentUserId}` 
+                table: 'menu_items'
+                // REMOVED FILTER
             }, () => {
+                console.log("🔔 Realtime Menu Update");
                 fetchFromCloudMenu();
             })
             .on('postgres_changes', {
@@ -104,35 +114,36 @@ export const initSupabaseSync = async () => {
                 }
             })
             .subscribe((status) => {
-                 if (status === 'SUBSCRIBED') console.log("🟢 Realtime Connected");
+                 if (status === 'SUBSCRIBED') console.log("🟢 Realtime Connected for User:", currentUserId);
+                 else if (status === 'CHANNEL_ERROR') console.error("🔴 Realtime Connection Error");
             });
 
-        // 4. Fallback Polling (Heartbeat) - Slightly increased interval to reduce load
+        // 4. Fallback Polling (Heartbeat) - 10s for faster sync recovery
         if (pollingInterval) clearInterval(pollingInterval);
         pollingInterval = setInterval(() => {
             fetchFromCloud();
             fetchSettingsFromCloud();
-        }, 20000);
+        }, 10000);
     }
 };
 
 const handleSupabaseError = (error: any) => {
     if (!error) return;
     console.error("Supabase Error:", error.message || JSON.stringify(error));
-    // Don't throw, just log. We want the app to survive network blips.
     return error;
 }
 
 const fetchFromCloud = async () => {
-    if (!supabase || !currentUserId || isSyncing) return;
+    if (!supabase || isSyncing) return;
+    await ensureUserId();
+    if (!currentUserId) return;
+
     isSyncing = true;
     
     try {
-        // OPTIMIZATION: Fixed Query Timeout
-        // Instead of complex OR, we fetch everything from last 48 hours.
-        // This covers active orders AND recent history, which is what we need.
+        // OPTIMIZATION: Fetch last 48 hours to avoid timeout on large tables
         const lookbackWindow = new Date();
-        lookbackWindow.setDate(lookbackWindow.getDate() - 2); // 48 Hours
+        lookbackWindow.setDate(lookbackWindow.getDate() - 2); 
 
         const { data, error } = await supabase
             .from('orders')
@@ -149,8 +160,7 @@ const fetchFromCloud = async () => {
         // Convert Cloud Orders
         const cloudOrders: Order[] = data.map((row: any) => ({
             id: row.id,
-            table_number: row.table_number,
-            tableNumber: row.table_number, 
+            tableNumber: row.table_number, // Ensure snake_case mapping
             status: row.status as OrderStatus,
             timestamp: parseInt(row.timestamp) || new Date(row.created_at).getTime(),
             createdAt: new Date(row.created_at).getTime(), 
@@ -164,20 +174,20 @@ const fetchFromCloud = async () => {
         const mergedOrders: Order[] = [];
         const processedIds = new Set<string>();
 
-        // 1. Merge Cloud Orders (checking against Local)
+        // 1. Merge Cloud Orders
         cloudOrders.forEach(cloudOrder => {
             processedIds.add(cloudOrder.id);
             const localOrder = localOrders.find(l => l.id === cloudOrder.id);
 
             if (localOrder) {
-                // If local is recent (< 1 min) and newer timestamp, trust local
-                // This prevents the "disappearing item" bug while sync is in flight
-                const isLocalRecent = (now - localOrder.timestamp) < 60000;
+                // TRUST CLOUD UNLESS LOCAL IS FRESHLY MODIFIED (Active Editing)
+                // Reduced window to 10s to prefer Cloud truth
+                const isLocalRecent = (now - localOrder.timestamp) < 10000;
                 const isLocalNewer = localOrder.timestamp > cloudOrder.timestamp;
 
                 if (isLocalRecent && isLocalNewer) {
                     mergedOrders.push(localOrder);
-                    // Force push this newer local state to cloud in background
+                    // Force push this newer local state to cloud immediately
                     addOrder(localOrder, true); 
                     return;
                 }
@@ -186,16 +196,11 @@ const fetchFromCloud = async () => {
         });
 
         // 2. Keep Local Orders NOT in Cloud yet (Pending Creation)
-        // But only if they are relatively recent (< 24h) to avoid zombie orders
         localOrders.forEach(localOrder => {
             if (!processedIds.has(localOrder.id)) {
-                // If it's very recent (< 5 mins), it's likely pending upload. Keep it.
-                // If it's older, check if it was supposed to be deleted.
-                // We keep it safe for now.
                  mergedOrders.push(localOrder);
-                 
-                 // If it's a new order that hasn't synced, retry sync
-                 if ((now - localOrder.timestamp) > 5000 && (now - localOrder.timestamp) < 300000) {
+                 // Retry sync for pending items older than 3s
+                 if ((now - localOrder.timestamp) > 3000 && (now - localOrder.timestamp) < 300000) {
                      addOrder(localOrder, true);
                  }
             }
@@ -214,7 +219,9 @@ const fetchFromCloud = async () => {
 };
 
 const fetchFromCloudMenu = async () => {
-    if (!supabase || !currentUserId) return;
+    if (!supabase) return;
+    await ensureUserId();
+    if (!currentUserId) return;
     
     const { data, error } = await supabase
         .from('menu_items')
@@ -245,16 +252,17 @@ const fetchFromCloudMenu = async () => {
 };
 
 const fetchSettingsFromCloud = async () => {
-    if (!supabase || !currentUserId) return;
+    if (!supabase) return;
+    await ensureUserId();
+    if (!currentUserId) return;
+
     try {
         const { data, error } = await supabase.from('profiles').select('settings').eq('id', currentUserId).single();
         if(data?.settings) {
             safeLocalStorageSave(APP_SETTINGS_KEY, JSON.stringify(data.settings));
             window.dispatchEvent(new Event('local-settings-update'));
         }
-    } catch (e) {
-        // Ignore single fetch errors
-    }
+    } catch (e) {}
 };
 
 // --- CRUD OPERATIONS ---
@@ -268,7 +276,6 @@ export const getOrders = (): Order[] => {
 export const addOrder = async (order: Order, silent = false) => {
     if (!silent) {
         const orders = getOrders();
-        // Check duplication
         if (!orders.find(o => o.id === order.id)) {
             orders.push(order);
             safeLocalStorageSave(STORAGE_KEY, JSON.stringify(orders));
@@ -276,8 +283,9 @@ export const addOrder = async (order: Order, silent = false) => {
         }
     }
     
+    await ensureUserId();
     if (supabase && currentUserId) {
-        // Fire and forget (don't await) to keep UI snappy
+        // Fire and forget, but with error logging
         supabase.from('orders').upsert({
             id: order.id,
             user_id: currentUserId,
@@ -288,7 +296,7 @@ export const addOrder = async (order: Order, silent = false) => {
             created_at: new Date(order.createdAt).toISOString(),
             waiter_name: order.waiterName
         }).then(({ error }) => {
-            if (error) console.error("Cloud push failed", error);
+            if (error) console.error("Cloud push failed for order", order.id, error);
         });
     }
 };
@@ -302,6 +310,7 @@ export const updateOrderStatus = async (orderId: string, status: OrderStatus) =>
         safeLocalStorageSave(STORAGE_KEY, JSON.stringify(orders));
         window.dispatchEvent(new Event('local-storage-update'));
 
+        await ensureUserId();
         if (supabase && currentUserId) {
              await supabase.from('orders').update({ status: status, timestamp: order.timestamp }).eq('id', orderId);
         }
@@ -317,6 +326,7 @@ export const updateOrderItems = async (orderId: string, newItems: OrderItem[]) =
         safeLocalStorageSave(STORAGE_KEY, JSON.stringify(orders));
         window.dispatchEvent(new Event('local-storage-update'));
 
+        await ensureUserId();
         if (supabase && currentUserId) {
              await supabase.from('orders').update({ items: order.items, timestamp: order.timestamp }).eq('id', orderId);
         }
@@ -343,6 +353,7 @@ export const toggleOrderItemCompletion = async (orderId: string, itemIndex: numb
         safeLocalStorageSave(STORAGE_KEY, JSON.stringify(orders));
         window.dispatchEvent(new Event('local-storage-update'));
 
+        await ensureUserId();
         if (supabase && currentUserId) {
              await supabase.from('orders').update({ items: order.items }).eq('id', orderId);
         }
@@ -357,6 +368,7 @@ export const serveItem = async (orderId: string, itemIndex: number) => {
         safeLocalStorageSave(STORAGE_KEY, JSON.stringify(orders));
         window.dispatchEvent(new Event('local-storage-update'));
         
+        await ensureUserId();
         if (supabase && currentUserId) {
              await supabase.from('orders').update({ items: order.items }).eq('id', orderId);
         }
@@ -375,6 +387,7 @@ export const freeTable = async (tableNumber: string) => {
     safeLocalStorageSave(STORAGE_KEY, JSON.stringify(orders));
     window.dispatchEvent(new Event('local-storage-update'));
     
+    await ensureUserId();
     if (supabase && currentUserId) {
         for (const o of tableOrders) {
             await supabase.from('orders').update({ status: OrderStatus.DELIVERED, timestamp: o.timestamp }).eq('id', o.id);
@@ -394,6 +407,7 @@ export const addMenuItem = async (item: MenuItem) => {
     safeLocalStorageSave(MENU_KEY, JSON.stringify(items));
     window.dispatchEvent(new Event('local-menu-update'));
     
+    await ensureUserId();
     if (supabase && currentUserId) {
         await supabase.from('menu_items').upsert({
             id: item.id,
@@ -419,6 +433,7 @@ export const updateMenuItem = async (item: MenuItem) => {
         safeLocalStorageSave(MENU_KEY, JSON.stringify(items));
         window.dispatchEvent(new Event('local-menu-update'));
         
+        await ensureUserId();
         if (supabase && currentUserId) {
             await supabase.from('menu_items').update({
                 name: item.name,
@@ -440,6 +455,7 @@ export const deleteMenuItem = async (id: string) => {
     safeLocalStorageSave(MENU_KEY, JSON.stringify(items));
     window.dispatchEvent(new Event('local-menu-update'));
     
+    await ensureUserId();
     if (supabase && currentUserId) {
         await supabase.from('menu_items').delete().eq('id', id);
     }
@@ -448,6 +464,7 @@ export const deleteMenuItem = async (id: string) => {
 export const deleteAllMenuItems = async () => {
     safeLocalStorageSave(MENU_KEY, JSON.stringify([]));
     window.dispatchEvent(new Event('local-menu-update'));
+    await ensureUserId();
     if (supabase && currentUserId) {
         await supabase.from('menu_items').delete().eq('user_id', currentUserId);
     }
@@ -458,6 +475,7 @@ export const importDemoMenu = async () => {
     safeLocalStorageSave(MENU_KEY, JSON.stringify(items));
     window.dispatchEvent(new Event('local-menu-update'));
     
+    await ensureUserId();
     if (supabase && currentUserId) {
         for (const item of items) {
             await addMenuItem(item);
@@ -487,6 +505,7 @@ export const saveAppSettings = async (settings: AppSettings) => {
     safeLocalStorageSave(APP_SETTINGS_KEY, JSON.stringify(settings));
     window.dispatchEvent(new Event('local-settings-update'));
     
+    await ensureUserId();
     if (supabase && currentUserId) {
         await supabase.from('profiles').update({ settings: settings }).eq('id', currentUserId);
     }
@@ -498,6 +517,7 @@ export const getGoogleApiKey = (): string | null => {
 
 export const saveGoogleApiKey = async (key: string) => {
     localStorage.setItem(GOOGLE_API_KEY_STORAGE, key);
+    await ensureUserId();
     if (supabase && currentUserId) {
         await supabase.from('profiles').update({ google_api_key: key }).eq('id', currentUserId);
     }
@@ -533,6 +553,7 @@ export const deleteHistoryByDate = async (date: Date) => {
     safeLocalStorageSave(STORAGE_KEY, JSON.stringify([])); 
     window.dispatchEvent(new Event('local-storage-update'));
     
+    await ensureUserId();
     if (supabase && currentUserId) {
         await supabase.from('orders').delete().eq('user_id', currentUserId).lt('created_at', date.toISOString());
     }
@@ -541,6 +562,7 @@ export const deleteHistoryByDate = async (date: Date) => {
 export const performFactoryReset = async () => {
     localStorage.clear();
     window.location.reload();
+    await ensureUserId();
     if (supabase && currentUserId) {
         await supabase.from('orders').delete().eq('user_id', currentUserId);
         await supabase.from('menu_items').delete().eq('user_id', currentUserId);
