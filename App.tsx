@@ -113,34 +113,11 @@ export default function App() {
       if (publicMenuId) { setLoadingSession(false); return; }
       if (!supabase) { setLoadingSession(false); return; }
 
-      // SAFETY TIMEOUT: Force stop loading after 3 seconds if everything else fails
-      const safetyTimer = setTimeout(() => { 
-          setLoadingSession((prev) => { 
-              if (prev) {
-                  console.warn("⚠️ App safety timeout triggered. Forcing entry.");
-                  return false; 
-              }
-              return prev; 
-          }); 
-      }, 3000); 
+      const timer = setTimeout(() => { setLoadingSession((prev) => { if (prev) return false; return prev; }); }, 5000); 
 
       const checkUserStatus = async (user: any) => {
           try {
-              // OPTIMIZATION: Wrap DB call in a race with a 2-second timeout
-              // If DB is slow, we assume the user is active to prevent lockouts.
-              const timeoutPromise = new Promise<{timeout: boolean}>((resolve) => setTimeout(() => resolve({timeout: true}), 2000));
-              
-              const fetchProfilePromise = supabase.from('profiles').select('restaurant_name, subscription_status, settings').eq('id', user.id).single();
-              
-              const result: any = await Promise.race([fetchProfilePromise, timeoutPromise]);
-
-              if (result.timeout) {
-                  console.log("⚠️ DB Profile Check Timed Out - Assuming Active");
-                  return true;
-              }
-
-              const { data } = result;
-
+              const { data } = await supabase.from('profiles').select('restaurant_name, subscription_status, settings').eq('id', user.id).single();
               if (data) {
                   if (data.subscription_status === 'suspended') { setIsSuspended(true); setIsBanned(false); return false; }
                   if (data.subscription_status === 'banned') { setIsBanned(true); setIsSuspended(false); return false; }
@@ -168,42 +145,23 @@ export default function App() {
                   return true; 
               }
               return true; 
-          } catch (e) { 
-              console.error("Status check failed", e);
-              return true; // Fail safe allow entry
-          }
+          } catch (e) { return true; }
       };
 
-      // AUTH INIT
       supabase.auth.getSession().then(async ({ data: { session } }) => {
           if (session) {
               const isActive = await checkUserStatus(session.user);
-              if (isActive) { 
-                  setSession(session); 
-                  // FIRE AND FORGET SYNC - DO NOT AWAIT
-                  initSupabaseSync(); 
-              } else { 
-                  setSession(session); 
-              }
-          } else { 
-              setSession(null); 
-          }
+              if (isActive) { setSession(session); initSupabaseSync(); } else { setSession(session); }
+          } else { setSession(null); }
           setLoadingSession(false);
       });
 
       const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-          if (session) { 
-              await checkUserStatus(session.user); 
-              setSession(session); 
-              initSupabaseSync(); 
-          } else { 
-              setSession(null); 
-              setIsSuspended(false); 
-              setIsBanned(false); 
-          }
+          if (session) { checkUserStatus(session.user); setSession(session); initSupabaseSync(); }
+          else { setSession(null); setIsSuspended(false); setIsBanned(false); }
           setLoadingSession(false);
       });
-      return () => { clearTimeout(safetyTimer); subscription.unsubscribe(); };
+      return () => { clearTimeout(timer); subscription.unsubscribe(); };
   }, [publicMenuId]);
 
   useEffect(() => {
@@ -728,7 +686,7 @@ export default function App() {
                       <div className="max-w-6xl mx-auto animate-fade-in">
                           <div className="flex justify-between items-center mb-8"><div><h2 className="text-3xl font-black text-white mb-2">Gestione Menu</h2><p className="text-slate-400">Aggiungi, modifica o rimuovi piatti dal tuo menu digitale.</p></div><div className="flex gap-3"><button onClick={() => { setEditingItem({}); setIsEditingItem(!isEditingItem); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-transform active:scale-95 ${isEditingItem ? 'bg-slate-700 text-white' : 'bg-green-600 hover:bg-green-500 text-white shadow-green-600/20'}`}>{isEditingItem ? <X size={20}/> : <Plus size={20}/>} {isEditingItem ? 'Chiudi Editor' : 'NUOVO PIATTO'}</button></div></div>
                           <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 mb-8 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg"><div className="flex items-center gap-4"><div className="p-3 bg-blue-600/20 text-blue-400 rounded-xl"><LayoutGrid size={24}/></div><div><h3 className="font-bold text-white text-lg">Configurazione Sala</h3><p className="text-xs text-slate-400 font-medium">Imposta il numero di tavoli attivi nel ristorante.</p></div></div><div className="flex items-center gap-3 bg-slate-950 p-1.5 rounded-xl border border-slate-700"><button onClick={() => handleUpdateTableCount(-1)} className="w-10 h-10 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 hover:text-white transition-colors"><Minus size={18} strokeWidth={3}/></button><span className="font-black text-3xl w-16 text-center text-white">{appSettings.restaurantProfile?.tableCount || 12}</span><button onClick={() => handleUpdateTableCount(1)} className="w-10 h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-500 rounded-lg text-white shadow-lg shadow-blue-600/20 transition-colors"><Plus size={18} strokeWidth={3}/></button></div></div>
-                          <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 flex gap-4 mb-8 overflow-x-auto no-scrollbar items-center"><button onClick={() => importDemoMenu().then(() => alert("Menu Demo Caricato!"))} className="flex items-center gap-2 bg-purple-600/20 text-purple-400 px-4 py-2 rounded-lg font-bold hover:bg-purple-600/30 transition-colors whitespace-nowrap text-xs"><Sparkles size={16}/> Carica Menu Demo</button><button onClick={() => bulkInputRef.current?.click()} className="flex items-center gap-2 bg-blue-600/20 text-blue-400 px-4 py-2 rounded-lg font-bold hover:bg-blue-600/30 transition-colors whitespace-nowrap text-xs"><Upload size={16}/> Importa JSON</button><input type="file" ref={bulkInputRef} onChange={handleBulkImport} accept=".json" className="hidden" /><button onClick={() => bulkImagesRef.current?.click()} className="flex items-center gap-2 bg-pink-600/20 text-pink-400 px-4 py-2 rounded-lg font-bold hover:bg-pink-600/30 transition-colors whitespace-nowrap text-xs"><ImageIcon size={16}/> Importa Foto Massiva</button><input type="file" ref={bulkImagesRef} onChange={handleBulkImageUpload} accept="image/*" multiple className="hidden" /><button onClick={exportMenu} className="flex items-center gap-2 bg-teal-600/20 text-teal-400 px-4 py-2 rounded-lg font-bold hover:bg-teal-600/30 transition-colors whitespace-nowrap text-xs"><Download size={16}/> Esporta JSON</button><div className="flex-1"></div><button onClick={() => setShowDeleteAllMenuModal(true)} className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-red-500 transition-colors whitespace-nowrap shadow-lg shadow-red-900/20 text-xs"><Trash2 size={16}/> ELIMINA TUTTO</button></div>
+                          <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 flex gap-4 mb-8 overflow-x-auto no-scrollbar items-center"><button onClick={() => bulkInputRef.current?.click()} className="flex items-center gap-2 bg-blue-600/20 text-blue-400 px-4 py-2 rounded-lg font-bold hover:bg-blue-600/30 transition-colors whitespace-nowrap text-xs"><Upload size={16}/> Importa JSON</button><input type="file" ref={bulkInputRef} onChange={handleBulkImport} accept=".json" className="hidden" /><button onClick={() => bulkImagesRef.current?.click()} className="flex items-center gap-2 bg-pink-600/20 text-pink-400 px-4 py-2 rounded-lg font-bold hover:bg-pink-600/30 transition-colors whitespace-nowrap text-xs"><ImageIcon size={16}/> Importa Foto Massiva</button><input type="file" ref={bulkImagesRef} onChange={handleBulkImageUpload} accept="image/*" multiple className="hidden" /><button onClick={exportMenu} className="flex items-center gap-2 bg-teal-600/20 text-teal-400 px-4 py-2 rounded-lg font-bold hover:bg-teal-600/30 transition-colors whitespace-nowrap text-xs"><Download size={16}/> Esporta JSON</button><div className="flex-1"></div><button onClick={() => setShowDeleteAllMenuModal(true)} className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded-lg font-bold hover:bg-red-500 transition-colors whitespace-nowrap shadow-lg shadow-red-900/20 text-xs"><Trash2 size={16}/> ELIMINA TUTTO</button></div>
                           {(isEditingItem || Object.keys(editingItem).length > 0) && (
                               <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-2xl mb-10 relative overflow-hidden animate-slide-up">
                                   <h3 className="font-bold text-white mb-4 flex items-center gap-2 text-lg"><Edit2 size={18}/> {editingItem.id ? 'Modifica Piatto' : 'Crea Nuovo Piatto'}</h3>
