@@ -5,13 +5,13 @@ import {
 } from '../types';
 import { 
   getOrders, addOrder, getMenuItems, freeTable, getWaiterName, 
-  updateOrderItems, getTableCount, serveItem, logoutWaiter 
+  updateOrderItems, getTableCount, serveItem, logoutWaiter, updateOrderStatus 
 } from '../services/storageService';
 import { 
   LogOut, Plus, Search, Utensils, CheckCircle, 
   ChevronLeft, Trash2, User, Clock, 
   DoorOpen, ChefHat, Pizza, Sandwich, 
-  Wine, CakeSlice, UtensilsCrossed, Send as SendIcon, CheckSquare, Square, BellRing, X, ArrowLeft, AlertTriangle, Home, Lock, UserX 
+  Wine, CakeSlice, UtensilsCrossed, Send as SendIcon, CheckSquare, Square, BellRing, X, ArrowLeft, Lock, Unlock, Home 
 } from 'lucide-react';
 
 interface WaiterPadProps {
@@ -42,7 +42,6 @@ const playWaiterSound = (type: 'success' | 'alert') => {
         const now = ctx.currentTime;
 
         if (type === 'success') {
-            // Ding dong (Ready)
             osc.type = 'sine';
             osc.frequency.setValueAtTime(600, now);
             osc.frequency.setValueAtTime(800, now + 0.1);
@@ -51,7 +50,6 @@ const playWaiterSound = (type: 'success' | 'alert') => {
             osc.start();
             osc.stop(now + 0.4);
         } else if (type === 'alert') {
-            // Error / Lock sound
             osc.type = 'sawtooth';
             osc.frequency.setValueAtTime(150, now);
             gain.gain.setValueAtTime(0.1, now);
@@ -92,9 +90,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isSending, setIsSending] = useState(false); 
 
-  // State to track previous order statuses for notifications
   const prevOrdersRef = useRef<Order[]>([]);
-
   const waiterName = getWaiterName();
 
   const loadData = () => {
@@ -103,24 +99,18 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
         const fetchedMenu = getMenuItems() || [];
         const fetchedTables = getTableCount() || 12;
         
-        // CHECK FOR NOTIFICATIONS (Compare previous state with new state)
+        // CHECK FOR NOTIFICATIONS
         if (prevOrdersRef.current.length > 0) {
             fetchedOrders.forEach(newOrder => {
-                // Filter only orders belonging to THIS waiter
-                if (newOrder.waiterName === waiterName) {
+                if (newOrder.waiterName === waiterName || !newOrder.waiterName) {
                     const oldOrder = prevOrdersRef.current.find(o => o.id === newOrder.id);
-                    
                     // Check if entire order became READY
                     if (oldOrder && oldOrder.status !== OrderStatus.READY && newOrder.status === OrderStatus.READY) {
                         playWaiterSound('success');
-                        // Optional: visual toast handled by global notification or simple alert
-                        // We rely on visual cue in the grid (Green blinking)
                     }
-                    
-                    // Check if items became Ready to Serve (partial completion)
+                    // Check partial items
                     const oldReadyCount = oldOrder?.items.filter(i => i.completed && !i.served).length || 0;
                     const newReadyCount = newOrder.items.filter(i => i.completed && !i.served).length;
-                    
                     if (newReadyCount > oldReadyCount) {
                         playWaiterSound('success');
                     }
@@ -134,8 +124,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
         setTableCount(fetchedTables);
     } catch (e) {
         console.error("Critical Error loading WaiterPad data:", e);
-        setOrders([]);
-        setMenuItems([]);
     }
   };
 
@@ -144,8 +132,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
     const handleStorage = () => loadData();
     window.addEventListener('local-storage-update', handleStorage);
     window.addEventListener('local-menu-update', handleStorage);
-    // Poll for notifications every 5 seconds as fallback
-    const interval = setInterval(loadData, 5000); 
+    const interval = setInterval(loadData, 3000); 
     return () => {
       window.removeEventListener('local-storage-update', handleStorage);
       window.removeEventListener('local-menu-update', handleStorage);
@@ -161,12 +148,13 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
     
     if (!tableOrder) return { status: 'free', owner: null };
     
-    // STRICT LOCKING: If waiterName doesn't match, it's LOCKED
+    // COLLABORATIVE LOGIC:
+    // If table has waiterName AND it's not me -> Locked visually, but overridable.
     if (tableOrder.waiterName && tableOrder.waiterName !== waiterName) {
         return { status: 'locked', owner: tableOrder.waiterName };
     }
     
-    // It's MY table
+    // It's MY table (or unassigned/Staff)
     const allItemsServed = (tableOrder.items || []).every(item => item.served);
     if (allItemsServed) return { status: 'completed', owner: waiterName };
 
@@ -186,9 +174,10 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
     const { status, owner } = getTableStatus(tableNum);
     
     if (status === 'locked') {
-        playWaiterSound('alert');
-        alert(`⛔ TAVOLO BLOCCATO\n\nQuesto tavolo è gestito da: ${owner}.\nSolo lui può modificarlo.`);
-        return;
+        // OVERRIDE LOGIC INSTEAD OF HARD RETURN
+        const confirmOverride = window.confirm(`⛔ TAVOLO DI ${owner}\n\nVuoi forzare l'accesso e gestire questo tavolo?`);
+        if (!confirmOverride) return;
+        // If confirmed, proceed to open table. Ownership will transfer on next action.
     }
     
     setSelectedTable(tableNum);
@@ -244,17 +233,19 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
         setIsSending(true);
 
         const currentOrders = getOrders();
+        // Reload fresh to avoid conflicts
         const currentActiveOrder = currentOrders.find(o => o.tableNumber === selectedTable && o.status !== OrderStatus.DELIVERED);
 
         if (currentActiveOrder) {
-          // Double check ownership before updating
+          // Ownership check with Override
           if (currentActiveOrder.waiterName && currentActiveOrder.waiterName !== waiterName) {
-              alert("Errore: Il tavolo è stato preso in carico da un altro cameriere nel frattempo.");
-              setIsSending(false);
-              return;
+             // We already confirmed entering the table, so we silently take ownership or keep shared
+             // Let's update ownership to current waiter for auditing
+             currentActiveOrder.waiterName = waiterName || 'Staff'; 
           }
           await updateOrderItems(currentActiveOrder.id, cart);
         } else {
+          // New Order
           const randomSuffix = Math.random().toString(36).substring(2, 8);
           const newId = `order_${Date.now()}_${randomSuffix}`;
           
@@ -265,23 +256,20 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
             status: OrderStatus.PENDING,
             timestamp: Date.now(),
             createdAt: Date.now(),
-            waiterName: waiterName || 'Staff' // STAMP WAITER NAME
+            waiterName: waiterName || 'Staff'
           };
           await addOrder(newOrder);
         }
         
-        // SUCCESS PATH
         setCart([]);
         setShowConfirmModal(false);
         setSelectedTable(null); 
         setView('tables');
-        setTimeout(() => loadData(), 100);
+        loadData(); // Immediate refresh
         
     } catch (error: any) {
         console.error("Errore invio ordine:", error);
-        if (!error.message?.includes('quota')) {
-             alert(`Si è verificato un errore: ${error.message}`);
-        }
+        alert(`Errore: ${error.message}`);
         setShowConfirmModal(false);
     } finally {
         setIsSending(false);
@@ -292,12 +280,25 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
     if (selectedTable && confirm(`Liberare il Tavolo ${selectedTable}?`)) {
         freeTable(selectedTable);
         setSelectedTable(null);
-        setTimeout(loadData, 50);
+        // Force immediate reload to update UI
+        setTimeout(() => {
+            loadData();
+            // Fallback for visual glitch
+            const btn = document.getElementById(`table-btn-${selectedTable}`);
+            if(btn) btn.className = "aspect-square rounded-2xl border-2 flex flex-col items-center justify-center gap-1 shadow-lg bg-slate-800 border-slate-700 text-slate-400";
+        }, 100);
     }
   };
 
   const handleServeItem = (orderId: string, itemIdx: number) => {
       serveItem(orderId, itemIdx);
+      // Optimistic update locally to make UI snappy
+      const updatedOrders = [...orders];
+      const order = updatedOrders.find(o => o.id === orderId);
+      if (order && order.items[itemIdx]) {
+          order.items[itemIdx].served = true;
+          setOrders(updatedOrders);
+      }
       setTimeout(loadData, 50);
   };
   
@@ -308,8 +309,8 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
   const handleLogout = () => {
       if(confirm("Vuoi uscire e cambiare cameriere?")) {
-          logoutWaiter(); // Clear from local storage
-          onExit(); // Go back to Role Selection
+          logoutWaiter();
+          onExit();
       }
   };
 
@@ -355,7 +356,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
             <button onClick={onExit} className="bg-slate-700 p-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-600 transition-colors border border-slate-600" title="Torna alla Home">
                 <Home size={20} />
             </button>
-            <h1 className="text-xl font-bold flex items-center gap-2"><div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center"><User size={18} className="text-white"/></div> {waiterName || 'Waiter Pad'}</h1>
+            <h1 className="text-xl font-bold flex items-center gap-2"><div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center"><User size={18} className="text-white"/></div> {waiterName || 'Staff'}</h1>
         </div>
         <button onClick={handleLogout} className="bg-slate-700 p-2 rounded-xl text-slate-300 hover:text-white hover:bg-red-600 transition-colors border border-slate-600" title="Cambia Cameriere">
             <LogOut size={20} />
@@ -408,7 +409,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                                                                  ) : isServed ? (
                                                                      <CheckSquare size={20} className="text-slate-600 ml-2" />
                                                                  ) : (
-                                                                     <span className="font-mono text-slate-500 ml-2 text-xs">Cooking</span>
+                                                                     <span className="font-mono text-slate-500 ml-2 text-xs">In Prep.</span>
                                                                  )}
                                                              </div>
                                                          );
@@ -450,7 +451,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
                          // STATUS VISUALS
                          if (status === 'locked') { 
-                             bgClass = "bg-slate-800 border-red-900/50 text-slate-600 opacity-70 cursor-not-allowed"; 
+                             bgClass = "bg-slate-800 border-red-900/50 text-slate-600 opacity-80 border-2"; // Less distinct disabled style 
                              statusIcon = <div className="flex flex-col items-center gap-1 text-[8px] font-bold uppercase text-red-500"><Lock size={14}/><span className="truncate max-w-[60px]">{owner}</span></div>; 
                          }
                          else if (status === 'occupied') { bgClass = "bg-blue-900/40 border-blue-500/50 text-blue-100"; statusIcon = <User size={12}/>; }
@@ -461,6 +462,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                          return (
                              <button 
                                  key={num} 
+                                 id={`table-btn-${num}`}
                                  onClick={() => handleTableClick(num.toString())}
                                  className={`aspect-square rounded-2xl border-2 flex flex-col items-center justify-center gap-1 shadow-lg transition-all active:scale-95 relative overflow-hidden ${bgClass}`}
                              >

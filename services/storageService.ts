@@ -65,6 +65,10 @@ export const saveOrders = (orders: Order[], skipSync = false) => {
 
 export const addOrder = async (order: Order) => {
     const orders = getOrders();
+    // Validate Waiter Name on Creation
+    if (!order.waiterName) {
+        order.waiterName = getWaiterName() || 'Staff';
+    }
     orders.push(order);
     saveOrders(orders);
 };
@@ -83,14 +87,7 @@ export const updateOrderItems = async (orderId: string, newItems: OrderItem[]) =
     const orders = getOrders();
     const order = orders.find(o => o.id === orderId);
     if (order) {
-        // Merge existing items with new ones or replace depending on logic.
-        // For simple waiter pad "Add to order", we usually append.
-        // But the WaiterPad logic currently sends the "Cart" which implies addition.
-        // We will treat this as an "add" operation to existing items if items already exist,
-        // marking new ones with 'isAddedLater' if the order was not pending.
-        
         const existingItems = order.items || [];
-        // Determine if we should flag these as added later
         const isLateAddition = order.status !== OrderStatus.PENDING;
         
         const itemsToAdd = newItems.map(i => ({
@@ -103,11 +100,15 @@ export const updateOrderItems = async (orderId: string, newItems: OrderItem[]) =
         order.items = [...existingItems, ...itemsToAdd];
         order.timestamp = Date.now();
         
-        // If order was delivered, reopen it? Usually not allowed from UI but safeguard:
-        if (order.status === OrderStatus.DELIVERED) {
+        // Ensure waiter name is consistent if updated by current user
+        const currentWaiter = getWaiterName();
+        if (currentWaiter && order.waiterName !== currentWaiter) {
+            order.waiterName = currentWaiter; // Transfer ownership logic
+        }
+
+        // Reopen order if needed
+        if (order.status === OrderStatus.DELIVERED || order.status === OrderStatus.READY) {
             order.status = OrderStatus.COOKING; 
-        } else if (order.status === OrderStatus.READY) {
-            order.status = OrderStatus.COOKING;
         }
 
         saveOrders(orders);
@@ -122,7 +123,6 @@ export const toggleOrderItemCompletion = (orderId: string, itemIndex: number, su
     const item = order.items[itemIndex];
 
     if (subItemId) {
-        // Toggle specific sub-item for combos
         let completedParts = item.comboCompletedParts || [];
         if (completedParts.includes(subItemId)) {
             completedParts = completedParts.filter(id => id !== subItemId);
@@ -130,25 +130,17 @@ export const toggleOrderItemCompletion = (orderId: string, itemIndex: number, su
             completedParts.push(subItemId);
         }
         item.comboCompletedParts = completedParts;
-        
-        // Check if all parts are done (optional logic, maybe just partial is enough)
-        // For now, we don't auto-complete the main item based on parts to allow manual control
     } else {
-        // Toggle main item
         item.completed = !item.completed;
     }
     
     // Check if entire order is complete
-    const allItemsCompleted = order.items.every(i => {
-         // If it's a combo, maybe check parts? For now stick to main flag
-         return i.completed; 
-    });
+    const allItemsCompleted = order.items.every(i => i.completed);
 
     if (allItemsCompleted && order.status === OrderStatus.COOKING) {
         order.status = OrderStatus.READY;
         order.timestamp = Date.now();
     } else if (!allItemsCompleted && order.status === OrderStatus.READY) {
-        // Revert to cooking if untoggled
         order.status = OrderStatus.COOKING;
         order.timestamp = Date.now();
     }
@@ -161,17 +153,21 @@ export const serveItem = (orderId: string, itemIndex: number) => {
     const order = orders.find(o => o.id === orderId);
     if (!order || !order.items[itemIndex]) return;
 
+    // Toggle served state or force true? Usually force true.
     order.items[itemIndex].served = true;
+    
+    // Check if ALL items are served
+    const allServed = order.items.every(i => i.served);
+    if (allServed) {
+         order.status = OrderStatus.DELIVERED;
+         order.timestamp = Date.now(); // Update timestamp for the "Green then Vanish" logic
+    }
+
     saveOrders(orders);
 };
 
 export const deleteHistoryByDate = (date: Date) => {
     const orders = getOrders();
-    // Keep orders that are NOT delivered OR (are delivered but NOT from the specified date)
-    // Actually typically "Delete History" means delete OLD delivered orders.
-    // The UI button says "Reset Storico" and passes new Date().
-    
-    // Let's interpret as: Remove all DELIVERED orders.
     const activeOrders = orders.filter(o => o.status !== OrderStatus.DELIVERED);
     saveOrders(activeOrders);
 };
@@ -179,6 +175,7 @@ export const deleteHistoryByDate = (date: Date) => {
 export const freeTable = (tableNumber: string) => {
     const orders = getOrders();
     let updated = false;
+    // Iterate all orders for this table (might be multiples if buggy, clear all)
     orders.forEach(o => {
         if (o.tableNumber === tableNumber && o.status !== OrderStatus.DELIVERED) {
             o.status = OrderStatus.DELIVERED;
@@ -186,7 +183,12 @@ export const freeTable = (tableNumber: string) => {
             updated = true;
         }
     });
-    if (updated) saveOrders(orders);
+    if (updated) {
+        saveOrders(orders);
+    } else {
+        // Fallback: If no order found but UI thinks there is one, force a UI refresh event
+        window.dispatchEvent(new Event('local-storage-update'));
+    }
 };
 
 // --- MENU MANAGEMENT ---
@@ -262,15 +264,7 @@ export const saveAppSettings = async (settings: AppSettings) => {
     if (settings.restaurantProfile && supabase) {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
-             // Create a deep copy to avoid mutating state
              const profileToSave = JSON.parse(JSON.stringify(settings.restaurantProfile));
-             // Don't overwrite critical fields if they are missing in local state
-             
-             const updatePayload: any = { 
-                 restaurant_name: profileToSave.name,
-             };
-             
-             // We need to fetch current settings to merge, or just update the restaurantProfile key
              const { data: currentProfile } = await supabase.from('profiles').select('settings').eq('id', user.id).single();
              const currentSettings = currentProfile?.settings || {};
              
@@ -385,7 +379,6 @@ const handleRealtimeOrder = (payload: any) => {
     const localOrders = getOrders();
 
     if (eventType === 'INSERT' || eventType === 'UPDATE') {
-        // Parse items if string (should be jsonb but supabase js client might return obj directly)
         const newOrder: Order = {
             id: newRow.id,
             tableNumber: newRow.table_number,
@@ -398,8 +391,6 @@ const handleRealtimeOrder = (payload: any) => {
         
         const idx = localOrders.findIndex(o => o.id === newOrder.id);
         if (idx >= 0) {
-            // Merge strategy: Last timestamp wins or Cloud wins?
-            // Simple: Cloud wins in realtime event
             localOrders[idx] = newOrder;
         } else {
             localOrders.push(newOrder);
@@ -415,8 +406,6 @@ const handleRealtimeOrder = (payload: any) => {
 
 const handleRealtimeMenu = (payload: any) => {
     if (isSyncing) return;
-    // Similar logic for Menu Items
-    // For brevity, we trigger a full pull on menu change to ensure consistency
     forceCloudSync();
 };
 
@@ -424,13 +413,10 @@ const handleRealtimeProfile = (payload: any) => {
     if (isSyncing) return;
     const { new: newProfile } = payload;
     if (newProfile && newProfile.settings) {
-         // Update local app settings from profile settings
          const currentLocal = getAppSettings();
-         // Merge logic
          const newSettings = {
              ...currentLocal,
-             ...newProfile.settings, // This might overwrite local-only settings like print config if not careful
-             // Ensure restaurantProfile is synced
+             ...newProfile.settings, 
              restaurantProfile: {
                  ...currentLocal.restaurantProfile,
                  ...newProfile.settings.restaurantProfile
@@ -446,7 +432,6 @@ export const forceCloudSync = async () => {
     isSyncing = true;
 
     try {
-        // A. PULL ORDERS
         const { data: cloudOrders, error: ordersError } = await supabase
             .from('orders')
             .select('*')
@@ -462,17 +447,10 @@ export const forceCloudSync = async () => {
                 createdAt: new Date(r.created_at).getTime(),
                 waiterName: r.waiter_name
             }));
-            
-            // Simple Conflict Resolution: Cloud overwrites Local for simplicity in this demo
-            // In production, we would merge based on timestamp
-            
-            // However, we must preserve local orders that haven't synced yet?
-            // For now, let's assume Cloud is Source of Truth.
             safeLocalStorageSave(STORAGE_KEY, JSON.stringify(parsedCloudOrders));
             window.dispatchEvent(new Event('local-storage-update'));
         }
 
-        // B. PULL MENU
         const { data: cloudMenu, error: menuError } = await supabase
             .from('menu_items')
             .select('*')
@@ -495,11 +473,6 @@ export const forceCloudSync = async () => {
              safeLocalStorageSave(MENU_KEY, JSON.stringify(parsedMenu));
              window.dispatchEvent(new Event('local-menu-update'));
         }
-        
-        // C. PUSH LOCAL CHANGES (Example: If we implemented a queue. For now, we save directly to cloud on action)
-        // This function acts more like a "Refresh from Cloud". 
-        // Actual pushes happen in addOrder/updateOrder etc.
-
         updateConnectionStatus(true);
     } catch (e) {
         console.error("Sync Error", e);
