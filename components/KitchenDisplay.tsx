@@ -48,23 +48,16 @@ const playNotificationSound = (type: 'new' | 'ready' | 'alert') => {
             osc.start();
             osc.stop(now + 1);
         } else if (type === 'alert') {
+            // Aggressive Alarm for Critical Delay
             osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(220, now);
-            osc.frequency.setValueAtTime(220, now + 0.2);
-            gain.gain.setValueAtTime(0.1, now);
-            gain.gain.linearRampToValueAtTime(0, now + 0.4);
-            const osc2 = ctx.createOscillator();
-            const gain2 = ctx.createGain();
-            osc2.type = 'sawtooth';
-            osc2.connect(gain2);
-            gain2.connect(ctx.destination);
-            osc2.frequency.setValueAtTime(220, now + 0.5);
-            gain2.gain.setValueAtTime(0.1, now + 0.5);
-            gain2.gain.linearRampToValueAtTime(0, now + 0.9);
+            osc.frequency.setValueAtTime(800, now);
+            osc.frequency.linearRampToValueAtTime(400, now + 0.5);
+            
+            gain.gain.setValueAtTime(0.3, now);
+            gain.gain.linearRampToValueAtTime(0, now + 0.5);
+            
             osc.start();
-            osc.stop(now + 0.4);
-            osc2.start(now + 0.5);
-            osc2.stop(now + 0.9);
+            osc.stop(now + 0.5);
         }
     } catch (e) { console.error("Audio error", e); }
 };
@@ -126,10 +119,10 @@ const OrderTimer: React.FC<{ timestamp: number; status: OrderStatus; onCritical:
         const interval = setInterval(() => {
             const newElapsed = Math.floor((Date.now() - timestamp) / 60000);
             setElapsed(newElapsed);
-            if (newElapsed === THRESHOLD_CRITICAL && status !== OrderStatus.READY && status !== OrderStatus.DELIVERED) {
+            if (newElapsed >= THRESHOLD_CRITICAL && status !== OrderStatus.READY && status !== OrderStatus.DELIVERED) {
                 onCritical();
             }
-        }, 30000); 
+        }, 10000); // Check every 10s
         return () => clearInterval(interval);
     }, [timestamp, status, onCritical]);
 
@@ -141,7 +134,7 @@ const OrderTimer: React.FC<{ timestamp: number; status: OrderStatus; onCritical:
     let label = "In corso";
     let animate = "";
 
-    if (elapsed >= THRESHOLD_CRITICAL) { colorClass = "text-white"; bgClass = "bg-red-600 border border-red-400 shadow-[0_0_10px_rgba(220,38,38,0.5)]"; icon = <Bell size={16} className="animate-wiggle" />; label = "RITARDO CRITICO"; animate = "animate-pulse"; } 
+    if (elapsed >= THRESHOLD_CRITICAL) { colorClass = "text-white"; bgClass = "bg-red-600"; icon = <Bell size={16} className="animate-wiggle" />; label = "RITARDO CRITICO"; animate = "animate-pulse"; } 
     else if (elapsed >= THRESHOLD_WARNING) { colorClass = "text-slate-900"; bgClass = "bg-orange-400 border border-orange-500"; icon = <AlertOctagon size={14} />; label = "RITARDO"; }
 
     return (
@@ -389,8 +382,15 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
                const currentTime = Date.now();
                const timeDiffMinutes = Math.floor((currentTime - order.timestamp) / 60000);
                const isCritical = timeDiffMinutes >= THRESHOLD_CRITICAL && order.status !== OrderStatus.READY && order.status !== OrderStatus.DELIVERED;
+               
                let borderColor = getStatusColor(order.status).replace('text', 'border').replace('bg-','border-');
-               if (isCritical) borderColor = 'border-red-600 animate-pulse shadow-[0_0_20px_rgba(220,38,38,0.4)]';
+               let cardBgClass = "bg-slate-800/95 bg-gradient-to-br from-slate-800 to-slate-900";
+               
+               // CRITICAL ALERT VISUALS
+               if (isCritical) {
+                   borderColor = 'border-red-500';
+                   cardBgClass = "bg-red-600 animate-pulse shadow-[0_0_40px_rgba(220,38,38,0.6)]";
+               }
 
                // COORDINATION LOGIC
                const otherDeptItems = order.items.filter(i => !isItemRelevantForDept(i) && i.menuItem.category !== Category.BEVANDE);
@@ -406,7 +406,7 @@ const KitchenDisplay: React.FC<KitchenDisplayProps> = ({ onExit, department = 'C
                const displayTableNumber = order.tableNumber.replace('_HISTORY', '');
 
               return (
-                <div key={order.id} className={`flex flex-col rounded-xl shadow-2xl border-t-8 ${borderColor} bg-slate-800/95 bg-gradient-to-br from-slate-800 to-slate-900 text-slate-200 overflow-hidden relative hover:-translate-y-1 transition-transform`}>
+                <div key={order.id} className={`flex flex-col rounded-xl shadow-2xl border-t-8 ${borderColor} ${cardBgClass} text-slate-200 overflow-hidden relative hover:-translate-y-1 transition-transform`}>
                   <div className={`p-4 border-b border-slate-700/50 flex justify-between items-start bg-slate-800/50`}>
                     <div>
                         <h2 className="text-3xl font-black bg-gradient-to-br from-white to-slate-400 bg-clip-text text-transparent">Tav. {displayTableNumber}</h2>
