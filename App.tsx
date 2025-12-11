@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import KitchenDisplay from './components/KitchenDisplay';
 import WaiterPad from './components/WaiterPad';
@@ -90,6 +91,9 @@ export default function App() {
   const [profileForm, setProfileForm] = useState<RestaurantProfile>({});
 
   const [apiKeyInput, setApiKeyInput] = useState('');
+  const [chatQuery, setChatQuery] = useState('');
+  const [chatResponse, setChatResponse] = useState('');
+  const [isChatting, setIsChatting] = useState(false);
   
   // Dynamic Admin Config (Global)
   const [adminContactEmail, setAdminContactEmail] = useState(SUPER_ADMIN_EMAIL);
@@ -124,7 +128,7 @@ export default function App() {
                   }
                   if (expiry) {
                       const expiryDate = new Date(expiry);
-                      expiryDate.setHours(23, 59, 59, 999);
+                      expiryDate.setHours(23, 59, 59, 99);
                       const now = new Date();
                       const diffTime = expiryDate.getTime() - now.getTime();
                       const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -433,6 +437,14 @@ export default function App() {
   const copyToClipboard = () => { navigator.clipboard.writeText(digitalMenuLink); alert("Link copiato!"); };
   const shareLink = () => { if (navigator.share) { navigator.share({ title: restaurantName, text: 'Guarda il nostro menu!', url: digitalMenuLink }).catch(console.error); } else { copyToClipboard(); } };
 
+  const handleAskChef = async () => {
+    if (!chatQuery) return;
+    setIsChatting(true);
+    const answer = await askChefAI(chatQuery, null);
+    setChatResponse(answer);
+    setIsChatting(false);
+  };
+
   // RENDER LOGIC
   if (publicMenuId) return <DigitalMenu restaurantId={publicMenuId} />;
   if (loadingSession) return <div className="min-h-screen bg-slate-900 flex items-center justify-center text-white"><Loader className="animate-spin text-orange-500" size={48}/></div>;
@@ -496,6 +508,29 @@ export default function App() {
               </div>
 
               <div className="flex-1 h-screen overflow-y-auto bg-slate-950 p-6 md:p-10 custom-scroll">
+                  {adminTab === 'profile' && (
+                      <div className="max-w-4xl mx-auto space-y-8 animate-fade-in pb-20">
+                          <h2 className="text-3xl font-black text-white mb-8">Profilo Ristorante</h2>
+                          <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl">
+                              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Store className="text-blue-500"/> Dati Pubblici</h3>
+                              <p className="text-slate-400 text-sm mb-6">Questi dati appariranno nel Menu Digitale.</p>
+                              <div className="space-y-4">
+                                  <div><label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Nome Ristorante</label><input type="text" value={profileForm.name || ''} onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold focus:border-blue-500 outline-none" /></div>
+                                  <div><label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Descrizione (facoltativa)</label><textarea value={profileForm.website || ''} onChange={(e) => setProfileForm({ ...profileForm, website: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm focus:border-blue-500 outline-none h-24 resize-none" placeholder="Breve descrizione del locale..." /></div>
+                              </div>
+                          </div>
+                          <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 shadow-xl">
+                              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Briefcase className="text-orange-500"/> Dati Fatturazione (Privati)</h3>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                  <div><label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Ragione Sociale</label><input type="text" value={profileForm.businessName || ''} onChange={(e) => setProfileForm({ ...profileForm, businessName: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white" /></div>
+                                  <div><label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">P.IVA / Codice Fiscale</label><input type="text" value={profileForm.vatNumber || ''} onChange={(e) => setProfileForm({ ...profileForm, vatNumber: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white font-mono" /></div>
+                                  <div><label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Email Fatturazione</label><input type="email" value={profileForm.email || ''} onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white" /></div>
+                                  <div><label className="text-[10px] text-slate-500 uppercase font-bold block mb-1">Telefono</label><input type="text" value={profileForm.phoneNumber || ''} onChange={(e) => setProfileForm({ ...profileForm, phoneNumber: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white" /></div>
+                              </div>
+                          </div>
+                          <div className="flex justify-end"><button onClick={handleSaveAppSettings} className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-lg transition-all flex items-center gap-2"><Save size={18}/> Salva Profilo</button></div>
+                      </div>
+                  )}
                   {adminTab === 'menu' && (
                       <div className="max-w-6xl mx-auto animate-fade-in">
                           <div className="flex justify-between items-center mb-8"><div><h2 className="text-3xl font-black text-white mb-2">Gestione Menu</h2><p className="text-slate-400">Aggiungi, modifica o rimuovi piatti dal tuo menu digitale.</p></div><div className="flex gap-3"><button onClick={() => { setEditingItem({}); setIsEditingItem(!isEditingItem); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-transform active:scale-95 ${isEditingItem ? 'bg-slate-700 text-white' : 'bg-green-600 hover:bg-green-500 text-white shadow-green-600/20'}`}>{isEditingItem ? <X size={20}/> : <Plus size={20}/>} {isEditingItem ? 'Chiudi Editor' : 'NUOVO PIATTO'}</button></div></div>
@@ -545,4 +580,115 @@ export default function App() {
                   )}
                   {adminTab === 'share' && (
                       <div className="flex flex-col xl:flex-row gap-8 pb-20 animate-fade-in">
-                          <div className="flex-1 space-y-8"><div><h3 className="text-2xl font-black text-white mb-2">Menu Digitale</h3><p className="text-slate-400 text-sm">Il tuo menu accessibile ovunque.</p></div><div className="bg-white p-6 rounded-3xl shadow-2xl inline-block mx-auto xl:mx-0">{qrCodeUrl ? <img src={qrCodeUrl} alt="Menu QR" className="w-64 h-64 mix-blend-multiply"/> : <div className="w-64 h-64 flex items-center justify-center bg-slate-100 text-slate-400 text-xs">QR non disponibile</div>}</div><div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 text-left space-y-4"><div><label className="text-
+                          <div className="flex-1 space-y-8"><div><h3 className="text-2xl font-black text-white mb-2">Menu Digitale</h3><p className="text-slate-400 text-sm">Il tuo menu accessibile ovunque.</p></div><div className="bg-white p-6 rounded-3xl shadow-2xl inline-block mx-auto xl:mx-0">{qrCodeUrl ? <img src={qrCodeUrl} alt="Menu QR" className="w-64 h-64 mix-blend-multiply"/> : <div className="w-64 h-64 flex items-center justify-center bg-slate-100 text-slate-400 text-xs">QR non disponibile</div>}</div><div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 text-left space-y-4"><div><label className="text-xs text-slate-500 font-bold uppercase block mb-1">Link Pubblico</label><div className="flex gap-2"><input type="text" readOnly value={digitalMenuLink} className="w-full bg-slate-950 text-slate-300 p-3 rounded-lg border border-slate-700 text-xs font-mono select-all"/><button onClick={copyToClipboard} className="p-3 bg-blue-600 rounded-lg text-white hover:bg-blue-500 transition-colors"><Copy size={18}/></button></div></div><div className="flex gap-3"><button onClick={shareLink} className="flex-1 py-3 bg-slate-800 text-white font-bold rounded-lg border border-slate-700 hover:bg-slate-700 flex items-center justify-center gap-2"><Share2 size={18}/> Condividi</button><button onClick={handlePrintQR} className="flex-1 py-3 bg-slate-800 text-white font-bold rounded-lg border border-slate-700 hover:bg-slate-700 flex items-center justify-center gap-2"><Printer size={18}/> Stampa QR</button></div></div></div>
+                          <div className="flex-1 xl:max-w-md h-[600px] bg-slate-950 border-4 border-slate-800 rounded-[3rem] shadow-2xl relative overflow-hidden"><div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-slate-800 rounded-b-xl z-20"></div><DigitalMenu restaurantId={session?.user?.id} isPreview activeMenuData={menuItems} activeRestaurantName={profileForm.name} /></div>
+                      </div>
+                  )}
+                  {adminTab === 'analytics' && (
+                      <div className="max-w-4xl mx-auto space-y-8 animate-fade-in pb-20">
+                          <div className="flex justify-between items-center mb-6">
+                              <h2 className="text-3xl font-black text-white">Analisi Performance</h2>
+                              <div className="flex items-center gap-2 bg-slate-900 p-1 rounded-xl border border-slate-800"><button onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() - 1); setSelectedDate(d); }} className="p-2 hover:bg-slate-800 rounded-lg"><ChevronLeft size={16}/></button><span className="font-bold text-sm w-32 text-center">{selectedDate.toLocaleDateString()}</span><button onClick={() => { const d = new Date(selectedDate); d.setDate(d.getDate() + 1); setSelectedDate(d); }} className="p-2 hover:bg-slate-800 rounded-lg"><ChevronRight size={16}/></button></div>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                              <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h3 className="text-slate-400 text-xs font-bold uppercase mb-2">Incasso Giornaliero</h3><p className="text-3xl font-black text-white">€ {analyticsData.revenue.toFixed(2)}</p></div>
+                              <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h3 className="text-slate-400 text-xs font-bold uppercase mb-2">Piatti Venduti</h3><p className="text-3xl font-black text-white">{analyticsData.totalDishes}</p></div>
+                              <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800"><h3 className="text-slate-400 text-xs font-bold uppercase mb-2">Scontrino Medio</h3><p className="text-3xl font-black text-white">€ {analyticsData.avgOrder.toFixed(2)}</p></div>
+                          </div>
+
+                          <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                              <div className="flex justify-between items-center mb-6"><h3 className="font-bold text-white flex items-center gap-2"><Trophy className="text-yellow-500"/> Top Piatti</h3></div>
+                              <div className="space-y-4">
+                                  {analyticsData.topItems.map(([name, count], i) => (
+                                      <div key={name} className="flex items-center justify-between p-3 bg-slate-950 rounded-xl border border-slate-800">
+                                          <div className="flex items-center gap-3"><span className={`font-black w-6 h-6 flex items-center justify-center rounded-full text-xs ${i===0?'bg-yellow-500 text-black':i===1?'bg-slate-400 text-black':'bg-orange-700 text-white'}`}>{i+1}</span><span className="font-bold">{name}</span></div>
+                                          <span className="font-mono text-slate-400">{count} ordini</span>
+                                      </div>
+                                  ))}
+                                  {analyticsData.topItems.length === 0 && <p className="text-slate-500 text-sm italic">Nessun dato disponibile.</p>}
+                              </div>
+                          </div>
+
+                          <div className="bg-gradient-to-br from-indigo-900 to-purple-900 p-6 rounded-2xl border border-indigo-500/30">
+                              <h3 className="font-bold text-white mb-4 flex items-center gap-2"><Sparkles className="text-yellow-300"/> AI Business Insight</h3>
+                              <p className="text-indigo-200 text-sm mb-4">L'intelligenza artificiale analizza i tuoi dati per darti consigli strategici.</p>
+                              {aiAnalysisResult ? (
+                                  <div className="bg-black/20 p-4 rounded-xl text-sm leading-relaxed border border-white/10">{aiAnalysisResult}</div>
+                              ) : (
+                                  <button onClick={handleGenerateAnalysis} disabled={isAnalyzing} className="px-6 py-3 bg-white text-indigo-900 font-bold rounded-xl shadow-lg hover:bg-indigo-50 transition-all flex items-center gap-2">{isAnalyzing ? <Loader className="animate-spin"/> : <Bot/>} Genera Analisi</button>
+                              )}
+                          </div>
+                      </div>
+                  )}
+                  {adminTab === 'ai' && (
+                      <div className="max-w-2xl mx-auto space-y-8 animate-fade-in pb-20">
+                           <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                               <h3 className="font-bold text-white mb-4 flex items-center gap-2"><Key className="text-yellow-500"/> Configurazione API</h3>
+                               <p className="text-slate-400 text-sm mb-4">Inserisci la tua Google Gemini API Key per abilitare le funzioni intelligenti.</p>
+                               <div className="flex gap-2">
+                                   <input type="password" value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)} placeholder="Incolla la tua API Key qui..." className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-yellow-500"/>
+                                   <button onClick={handleSaveApiKey} className="bg-yellow-600 hover:bg-yellow-500 text-white font-bold px-6 py-3 rounded-xl transition-colors">Salva</button>
+                               </div>
+                               <p className="text-xs text-slate-500 mt-2">Non hai una chiave? <a href="https://aistudio.google.com/app/apikey" target="_blank" className="text-blue-400 hover:underline">Richiedila qui</a>.</p>
+                           </div>
+
+                           <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 flex flex-col h-[500px]">
+                               <h3 className="font-bold text-white mb-4 flex items-center gap-2"><Bot className="text-blue-400"/> Chef Assistant</h3>
+                               <div className="flex-1 bg-slate-950 rounded-xl border border-slate-700 p-4 overflow-y-auto mb-4">
+                                   {chatResponse ? (
+                                       <div className="flex gap-3">
+                                           <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center shrink-0"><Bot size={16} className="text-white"/></div>
+                                           <div className="bg-slate-800 p-3 rounded-r-xl rounded-bl-xl text-sm leading-relaxed text-slate-200">{chatResponse}</div>
+                                       </div>
+                                   ) : (
+                                       <p className="text-slate-500 text-center text-sm mt-10">Chiedimi qualcosa sul menu, sugli allergeni o per un consiglio!</p>
+                                   )}
+                               </div>
+                               <div className="flex gap-2">
+                                   <input type="text" value={chatQuery} onChange={(e) => setChatQuery(e.target.value)} placeholder="Fai una domanda allo Chef AI..." className="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500" onKeyDown={(e) => e.key === 'Enter' && handleAskChef()}/>
+                                   <button onClick={handleAskChef} disabled={isChatting} className="bg-blue-600 hover:bg-blue-500 text-white p-3 rounded-xl transition-colors disabled:opacity-50">{isChatting ? <Loader className="animate-spin"/> : <Send size={20}/>}</button>
+                               </div>
+                           </div>
+                      </div>
+                  )}
+                  {adminTab === 'info' && (
+                      <div className="max-w-3xl mx-auto space-y-8 animate-fade-in pb-20">
+                          <h2 className="text-3xl font-black text-white mb-4">Supporto & Info</h2>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                                  <h3 className="font-bold text-white mb-4">Contatti Assistenza</h3>
+                                  <ul className="space-y-4">
+                                      <li className="flex items-center gap-3 text-slate-300"><Mail className="text-blue-500"/> {adminContactEmail}</li>
+                                      <li className="flex items-center gap-3 text-slate-300"><Phone className="text-green-500"/> {adminPhone}</li>
+                                      <li className="flex items-center gap-3 text-slate-300"><Globe className="text-purple-500"/> www.ristosync.com</li>
+                                  </ul>
+                              </div>
+                              <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                                  <h3 className="font-bold text-white mb-4">Informazioni App</h3>
+                                  <ul className="space-y-4">
+                                      <li className="flex justify-between text-sm"><span className="text-slate-500">Versione</span><span className="text-white font-mono">2.4.0 (Cloud)</span></li>
+                                      <li className="flex justify-between text-sm"><span className="text-slate-500">Stato Sync</span><span className="text-green-400 font-bold flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> Online</span></li>
+                                      <li className="flex justify-between text-sm"><span className="text-slate-500">Storage</span><span className="text-white font-mono">Supabase Enterprise</span></li>
+                                  </ul>
+                              </div>
+                          </div>
+                          
+                          <div className="bg-red-900/10 border border-red-500/30 p-6 rounded-2xl">
+                              <h3 className="font-bold text-red-400 mb-2 flex items-center gap-2"><AlertTriangle/> Area Pericolosa</h3>
+                              <p className="text-slate-400 text-sm mb-4">Queste azioni sono irreversibili.</p>
+                              <div className="flex gap-4">
+                                  <button onClick={() => { if(confirm("Cancellare tutto lo storico ordini?")) deleteHistoryByDate(new Date()) }} className="px-4 py-2 bg-red-600/20 text-red-400 hover:bg-red-600 hover:text-white rounded-lg font-bold text-sm transition-colors border border-red-500/30">Reset Storico</button>
+                                  <button onClick={() => { if(confirm("Cancellare TUTTO (Ordini e Menu)?")) performFactoryReset() }} className="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg font-bold text-sm transition-colors shadow-lg">Factory Reset</button>
+                              </div>
+                          </div>
+                      </div>
+                  )}
+              </div>
+          </div>
+      );
+  }
+
+  // --- WAIT/KITCHEN VIEW RENDER IS ABOVE ---
+  return null; // Should not reach here
+}

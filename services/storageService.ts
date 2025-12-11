@@ -7,26 +7,17 @@ const TABLES_COUNT_KEY = 'ristosync_table_count';
 const WAITER_KEY = 'ristosync_waiter_name';
 const MENU_KEY = 'ristosync_menu_items';
 const SETTINGS_NOTIFICATIONS_KEY = 'ristosync_settings_notifications';
-const APP_SETTINGS_KEY = 'ristosync_app_settings'; // New Global Settings Key
+const APP_SETTINGS_KEY = 'ristosync_app_settings'; 
 const GOOGLE_API_KEY_STORAGE = 'ristosync_google_api_key';
 
 // --- DEMO DATASET ---
 const DEMO_MENU_ITEMS: MenuItem[] = [
-    // ANTIPASTI
     { id: 'demo_a1', name: 'Tagliere del Contadino', price: 18, category: Category.ANTIPASTI, description: 'Selezione di salumi nostrani, formaggi stagionati, miele di castagno e noci.', allergens: ['Latticini', 'Frutta a guscio'], ingredients: 'Prosciutto crudo, Salame felino, Pecorino, Miele, Noci' },
     { id: 'demo_a2', name: 'Bruschette Miste', price: 8, category: Category.ANTIPASTI, description: 'Tris di bruschette: pomodoro fresco, patè di olive, crema di carciofi.', allergens: ['Glutine'], ingredients: 'Pane casereccio, Pomodoro, Aglio, Olio EVO, Olive' },
-    
-    // PRIMI
     { id: 'demo_p1', name: 'Spaghetti alla Carbonara', price: 12, category: Category.PRIMI, description: 'La vera ricetta romana con guanciale croccante, uova bio e pecorino.', allergens: ['Glutine', 'Uova', 'Latticini'], ingredients: 'Spaghetti, Guanciale, Tuorlo d\'uovo, Pecorino Romano, Pepe nero' },
     { id: 'demo_p2', name: 'Tonnarelli Cacio e Pepe', price: 11, category: Category.PRIMI, description: 'Cremosità unica con pecorino romano DOP e pepe nero tostato.', allergens: ['Glutine', 'Latticini'], ingredients: 'Tonnarelli freschi, Pecorino Romano, Pepe nero' },
-
-    // SECONDI
     { id: 'demo_s1', name: 'Tagliata di Manzo', price: 22, category: Category.SECONDI, description: 'Controfiletto servito con rucola selvatica e scaglie di grana.', allergens: ['Latticini'], ingredients: 'Manzo, Rucola, Grana Padano, Aceto Balsamico' },
-    
-    // PIZZE
     { id: 'demo_pz1', name: 'Margherita DOP', price: 8, category: Category.PIZZE, description: 'Pomodoro San Marzano, Mozzarella di Bufala, Basilico fresco.', allergens: ['Glutine', 'Latticini'], ingredients: 'Impasto, Pomodoro, Mozzarella di Bufala, Basilico, Olio EVO' },
-    
-    // BEVANDE
     { id: 'demo_b1', name: 'Acqua Naturale 0.75cl', price: 2.5, category: Category.BEVANDE, description: 'Bottiglia in vetro.' },
     { id: 'demo_b2', name: 'Coca Cola 33cl', price: 3.5, category: Category.BEVANDE, description: 'In vetro.' },
     { id: 'demo_b3', name: 'Caffè Espresso', price: 1.5, category: Category.BEVANDE, description: 'Miscela 100% Arabica.' }
@@ -43,15 +34,15 @@ const safeLocalStorageSave = (key: string, value: string) => {
     try {
         localStorage.setItem(key, value);
     } catch (e: any) {
+        // Intercept QuotaExceededError
         if (e.name === 'QuotaExceededError' || e.message?.toLowerCase().includes('quota')) {
-            console.warn("⚠️ STORAGE FULL: Cleaning up local cache to free space...");
+            console.warn("⚠️ STORAGE FULL: Operating in Cloud-Only mode.");
             
-            // Strategy: Keep ONLY Active Orders locally if space is tight.
-            // History is safe in Supabase.
+            // Strategy: Try to clean up Local Cache (Remove Delivered Orders)
             if (key === STORAGE_KEY) {
                 try {
                     const orders = JSON.parse(value) as Order[];
-                    // Aggressive Clean: Remove ALL Delivered orders from local cache
+                    // Aggressive Clean: Keep only active orders
                     const streamlined = orders.filter(o => o.status !== OrderStatus.DELIVERED);
                     
                     if (streamlined.length < orders.length) {
@@ -60,14 +51,14 @@ const safeLocalStorageSave = (key: string, value: string) => {
                             console.log(`✅ Cache cleaned: Removed ${orders.length - streamlined.length} delivered orders.`);
                             return; 
                         } catch (retryError) {
-                            console.warn("❌ Cache cleanup didn't free enough space. Skipping local save.");
+                            // Even streamlined is too big, ignore local save
                         }
                     }
                 } catch (cleanError) {
                     console.error("Cleanup failed:", cleanError);
                 }
             }
-            // Silent Fail: Don't annoy user. App relies on Cloud.
+            // Silent Fail: DO NOT ALERT USER. App relies on Cloud.
         }
     }
 };
@@ -84,7 +75,7 @@ export const initSupabaseSync = async () => {
         // 1. Initial Sync
         await fetchFromCloud(); 
         await fetchFromCloudMenu();
-        await fetchSettingsFromCloud(); // New: Fetch global settings
+        await fetchSettingsFromCloud(); 
         
         // 2. Sync Profile Settings (API KEY)
         const { data: profile } = await supabase.from('profiles').select('google_api_key').eq('id', currentUserId).single();
@@ -93,7 +84,6 @@ export const initSupabaseSync = async () => {
         }
 
         // 3. Realtime Subscription (Robust Mode)
-        // We create a unique channel for this user/restaurant
         const channel = supabase.channel(`room:${currentUserId}`);
 
         channel
@@ -101,19 +91,18 @@ export const initSupabaseSync = async () => {
                 event: '*', 
                 schema: 'public', 
                 table: 'orders',
-                filter: `user_id=eq.${currentUserId}` // Filter by user ID
-            }, (payload) => {
+                filter: `user_id=eq.${currentUserId}` 
+            }, () => {
                 fetchFromCloud(); 
             })
             .on('postgres_changes', { 
                 event: '*', 
                 schema: 'public', 
                 table: 'menu_items',
-                filter: `user_id=eq.${currentUserId}` // Filter by user ID
+                filter: `user_id=eq.${currentUserId}` 
             }, () => {
                 fetchFromCloudMenu();
             })
-            // NEW: Listen for Settings changes in Profile
             .on('postgres_changes', {
                 event: 'UPDATE',
                 schema: 'public',
@@ -125,11 +114,7 @@ export const initSupabaseSync = async () => {
                     window.dispatchEvent(new Event('local-settings-update'));
                 }
             })
-            .subscribe((status) => {
-                if (status === 'SUBSCRIBED') {
-                    // console.log('Connected to Realtime Cloud');
-                }
-            });
+            .subscribe();
 
         // 4. Fallback Polling (Heartbeat)
         if (pollingInterval) clearInterval(pollingInterval);
@@ -164,29 +149,24 @@ const fetchFromCloud = async () => {
         return;
     }
     
-    // Convert DB format to App format
     const appOrders: Order[] = data.map((row: any) => ({
         id: row.id,
-        table_number: row.table_number, // Handle both snake_case from DB
-        tableNumber: row.table_number,  // and camelCase for App
+        table_number: row.table_number,
+        tableNumber: row.table_number, 
         status: row.status as OrderStatus,
         timestamp: parseInt(row.timestamp) || new Date(row.created_at).getTime(),
-        createdAt: new Date(row.created_at).getTime(), // Map DB created_at to App createdAt
+        createdAt: new Date(row.created_at).getTime(), 
         items: row.items,
         waiterName: row.waiter_name
     }));
 
-    // Update Local Cache using Safe Save
     safeLocalStorageSave(STORAGE_KEY, JSON.stringify(appOrders));
     window.dispatchEvent(new Event('local-storage-update'));
 };
 
 const fetchFromCloudMenu = async () => {
     if (!supabase || !currentUserId) return;
-    const { data, error } = await supabase
-        .from('menu_items')
-        .select('*')
-        .eq('user_id', currentUserId);
+    const { data, error } = await supabase.from('menu_items').select('*').eq('user_id', currentUserId);
 
     if (error) handleSupabaseError(error);
 
@@ -230,11 +210,8 @@ const saveLocallyAndNotify = (orders: Order[]) => {
     window.dispatchEvent(new Event('local-storage-update'));
 };
 
-// HELPER: Sync individual order to Cloud (NON-BLOCKING)
 const syncOrderToCloud = async (order: Order, isDelete = false) => {
     if (!supabase || !currentUserId) return;
-    
-    // We do NOT await this in critical paths to avoid UI blocking if DB is slow/full
     try {
         if (isDelete) {
             await supabase.from('orders').delete().eq('id', order.id);
@@ -251,7 +228,7 @@ const syncOrderToCloud = async (order: Order, isDelete = false) => {
             await supabase.from('orders').upsert(payload);
         }
     } catch (e) {
-        console.warn("Cloud sync failed (Offline mode active):", e);
+        console.warn("Cloud sync warning:", e);
     }
 };
 
@@ -284,10 +261,7 @@ export const addOrder = async (order: Order) => {
   };
   const newOrders = [...orders, cleanOrder];
   
-  // 1. SAVE LOCALLY IMMEDIATELY (Critical for speed/stability)
   saveLocallyAndNotify(newOrders);
-  
-  // 2. SYNC TO CLOUD IN BACKGROUND
   syncOrderToCloud(cleanOrder);
 };
 
@@ -356,10 +330,7 @@ export const updateOrderItems = async (orderId: string, newItems: OrderItem[]) =
     };
     const newOrders = orders.map(o => o.id === orderId ? updatedOrder : o);
 
-    // 1. SAVE LOCALLY IMMEDIATELY
     saveLocallyAndNotify(newOrders);
-    
-    // 2. SYNC TO CLOUD
     syncOrderToCloud(updatedOrder);
 };
 
@@ -500,8 +471,8 @@ export const freeTable = async (tableNumber: string) => {
 };
 
 export const performFactoryReset = async () => {
-    localStorage.setItem(STORAGE_KEY, '[]');
-    localStorage.setItem(MENU_KEY, '[]');
+    safeLocalStorageSave(STORAGE_KEY, '[]');
+    safeLocalStorageSave(MENU_KEY, '[]');
     window.dispatchEvent(new Event('local-storage-update'));
     window.dispatchEvent(new Event('local-menu-update'));
 
@@ -512,7 +483,7 @@ export const performFactoryReset = async () => {
 };
 
 export const deleteAllMenuItems = async () => {
-    localStorage.setItem(MENU_KEY, '[]');
+    safeLocalStorageSave(MENU_KEY, '[]');
     window.dispatchEvent(new Event('local-menu-update'));
 
     if (supabase && currentUserId) {
@@ -569,7 +540,7 @@ export const getWaiterName = (): string | null => {
 };
 
 export const saveWaiterName = (name: string) => {
-    localStorage.setItem(WAITER_KEY, name);
+    safeLocalStorageSave(WAITER_KEY, name);
 };
 
 export const logoutWaiter = () => {
@@ -637,7 +608,7 @@ export const getGoogleApiKey = (): string | null => {
 };
 
 export const saveGoogleApiKey = async (apiKey: string) => {
-    localStorage.setItem(GOOGLE_API_KEY_STORAGE, apiKey);
+    safeLocalStorageSave(GOOGLE_API_KEY_STORAGE, apiKey);
     if (supabase && currentUserId) {
         const { error } = await supabase
             .from('profiles')
@@ -714,5 +685,5 @@ export const getNotificationSettings = (): NotificationSettings => {
 };
 
 export const saveNotificationSettings = (settings: NotificationSettings) => {
-    localStorage.setItem(SETTINGS_NOTIFICATIONS_KEY, JSON.stringify(settings));
+    safeLocalStorageSave(SETTINGS_NOTIFICATIONS_KEY, JSON.stringify(settings));
 };
