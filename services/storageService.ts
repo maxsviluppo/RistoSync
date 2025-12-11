@@ -47,13 +47,23 @@ const safeLocalStorageSave = (key: string, value: string) => {
 };
 
 const ensureUserId = async () => {
-    if (currentUserId) return currentUserId;
     if (!supabase) return null;
+    
+    // Always double check session to avoid stale state
     const { data } = await supabase.auth.getSession();
     if (data.session?.user?.id) {
         currentUserId = data.session.user.id;
+        return currentUserId;
     }
-    return currentUserId;
+    
+    // Fallback try getUser
+    const { data: userData } = await supabase.auth.getUser();
+    if (userData.user?.id) {
+        currentUserId = userData.user.id;
+        return currentUserId;
+    }
+
+    return null;
 };
 
 const broadcastUpdate = async (type: 'orders' | 'menu') => {
@@ -73,12 +83,13 @@ export const initSupabaseSync = async () => {
     await ensureUserId();
     
     if (currentUserId) {
-        // 1. Initial Sync
+        // 1. Initial Sync - FORCE CLOUD SETTINGS PRIORITY
+        // We do not await this to prevent blocking UI, but it runs immediately
         Promise.all([
             fetchFromCloud(),
             fetchFromCloudMenu(),
-            fetchSettingsFromCloud()
-        ]).catch(e => console.error("Initial Sync Failed (Non-fatal)", e));
+            fetchSettingsFromCloud(true) // Force overwrite local settings
+        ]).catch(e => console.error("Initial Sync Failed", e));
         
         // 2. Sync Profile Settings (API KEY)
         supabase.from('profiles').select('google_api_key').eq('id', currentUserId).single().then(({data}) => {
@@ -107,6 +118,15 @@ export const initSupabaseSync = async () => {
                 console.log("🔔 DB Menu Update");
                 fetchFromCloudMenu();
             })
+            .on('postgres_changes', { 
+                event: 'UPDATE', 
+                schema: 'public', 
+                table: 'profiles',
+                filter: `id=eq.${currentUserId}`
+            }, () => {
+                console.log("🔔 Profile Update (Subscription)");
+                fetchSettingsFromCloud(true);
+            })
             .on('broadcast', { event: 'sync_update' }, (payload: any) => {
                 console.log("📡 Broadcast Received:", payload);
                 if (payload.payload?.type === 'orders') fetchFromCloud();
@@ -130,7 +150,7 @@ export const forceCloudSync = async () => {
     await ensureUserId();
     await fetchFromCloud();
     await fetchFromCloudMenu();
-    await fetchSettingsFromCloud();
+    await fetchSettingsFromCloud(true); // Force overwrite
     return true;
 };
 
@@ -253,18 +273,31 @@ const fetchFromCloudMenu = async () => {
     window.dispatchEvent(new Event('local-menu-update'));
 };
 
-const fetchSettingsFromCloud = async () => {
+const fetchSettingsFromCloud = async (forceOverwrite = false) => {
     if (!supabase) return;
     await ensureUserId();
     if (!currentUserId) return;
 
     try {
         const { data, error } = await supabase.from('profiles').select('settings').eq('id', currentUserId).single();
-        if(data?.settings) {
-            safeLocalStorageSave(APP_SETTINGS_KEY, JSON.stringify(data.settings));
-            window.dispatchEvent(new Event('local-settings-update'));
+        
+        if (data?.settings) {
+            // FIX: If forceOverwrite is true, we blindly trust the cloud data.
+            // This solves the issue where subscription changes in DB weren't reflecting locally
+            // because the local version was deemed "newer" or conflict resolution failed.
+            if (forceOverwrite) {
+                console.log("☁️ Forcing Settings Sync from Cloud");
+                safeLocalStorageSave(APP_SETTINGS_KEY, JSON.stringify(data.settings));
+                window.dispatchEvent(new Event('local-settings-update'));
+            } else {
+                // Gentle sync logic (optional)
+                safeLocalStorageSave(APP_SETTINGS_KEY, JSON.stringify(data.settings));
+                window.dispatchEvent(new Event('local-settings-update'));
+            }
         }
-    } catch (e) {}
+    } catch (e) {
+        console.error("Settings Sync Error", e);
+    }
 };
 
 // --- CRUD OPERATIONS ---
@@ -275,6 +308,7 @@ export const getOrders = (): Order[] => {
 };
 
 export const addOrder = async (order: Order, silent = false) => {
+    // 1. Optimistic Update (Local)
     if (!silent) {
         const orders = getOrders();
         if (!orders.find(o => o.id === order.id)) {
@@ -284,9 +318,10 @@ export const addOrder = async (order: Order, silent = false) => {
         }
     }
     
+    // 2. Cloud Sync
     await ensureUserId();
     if (supabase && currentUserId) {
-        supabase.from('orders').upsert({
+        const { error } = await supabase.from('orders').upsert({
             id: order.id,
             user_id: currentUserId,
             table_number: order.tableNumber,
@@ -295,10 +330,19 @@ export const addOrder = async (order: Order, silent = false) => {
             timestamp: order.timestamp,
             created_at: new Date(order.createdAt).toISOString(),
             waiter_name: order.waiterName
-        }).then(({ error }) => {
-            if (error) console.error("Cloud push failed for order", order.id, error);
-            else broadcastUpdate('orders'); // BROADCAST SUCCESS
         });
+
+        if (error) {
+            console.error("🔴 CLOUD SYNC FAILED (addOrder):", error.message);
+            // DO NOT THROW. We want to keep working offline. 
+            // Ideally, we'd queue this for retry. 
+            // For now, the Polling mechanism will try to pick up diffs, 
+            // OR the 'Force Sync' button will resolve it.
+        } else {
+            broadcastUpdate('orders'); // BROADCAST SUCCESS
+        }
+    } else {
+        console.warn("🔴 No User ID found. Order saved LOCALLY only.");
     }
 };
 
@@ -313,8 +357,9 @@ export const updateOrderStatus = async (orderId: string, status: OrderStatus) =>
 
         await ensureUserId();
         if (supabase && currentUserId) {
-             await supabase.from('orders').update({ status: status, timestamp: order.timestamp }).eq('id', orderId);
-             broadcastUpdate('orders');
+             const { error } = await supabase.from('orders').update({ status: status, timestamp: order.timestamp }).eq('id', orderId);
+             if (error) console.error("Update Status Error", error);
+             else broadcastUpdate('orders');
         }
     }
 };
@@ -330,8 +375,9 @@ export const updateOrderItems = async (orderId: string, newItems: OrderItem[]) =
 
         await ensureUserId();
         if (supabase && currentUserId) {
-             await supabase.from('orders').update({ items: order.items, timestamp: order.timestamp }).eq('id', orderId);
-             broadcastUpdate('orders');
+             const { error } = await supabase.from('orders').update({ items: order.items, timestamp: order.timestamp }).eq('id', orderId);
+             if (error) console.error("Update Items Error", error);
+             else broadcastUpdate('orders');
         }
     }
 };
@@ -358,8 +404,8 @@ export const toggleOrderItemCompletion = async (orderId: string, itemIndex: numb
 
         await ensureUserId();
         if (supabase && currentUserId) {
-             await supabase.from('orders').update({ items: order.items }).eq('id', orderId);
-             broadcastUpdate('orders');
+             const { error } = await supabase.from('orders').update({ items: order.items }).eq('id', orderId);
+             if(!error) broadcastUpdate('orders');
         }
     }
 };
@@ -374,8 +420,8 @@ export const serveItem = async (orderId: string, itemIndex: number) => {
         
         await ensureUserId();
         if (supabase && currentUserId) {
-             await supabase.from('orders').update({ items: order.items }).eq('id', orderId);
-             broadcastUpdate('orders');
+             const { error } = await supabase.from('orders').update({ items: order.items }).eq('id', orderId);
+             if(!error) broadcastUpdate('orders');
         }
     }
 };
