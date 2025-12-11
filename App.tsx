@@ -4,7 +4,7 @@ import WaiterPad from './components/WaiterPad';
 import AuthScreen from './components/AuthScreen';
 import SuperAdminDashboard from './components/SuperAdminDashboard';
 import DigitalMenu from './components/DigitalMenu';
-import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, RefreshCw, Send, Printer, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, FileSpreadsheet, Image as ImageIcon, Upload, FileImage, ExternalLink, CreditCard, Banknote, Briefcase, Clock, Check, ListPlus, ArrowRightLeft, Code2, Cookie, Shield, Wrench, Download, CloudUpload, BookOpen, EyeOff, LayoutGrid, ArrowLeft, PlayCircle, ChevronDown, FileJson, Wallet, Crown, Zap, ShieldCheck as ShieldIcon, Trophy, Timer, LifeBuoy } from 'lucide-react';
+import { ChefHat, Smartphone, User, Settings, Bell, Utensils, X, Save, Plus, Trash2, Edit2, Wheat, Milk, Egg, Nut, Fish, Bean, Flame, Leaf, Info, LogOut, Bot, Key, Database, ShieldCheck, Lock, AlertTriangle, Mail, RefreshCw, Send, Printer, Mic, MicOff, TrendingUp, BarChart3, Calendar, ChevronLeft, ChevronRight, DollarSign, History, Receipt, UtensilsCrossed, Eye, ArrowRight, QrCode, Share2, Copy, MapPin, Store, Phone, Globe, Star, Pizza, CakeSlice, Wine, Sandwich, MessageCircle, FileText, PhoneCall, Sparkles, Loader, Facebook, Instagram, Youtube, Linkedin, Music, Compass, FileSpreadsheet, Image as ImageIcon, Upload, FileImage, ExternalLink, CreditCard, Banknote, Briefcase, Clock, Check, ListPlus, ArrowRightLeft, Code2, Cookie, Shield, Wrench, Download, CloudUpload, BookOpen, EyeOff, LayoutGrid, ArrowLeft, PlayCircle, ChevronDown, FileJson, Wallet, Crown, Zap, ShieldCheck as ShieldIcon, Trophy, Timer, LifeBuoy, Minus, Hash } from 'lucide-react';
 import { getWaiterName, saveWaiterName, getMenuItems, addMenuItem, updateMenuItem, deleteMenuItem, getNotificationSettings, saveNotificationSettings, initSupabaseSync, getGoogleApiKey, saveGoogleApiKey, getAppSettings, saveAppSettings, getOrders, deleteHistoryByDate, performFactoryReset, deleteAllMenuItems, importDemoMenu } from './services/storageService';
 import { supabase, signOut, isSupabaseConfigured, SUPER_ADMIN_EMAIL } from './services/supabase';
 import { askChefAI, generateRestaurantAnalysis, generateDishDescription, generateDishIngredients } from './services/geminiService';
@@ -436,6 +436,27 @@ export default function App() {
       }
   };
 
+  // --- TABLE COUNT MANAGER ---
+  const handleUpdateTableCount = async (increment: number) => {
+      const current = appSettings.restaurantProfile?.tableCount || 12;
+      const newCount = Math.max(1, current + increment);
+      
+      const newSettings = {
+          ...appSettings,
+          restaurantProfile: {
+              ...appSettings.restaurantProfile,
+              tableCount: newCount
+          }
+      };
+      
+      // Update Local State
+      setAppSettingsState(newSettings);
+      setProfileForm(prev => ({ ...prev, tableCount: newCount }));
+      
+      // Persist
+      await saveAppSettings(newSettings);
+  };
+
   // --- ANALYTICS METRICS ---
   const handleGenerateAnalysis = async () => {
       if (ordersForAnalytics.length === 0) {
@@ -833,6 +854,19 @@ export default function App() {
                                   </button>
                               </div>
                           </div>
+
+                          {/* --- NEW: TABLE COUNT CONFIGURATION --- */}
+                          <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 mb-8 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-lg">
+                              <div className="flex items-center gap-4">
+                                 <div className="p-3 bg-blue-600/20 text-blue-400 rounded-xl"><LayoutGrid size={24}/></div>
+                                 <div><h3 className="font-bold text-white text-lg">Configurazione Sala</h3><p className="text-xs text-slate-400 font-medium">Imposta il numero di tavoli attivi nel ristorante.</p></div>
+                              </div>
+                              <div className="flex items-center gap-3 bg-slate-950 p-1.5 rounded-xl border border-slate-700">
+                                 <button onClick={() => handleUpdateTableCount(-1)} className="w-10 h-10 flex items-center justify-center bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-300 hover:text-white transition-colors"><Minus size={18} strokeWidth={3}/></button>
+                                 <span className="font-black text-3xl w-16 text-center text-white">{appSettings.restaurantProfile?.tableCount || 12}</span>
+                                 <button onClick={() => handleUpdateTableCount(1)} className="w-10 h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-500 rounded-lg text-white shadow-lg shadow-blue-600/20 transition-colors"><Plus size={18} strokeWidth={3}/></button>
+                              </div>
+                          </div>
                           
                           {/* QUICK ACTIONS ROW */}
                           <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 flex gap-4 mb-8 overflow-x-auto no-scrollbar items-center">
@@ -1154,6 +1188,13 @@ export default function App() {
                               {/* ANAGRAFICA GENERALE */}
                               <div>
                                   <h3 className="text-sm font-bold text-orange-500 uppercase mb-4 flex items-center gap-2"><Store size={16}/> Dati Generali</h3>
+                                  
+                                  {/* EMAIL ACCOUNT FIELD (ADDED) */}
+                                  <div className="mb-6">
+                                      <label className="text-xs text-slate-500 font-bold uppercase mb-1 block flex items-center gap-1"><Key size={12}/> Email Account (Login)</label>
+                                      <input type="text" value={session?.user?.email || ''} readOnly className="w-full bg-slate-900/50 border border-slate-700/50 rounded-xl p-3 text-slate-400 font-mono cursor-not-allowed" />
+                                  </div>
+
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                       <div><label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Nome Insegna</label><input type="text" value={profileForm.name || ''} onChange={e => setProfileForm({...profileForm, name: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-bold"/></div>
                                       <div><label className="text-xs text-slate-500 font-bold uppercase mb-1 block">Numero Tavoli</label><input type="number" value={profileForm.tableCount || 12} onChange={e => setProfileForm({...profileForm, tableCount: parseInt(e.target.value)})} className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-white font-mono font-bold"/></div>
