@@ -207,8 +207,18 @@ export default function App() {
                      if (data.subscription_status === 'suspended') { setIsSuspended(true); setIsBanned(false); if(data.restaurant_name) setRestaurantName(data.restaurant_name); return false; }
                      if (data.subscription_status === 'banned') { setIsBanned(true); setIsSuspended(false); if(data.restaurant_name) setRestaurantName(data.restaurant_name); return false; }
                      
-                     // CHECK DATE EXPIRATION
+                     // CHECK PLAN & EXPIRATION
+                     const plan = data.settings?.restaurantProfile?.planType;
                      const expiry = data.settings?.restaurantProfile?.subscriptionEndDate;
+                     
+                     // IF FREE or DEMO -> Bypass expiry check
+                     if (plan === 'Free' || plan === 'Demo') {
+                         setDaysRemaining(null);
+                         setSubscriptionExpired(false);
+                         if (data.restaurant_name) setRestaurantName(data.restaurant_name);
+                         return true;
+                     }
+
                      if (expiry) {
                          const days = Math.ceil((new Date(expiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
                          setDaysRemaining(days);
@@ -346,7 +356,10 @@ export default function App() {
           setAppSettingsState(updated);
           // Update days remaining logic on settings change
           const expiry = updated.restaurantProfile?.subscriptionEndDate;
-          if (expiry) {
+          const plan = updated.restaurantProfile?.planType;
+          if (plan === 'Free' || plan === 'Demo') {
+              setDaysRemaining(null);
+          } else if (expiry) {
               const days = Math.ceil((new Date(expiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
               setDaysRemaining(days);
           }
@@ -918,7 +931,7 @@ Grazie.`);
                             </div>
                         )}
 
-                        {/* SUBSCRIPTION TAB - RESTORED */}
+                        {/* SUBSCRIPTION TAB - UPDATED WITH PAYMENT METHODS */}
                         {adminTab === 'subscription' && (
                             <div className="max-w-4xl mx-auto pb-20 animate-fade-in">
                                 <div className="flex items-center gap-3 mb-8"><div className="p-3 bg-green-500/10 rounded-2xl text-green-500"><CreditCard size={32} /></div><div><h3 className="text-2xl font-bold text-white">Stato Abbonamento</h3><p className="text-slate-400 text-sm">Gestisci il tuo piano e i pagamenti.</p></div></div>
@@ -928,8 +941,17 @@ Grazie.`);
                                         <p className="text-indigo-300 font-bold uppercase text-xs mb-2">{profileForm.planType === 'Trial' ? 'Costo al rinnovo' : 'Canone Mensile'}</p>
                                         <h2 className="text-5xl font-black text-white mb-2">€ {profileForm.subscriptionCost || '49.90'}</h2>
                                         <p className="text-slate-400 text-sm mb-6">+ IVA / Mese</p>
-                                        <a href={`https://paypal.me/castromassimo/${(profileForm.subscriptionCost || '49.90').replace(',', '.')}`} target="_blank" rel="noopener noreferrer" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 transition-all"><CreditCard size={18}/> {profileForm.planType === 'Trial' ? 'Attiva Piano Pro' : 'Paga con PayPal / Carta'}</a>
-                                        <p className="text-[10px] text-slate-500 mt-3">Link sicuro PayPal.Me</p>
+                                        
+                                        <a href={`https://paypal.me/castromassimo/${(profileForm.subscriptionCost || '49.90').replace(',', '.')}`} target="_blank" rel="noopener noreferrer" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 transition-all mb-4"><CreditCard size={18}/> {profileForm.planType === 'Trial' ? 'Attiva Piano Pro' : 'Paga con PayPal / Carta'}</a>
+                                        
+                                        {/* NEW PAYMENT METHODS */}
+                                        <div className="w-full">
+                                            <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Altri metodi accettati</p>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <a href={`https://paypal.me/castromassimo/${(profileForm.subscriptionCost || '49.90').replace(',', '.')}`} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1 py-2 bg-black text-white rounded-lg border border-slate-700 font-bold text-sm hover:scale-105 transition-transform"><span className="font-mono text-lg leading-none"></span> Pay</a>
+                                                <a href={`https://paypal.me/castromassimo/${(profileForm.subscriptionCost || '49.90').replace(',', '.')}`} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1 py-2 bg-white text-slate-900 rounded-lg border border-slate-200 font-bold text-sm hover:scale-105 transition-transform"><span className="text-blue-500 font-black text-lg leading-none">G</span> Pay</a>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                                 <div className="bg-slate-900 rounded-3xl border border-slate-800 p-6"><h4 className="font-bold text-white mb-6 flex items-center gap-2"><Banknote size={20} className="text-green-500"/> Coordinate Bancarie (Bonifico)</h4><div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-sm"><div><p className="text-slate-500 mb-1">Intestatario</p><p className="text-white font-bold text-lg mb-4">{adminHolder}</p><p className="text-slate-500 mb-1">IBAN</p><div className="flex items-center gap-2 bg-slate-950 p-3 rounded-lg border border-slate-800"><p className="text-white font-mono select-all cursor-text text-xs md:text-sm flex-1">{adminIban}</p><button onClick={handleCopyIban} className="p-2 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors relative" title="Copia IBAN">{ibanCopied ? <Check size={16} className="text-green-500"/> : <Copy size={16}/>}</button></div></div><div><p className="text-slate-500 mb-1">Causale</p><p className="text-white font-bold mb-4">{profileForm.businessName || restaurantName} - Mese/Anno</p><div className="bg-blue-900/20 border border-blue-500/30 p-5 rounded-2xl shadow-inner"><div className="flex items-start gap-3 mb-4"><Info size={20} className="text-blue-400 shrink-0 mt-0.5" /><div><p className="text-blue-300 text-xs font-black uppercase tracking-wider mb-1">CONFERMA PAGAMENTO</p><p className="text-slate-400 text-xs leading-relaxed">Dopo il bonifico, invia la distinta a <strong>{adminContactEmail}</strong> per l'attivazione immediata.</p></div></div><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><a href={getPaymentMailto()} className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white py-2.5 rounded-xl font-bold text-xs transition-all shadow-lg shadow-blue-600/20"><Send size={14} /> INVIA EMAIL CON DATI</a><button onClick={handleCopyAdminEmail} className="flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white py-2.5 rounded-xl font-bold text-xs transition-all border border-slate-700">{adminEmailCopied ? <Check size={14} className="text-green-500"/> : <Copy size={14} />} {adminEmailCopied ? 'EMAIL COPIATA' : 'COPIA INDIRIZZO EMAIL'}</button></div></div></div></div></div>

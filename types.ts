@@ -61,7 +61,7 @@ export interface RestaurantProfile {
   
   // Subscription Fields
   subscriptionEndDate?: string; // ISO Date String
-  planType?: 'Trial' | 'Pro' | 'Enterprise';
+  planType?: 'Trial' | 'Pro' | 'Enterprise' | 'Free' | 'Demo';
   subscriptionCost?: string; // Custom cost set by Admin (string to allow formatting like "29.90")
   
   // Agent Data

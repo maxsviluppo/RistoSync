@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase, signOut } from '../services/supabase';
-import { ShieldCheck, Users, Database, LogOut, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon, FileText, MapPin, CreditCard, Mail, MessageCircle, Share2, PhoneCall, Facebook, Instagram, Store, Compass, Wrench, Calendar, DollarSign, Briefcase, Sparkles, Clock, AlertOctagon, UserCheck, Banknote, CalendarCheck, Settings, Inbox, Hash } from 'lucide-react';
+import { ShieldCheck, Users, Database, LogOut, RefreshCw, Smartphone, PlayCircle, PauseCircle, AlertTriangle, Copy, Check, User, PlusCircle, Edit2, Save, X, FlaskConical, Terminal, Trash2, Lock, LifeBuoy, Globe, Image as ImageIcon, FileText, MapPin, CreditCard, Mail, MessageCircle, Share2, PhoneCall, Facebook, Instagram, Store, Compass, Wrench, Calendar, DollarSign, Briefcase, Sparkles, Clock, AlertOctagon, UserCheck, Banknote, CalendarCheck, Settings, Inbox, Hash, MonitorPlay } from 'lucide-react';
 
 interface SuperAdminDashboardProps {
     onEnterApp: () => void;
@@ -181,6 +181,13 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
         setSubPlan('Trial');
     };
 
+    const activateDemoAgent = () => {
+        // Data molto lontana per "Free/Demo"
+        setSubDate('2099-12-31T23:59:59.000Z');
+        setSubPlan('Demo');
+        setSubCost('0.00');
+    };
+
     const saveRegistryChanges = async () => {
         if (!supabase || !viewingProfile) return;
 
@@ -240,9 +247,10 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
 
     // Derived Status for Modal
     const isTrial = subPlan === 'Trial';
-    const isExpired = subDate && new Date(subDate) < new Date();
-    const statusLabel = isExpired ? 'SCADUTO' : isTrial ? 'IN PROVA' : 'ATTIVO';
-    const statusColorClass = isExpired ? 'bg-red-600' : isTrial ? 'bg-blue-500' : 'bg-green-600';
+    const isFree = subPlan === 'Free' || subPlan === 'Demo';
+    const isExpired = subDate && new Date(subDate) < new Date() && !isFree;
+    const statusLabel = isFree ? 'GRATIS / DEMO' : isExpired ? 'SCADUTO' : isTrial ? 'IN PROVA' : 'ATTIVO';
+    const statusColorClass = isFree ? 'bg-indigo-600' : isExpired ? 'bg-red-600' : isTrial ? 'bg-blue-500' : 'bg-green-600';
 
     return (
         <div className="min-h-screen bg-slate-900 text-white font-sans p-4 md:p-8">
@@ -431,10 +439,10 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
                                         </div>
                                     </div>
 
-                                    <div className={`p-6 rounded-3xl border relative overflow-hidden ${isExpired ? 'bg-red-900/10 border-red-500/30' : isTrial ? 'bg-blue-900/10 border-blue-500/30' : 'bg-green-900/10 border-green-500/30'}`}>
-                                        <div className="absolute top-0 right-0 p-4 opacity-10"><Calendar size={120} className={isExpired ? 'text-red-500' : isTrial ? 'text-blue-500' : 'text-green-500'}/></div>
+                                    <div className={`p-6 rounded-3xl border relative overflow-hidden ${isFree ? 'bg-indigo-900/10 border-indigo-500/30' : isExpired ? 'bg-red-900/10 border-red-500/30' : isTrial ? 'bg-blue-900/10 border-blue-500/30' : 'bg-green-900/10 border-green-500/30'}`}>
+                                        <div className="absolute top-0 right-0 p-4 opacity-10"><Calendar size={120} className={isFree ? 'text-indigo-500' : isExpired ? 'text-red-500' : isTrial ? 'text-blue-500' : 'text-green-500'}/></div>
                                         
-                                        <h3 className={`text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2 ${isExpired ? 'text-red-400' : isTrial ? 'text-blue-400' : 'text-green-400'}`}><CreditCard size={14}/> Stato Abbonamento</h3>
+                                        <h3 className={`text-xs font-black uppercase tracking-widest mb-4 flex items-center gap-2 ${isFree ? 'text-indigo-400' : isExpired ? 'text-red-400' : isTrial ? 'text-blue-400' : 'text-green-400'}`}><CreditCard size={14}/> Stato Abbonamento</h3>
                                         
                                         <div className="space-y-4 relative z-10">
                                             <div>
@@ -454,6 +462,8 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
                                                             <option value="Pro">Pro</option>
                                                             <option value="Trial">Trial (Prova)</option>
                                                             <option value="Enterprise">Enterprise</option>
+                                                            <option value="Free">Free</option>
+                                                            <option value="Demo">Demo</option>
                                                         </select>
                                                     ) : (
                                                         <div className="bg-slate-950 px-3 py-2 rounded-lg border border-slate-800 text-white font-bold text-sm">{subPlan || 'Pro'}</div>
@@ -474,6 +484,9 @@ const SuperAdminDashboard: React.FC<SuperAdminDashboardProps> = ({ onEnterApp })
                                                 <div className="pt-4 border-t border-white/5 flex flex-col gap-2">
                                                     <button onClick={activateFreeTrial} className="w-full py-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 active:scale-95 transition-all">
                                                         <Sparkles size={14} className="animate-pulse text-yellow-300"/> ATTIVA 15 GIORNI GRATIS
+                                                    </button>
+                                                    <button onClick={activateDemoAgent} className="w-full py-3 bg-gradient-to-r from-indigo-700 to-purple-700 hover:from-indigo-600 hover:to-purple-600 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-purple-600/20 active:scale-95 transition-all">
+                                                        <MonitorPlay size={14} className="text-white"/> ATTIVA DEMO AGENTE (FREE)
                                                     </button>
                                                     <div className="grid grid-cols-2 gap-2">
                                                         <button onClick={() => setSubDate(addMonths(subDate, 1))} className="py-2 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-bold rounded-lg border border-slate-700">+1 Mese</button>
