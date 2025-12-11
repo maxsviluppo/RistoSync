@@ -54,6 +54,7 @@ export default function App() {
 
   // Admin State
   const [showAdmin, setShowAdmin] = useState(false);
+  // RESTORED ALL TABS
   const [adminTab, setAdminTab] = useState<'profile' | 'subscription' | 'menu' | 'notif' | 'info' | 'ai' | 'analytics' | 'share'>('menu');
   const [adminViewMode, setAdminViewMode] = useState<'dashboard' | 'app'>('dashboard');
   
@@ -187,6 +188,11 @@ export default function App() {
           if (currentSettings.restaurantProfile) {
               setProfileForm(currentSettings.restaurantProfile);
           }
+          // Load Orders for Analytics
+          setOrdersForAnalytics(getOrders());
+          // Load API Key
+          const key = getGoogleApiKey();
+          if (key) setApiKeyInput(key);
       }
   }, [showAdmin]);
 
@@ -272,7 +278,6 @@ export default function App() {
 
           const reader = new FileReader();
           reader.onloadend = () => {
-              // Resize image before saving to avoid LocalStorage crash
               const img = new Image();
               img.src = reader.result as string;
               img.onload = () => {
@@ -291,7 +296,6 @@ export default function App() {
                   const ctx = canvas.getContext('2d');
                   ctx?.drawImage(img, 0, 0, width, height);
                   
-                  // Use 0.6 quality to keep file size low even if resolution is decent
                   const resizedBase64 = canvas.toDataURL('image/jpeg', 0.6); 
                   setEditingItem(prev => ({ ...prev, image: resizedBase64 }));
               };
@@ -388,10 +392,18 @@ export default function App() {
       setIsAnalyzing(false);
   };
   
-  // --- SETTINGS ---
+  // --- SETTINGS & SHARE ---
   const handleSaveNotifSettings = () => {
       saveNotificationSettings(notifSettings);
       alert("Impostazioni salvate!");
+  };
+
+  const saveDestinations = async () => { 
+      const newSettings: AppSettings = { ...appSettings, categoryDestinations: tempDestinations, printEnabled: tempPrintSettings }; 
+      await saveAppSettings(newSettings); 
+      setAppSettingsState(newSettings); 
+      setHasUnsavedDestinations(false); 
+      alert("Impostazioni salvate con successo!"); 
   };
 
   const handleSaveAppSettings = async () => {
@@ -433,6 +445,10 @@ export default function App() {
           win.document.close();
       }
   };
+
+  const digitalMenuLink = session?.user?.id ? `${window.location.origin}?menu=${session.user.id}` : '';
+  const qrCodeUrl = digitalMenuLink ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(digitalMenuLink)}` : '';
+  const copyToClipboard = () => { navigator.clipboard.writeText(digitalMenuLink); alert("Link copiato!"); };
 
   // RENDER LOGIC
 
@@ -641,7 +657,7 @@ export default function App() {
       return (
           <div className="min-h-screen bg-slate-950 text-white font-sans flex flex-col md:flex-row">
               
-              {/* ADMIN SIDEBAR */}
+              {/* ADMIN SIDEBAR (RESTORED TABS) */}
               <div className="w-full md:w-72 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 h-screen sticky top-0">
                   <div className="p-6 border-b border-slate-800 flex items-center gap-3">
                       <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg flex items-center justify-center shadow-lg">
@@ -657,17 +673,23 @@ export default function App() {
                       <button onClick={() => setAdminTab('menu')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${adminTab === 'menu' ? 'bg-orange-600 text-white shadow-lg shadow-orange-900/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
                           <Utensils size={18} /> Gestione Menu
                       </button>
+                      <button onClick={() => setAdminTab('share')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${adminTab === 'share' ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-900/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                          <QrCode size={18} /> Menu Digitale
+                      </button>
+                      <button onClick={() => setAdminTab('notif')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${adminTab === 'notif' ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                          <Bell size={18} /> Notifiche & Reparti
+                      </button>
                       <button onClick={() => setAdminTab('subscription')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${adminTab === 'subscription' ? 'bg-green-600 text-white shadow-lg shadow-green-900/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
                           <CreditCard size={18} /> Abbonamento
                       </button>
-                      <button onClick={() => setAdminTab('analytics')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${adminTab === 'analytics' ? 'bg-purple-600 text-white shadow-lg shadow-purple-900/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                      <button onClick={() => setAdminTab('analytics')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${adminTab === 'analytics' ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-900/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
                           <BarChart3 size={18} /> Statistiche
                       </button>
                       <button onClick={() => setAdminTab('ai')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${adminTab === 'ai' ? 'bg-pink-600 text-white shadow-lg shadow-pink-900/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
                           <Bot size={18} /> AI Intelligence
                       </button>
-                      <button onClick={() => setAdminTab('info')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${adminTab === 'info' ? 'bg-cyan-600 text-white shadow-lg shadow-cyan-900/20' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
-                          <Settings size={18} /> Configurazione
+                      <button onClick={() => setAdminTab('info')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl font-bold text-sm transition-all ${adminTab === 'info' ? 'bg-slate-700 text-white' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+                          <Info size={18} /> Info & Supporto
                       </button>
                   </nav>
 
@@ -679,9 +701,9 @@ export default function App() {
               </div>
 
               {/* MAIN CONTENT AREA */}
-              <div className="flex-1 h-screen overflow-y-auto bg-slate-950 p-6 md:p-10">
+              <div className="flex-1 h-screen overflow-y-auto bg-slate-950 p-6 md:p-10 custom-scroll">
                   
-                  {/* --- TAB: MENU MANAGER --- */}
+                  {/* --- TAB: MENU MANAGER (REDESIGNED) --- */}
                   {adminTab === 'menu' && (
                       <div className="max-w-6xl mx-auto animate-fade-in">
                           <div className="flex justify-between items-center mb-8">
@@ -691,12 +713,15 @@ export default function App() {
                               </div>
                               <div className="flex gap-3">
                                   <button onClick={handlePrintQR} className="bg-slate-800 hover:bg-slate-700 text-white px-4 py-3 rounded-xl font-bold flex items-center gap-2 border border-slate-700 transition-colors"><QrCode size={18}/> Stampa QR</button>
-                                  <button onClick={() => { setEditingItem({}); setIsEditingItem(false); }} className="bg-orange-600 hover:bg-orange-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-orange-600/20 transition-transform active:scale-95"><Plus size={20}/> Nuovo Piatto</button>
+                                  {/* Toggle Edit Form Button */}
+                                  <button onClick={() => { setEditingItem({}); setIsEditingItem(!isEditingItem); window.scrollTo({ top: 0, behavior: 'smooth' }); }} className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg transition-transform active:scale-95 ${isEditingItem ? 'bg-slate-700 text-white' : 'bg-orange-600 hover:bg-orange-500 text-white shadow-orange-600/20'}`}>
+                                      {isEditingItem ? <X size={20}/> : <Plus size={20}/>} {isEditingItem ? 'Chiudi' : 'Nuovo Piatto'}
+                                  </button>
                               </div>
                           </div>
                           
-                          {/* QUICK ACTIONS */}
-                          <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 flex gap-4 mb-8 overflow-x-auto">
+                          {/* QUICK ACTIONS ROW */}
+                          <div className="bg-slate-900 p-4 rounded-2xl border border-slate-800 flex gap-4 mb-8 overflow-x-auto no-scrollbar">
                               <button onClick={() => bulkInputRef.current?.click()} className="flex items-center gap-2 bg-blue-600/20 text-blue-400 px-4 py-2 rounded-lg font-bold hover:bg-blue-600/30 transition-colors whitespace-nowrap"><Upload size={16}/> Importa JSON</button>
                               <input type="file" ref={bulkInputRef} onChange={handleBulkImport} accept=".json" className="hidden" />
                               <button onClick={exportMenu} className="flex items-center gap-2 bg-green-600/20 text-green-400 px-4 py-2 rounded-lg font-bold hover:bg-green-600/30 transition-colors whitespace-nowrap"><Download size={16}/> Esporta JSON</button>
@@ -704,158 +729,233 @@ export default function App() {
                               <button onClick={() => setShowDeleteAllMenuModal(true)} className="flex items-center gap-2 bg-red-600/20 text-red-400 px-4 py-2 rounded-lg font-bold hover:bg-red-600/30 transition-colors whitespace-nowrap ml-auto"><Trash2 size={16}/> Svuota Menu</button>
                           </div>
 
-                          {/* EDITOR FORM */}
-                          <div className="bg-slate-900 p-6 md:p-8 rounded-3xl border border-slate-800 shadow-2xl mb-10 relative overflow-hidden">
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative z-10">
-                                  <div className="space-y-4">
-                                      <div>
-                                          <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Nome Piatto</label>
-                                          <input type="text" placeholder="Es. Spaghetti Carbonara" value={editingItem.name || ''} onChange={e => setEditingItem({ ...editingItem, name: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold focus:border-orange-500 outline-none transition-colors" />
+                          {/* EDITOR FORM (COMPACT & COLLAPSIBLE) */}
+                          {(isEditingItem || Object.keys(editingItem).length > 0) && (
+                              <div className="bg-slate-900 p-6 rounded-3xl border border-slate-800 shadow-2xl mb-10 relative overflow-hidden animate-slide-up">
+                                  <h3 className="font-bold text-white mb-4 flex items-center gap-2 text-lg"><Edit2 size={18}/> {editingItem.id ? 'Modifica Piatto' : 'Nuovo Piatto'}</h3>
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                      {/* Column 1: Image & Basic Info */}
+                                      <div className="space-y-4">
+                                          <div className="flex gap-4">
+                                              <div className="relative w-24 h-24 bg-slate-950 rounded-xl border border-slate-700 flex items-center justify-center overflow-hidden shrink-0 group">
+                                                  {editingItem.image ? (
+                                                      <>
+                                                          <img src={editingItem.image} alt="Preview" className="w-full h-full object-cover" />
+                                                          <button onClick={(e) => { e.stopPropagation(); setEditingItem(prev => ({ ...prev, image: undefined })); }} className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-20"><X size={12}/></button>
+                                                      </>
+                                                  ) : <ImageIcon className="text-slate-600" size={24} />}
+                                                  <input type="file" ref={fileInputRef} onChange={handleImageUpload} className="hidden" accept="image/*" />
+                                                  <div onClick={() => fileInputRef.current?.click()} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity z-10"><Upload className="text-white" size={20}/></div>
+                                              </div>
+                                              <div className="flex-1 space-y-2">
+                                                  <input type="text" placeholder="Nome Piatto" value={editingItem.name || ''} onChange={e => setEditingItem({ ...editingItem, name: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold text-sm focus:border-orange-500 outline-none" />
+                                                  <div className="flex gap-2">
+                                                      <input type="number" placeholder="€" value={editingItem.price || ''} onChange={e => setEditingItem({ ...editingItem, price: parseFloat(e.target.value) })} className="w-24 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono font-bold text-sm focus:border-orange-500 outline-none text-right" />
+                                                      <select value={editingItem.category || Category.ANTIPASTI} onChange={e => setEditingItem({ ...editingItem, category: e.target.value as Category })} className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white font-bold text-xs focus:border-orange-500 outline-none appearance-none">
+                                                          {Object.values(Category).map(c => <option key={c} value={c}>{c}</option>)}
+                                                      </select>
+                                                  </div>
+                                              </div>
+                                          </div>
+                                          {/* Specific Dept Override */}
+                                          <select value={editingItem.specificDepartment || ''} onChange={e => setEditingItem({ ...editingItem, specificDepartment: e.target.value as Department | undefined })} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-slate-400 text-xs outline-none">
+                                              <option value="">Destinazione Default</option>
+                                              <option value="Cucina">Forza Cucina</option>
+                                              <option value="Pizzeria">Forza Pizzeria</option>
+                                              <option value="Pub">Forza Pub</option>
+                                              <option value="Sala">Forza Sala</option>
+                                          </select>
                                       </div>
-                                      <div className="grid grid-cols-2 gap-4">
+
+                                      {/* Column 2: Details & AI */}
+                                      <div className="space-y-3">
                                           <div>
-                                              <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Prezzo (€)</label>
-                                              <input type="number" placeholder="0.00" value={editingItem.price || ''} onChange={e => setEditingItem({ ...editingItem, price: parseFloat(e.target.value) })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white font-mono font-bold focus:border-orange-500 outline-none transition-colors" />
+                                              <div className="flex justify-between mb-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Ingredienti</label><button onClick={generateIngr} disabled={!editingItem.name} className="text-[10px] text-purple-400 hover:text-purple-300 flex gap-1 items-center"><Sparkles size={10}/> AI</button></div>
+                                              <input type="text" placeholder="Es. Pomodoro, Mozzarella" value={editingItem.ingredients || ''} onChange={e => setEditingItem({ ...editingItem, ingredients: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs outline-none" />
                                           </div>
                                           <div>
-                                              <label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Categoria</label>
-                                              <select value={editingItem.category || Category.ANTIPASTI} onChange={e => setEditingItem({ ...editingItem, category: e.target.value as Category })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white font-bold focus:border-orange-500 outline-none transition-colors appearance-none">
-                                                  {Object.values(Category).map(c => <option key={c} value={c}>{c}</option>)}
-                                              </select>
+                                              <div className="flex justify-between mb-1"><label className="text-[10px] font-bold text-slate-500 uppercase">Descrizione</label><button onClick={generateDesc} disabled={!editingItem.name} className="text-[10px] text-purple-400 hover:text-purple-300 flex gap-1 items-center"><Sparkles size={10}/> AI</button></div>
+                                              <textarea placeholder="Descrizione breve..." value={editingItem.description || ''} onChange={e => setEditingItem({ ...editingItem, description: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs outline-none resize-none h-16" />
                                           </div>
                                       </div>
-                                      
-                                      {/* COMBO SELECTION LOGIC */}
-                                      {editingItem.category === Category.MENU_COMPLETO && (
-                                          <div className="bg-slate-800 p-4 rounded-xl border border-slate-700">
-                                              <label className="text-xs font-bold text-orange-400 uppercase mb-2 block flex items-center gap-2"><ListPlus size={14}/> Seleziona Piatti Inclusi</label>
-                                              <div className="max-h-40 overflow-y-auto custom-scroll space-y-2">
-                                                  {menuItems.filter(i => i.category !== Category.MENU_COMPLETO).map(opt => (
-                                                      <label key={opt.id} className="flex items-center gap-3 p-2 hover:bg-slate-700 rounded-lg cursor-pointer">
-                                                          <input 
-                                                              type="checkbox" 
-                                                              checked={editingItem.comboItems?.includes(opt.id) || false}
-                                                              onChange={(e) => {
-                                                                  const current = editingItem.comboItems || [];
-                                                                  if (e.target.checked) setEditingItem({ ...editingItem, comboItems: [...current, opt.id] });
-                                                                  else setEditingItem({ ...editingItem, comboItems: current.filter(id => id !== opt.id) });
-                                                              }}
-                                                              className="w-4 h-4 rounded border-slate-600 bg-slate-900 text-orange-500 focus:ring-orange-500"
-                                                          />
-                                                          <span className="text-sm text-slate-300">{opt.name}</span>
-                                                      </label>
+
+                                      {/* Column 3: Allergens & Save */}
+                                      <div className="flex flex-col justify-between">
+                                          <div>
+                                              <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Allergeni</label>
+                                              <div className="flex flex-wrap gap-1.5">
+                                                  {ALLERGENS_CONFIG.map(alg => (
+                                                      <button key={alg.id} onClick={() => { const current = editingItem.allergens || []; setEditingItem({ ...editingItem, allergens: current.includes(alg.id) ? current.filter(a => a !== alg.id) : [...current, alg.id] }); }} className={`px-2 py-1 rounded text-[10px] font-bold border transition-all ${editingItem.allergens?.includes(alg.id) ? 'bg-orange-500 border-orange-500 text-white' : 'bg-slate-950 border-slate-800 text-slate-500'}`}>{alg.label}</button>
                                                   ))}
                                               </div>
                                           </div>
-                                      )}
-
-                                      {/* SPECIFIC DESTINATION OVERRIDE */}
-                                      <div>
-                                          <label className="text-xs font-bold text-slate-500 uppercase mb-1 block flex items-center gap-2"><MapPin size={12}/> Destinazione Specifica (Opzionale)</label>
-                                          <select value={editingItem.specificDepartment || ''} onChange={e => setEditingItem({ ...editingItem, specificDepartment: e.target.value as Department | undefined })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-slate-300 text-sm focus:border-blue-500 outline-none transition-colors">
-                                              <option value="">Usa Default Categoria</option>
-                                              <option value="Cucina">Cucina</option>
-                                              <option value="Pizzeria">Pizzeria</option>
-                                              <option value="Pub">Pub</option>
-                                              <option value="Sala">Sala (Bar)</option>
-                                          </select>
+                                          <div className="flex gap-2 mt-4">
+                                              <button onClick={() => { setEditingItem({}); setIsEditingItem(false); }} className="flex-1 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs">Annulla</button>
+                                              <button onClick={handleSaveItem} disabled={!editingItem.name || !editingItem.price} className="flex-1 py-2 rounded-lg bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold text-xs flex items-center justify-center gap-1"><Save size={14}/> Salva</button>
+                                          </div>
                                       </div>
                                   </div>
+                              </div>
+                          )}
 
-                                  <div className="space-y-4">
-                                      <div>
-                                          <div className="flex justify-between items-center mb-1">
-                                              <label className="text-xs font-bold text-slate-500 uppercase">Ingredienti</label>
-                                              <button onClick={generateIngr} disabled={isGeneratingIngr || !editingItem.name} className="text-[10px] bg-purple-600/20 text-purple-400 px-2 py-1 rounded hover:bg-purple-600/30 transition-colors flex items-center gap-1 disabled:opacity-50"><Sparkles size={10}/> AI MAGIC</button>
+                          {/* GROUPED MENU LIST */}
+                          <div className="space-y-8">
+                              {ADMIN_CATEGORY_ORDER.map(category => {
+                                  const categoryItems = menuItems.filter(item => item.category === category);
+                                  if (categoryItems.length === 0) return null;
+
+                                  return (
+                                      <div key={category} className="bg-slate-900/50 border border-slate-800 rounded-2xl p-5">
+                                          <div className="flex items-center gap-3 mb-4">
+                                              <div className="w-2 h-8 bg-orange-500 rounded-full"></div>
+                                              <h3 className="text-xl font-bold text-white uppercase tracking-wide">{category}</h3>
+                                              <span className="text-xs font-mono text-slate-500 bg-slate-800 px-2 py-1 rounded">{categoryItems.length}</span>
                                           </div>
-                                          <textarea placeholder="Elenco ingredienti..." value={editingItem.ingredients || ''} onChange={e => setEditingItem({ ...editingItem, ingredients: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm min-h-[80px] focus:border-orange-500 outline-none transition-colors resize-none" />
-                                      </div>
-                                      <div>
-                                          <div className="flex justify-between items-center mb-1">
-                                              <label className="text-xs font-bold text-slate-500 uppercase">Descrizione</label>
-                                              <button onClick={generateDesc} disabled={isGeneratingDesc || !editingItem.name} className="text-[10px] bg-purple-600/20 text-purple-400 px-2 py-1 rounded hover:bg-purple-600/30 transition-colors flex items-center gap-1 disabled:opacity-50"><Sparkles size={10}/> AI MAGIC</button>
-                                          </div>
-                                          <textarea placeholder="Descrizione del piatto..." value={editingItem.description || ''} onChange={e => setEditingItem({ ...editingItem, description: e.target.value })} className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 text-white text-sm min-h-[80px] focus:border-orange-500 outline-none transition-colors resize-none" />
-                                      </div>
-                                      
-                                      <div>
-                                          <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Allergeni</label>
-                                          <div className="flex flex-wrap gap-2">
-                                              {ALLERGENS_CONFIG.map(alg => (
-                                                  <button 
-                                                      key={alg.id}
-                                                      onClick={() => {
-                                                          const current = editingItem.allergens || [];
-                                                          if (current.includes(alg.id)) setEditingItem({ ...editingItem, allergens: current.filter(a => a !== alg.id) });
-                                                          else setEditingItem({ ...editingItem, allergens: [...current, alg.id] });
-                                                      }}
-                                                      className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${editingItem.allergens?.includes(alg.id) ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30' : 'bg-slate-950 text-slate-500 border border-slate-800 hover:border-slate-600'}`}
-                                                  >
-                                                      <alg.icon size={12}/> {alg.label}
-                                                  </button>
+                                          
+                                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                              {categoryItems.map(item => (
+                                                  <div key={item.id} className="bg-slate-800 p-4 rounded-xl border border-slate-700 hover:border-slate-500 transition-all group flex items-start gap-4 shadow-sm relative">
+                                                      <div className="w-16 h-16 bg-slate-900 rounded-lg border border-slate-700 overflow-hidden shrink-0 flex items-center justify-center">
+                                                          {item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <Utensils size={20} className="text-slate-600"/>}
+                                                      </div>
+                                                      <div className="flex-1 min-w-0">
+                                                          <h4 className="font-bold text-white text-sm truncate">{item.name}</h4>
+                                                          <p className="text-orange-400 font-mono font-bold text-xs mt-0.5">€ {item.price.toFixed(2)}</p>
+                                                          {item.ingredients && <p className="text-[10px] text-slate-500 truncate mt-1">{item.ingredients}</p>}
+                                                      </div>
+                                                      <div className="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity absolute right-2 top-2">
+                                                          <button onClick={() => { setEditingItem(item); setIsEditingItem(true); window.scrollTo({top:0, behavior:'smooth'}); }} className="p-1.5 bg-blue-600/20 text-blue-400 rounded-lg hover:bg-blue-600 hover:text-white"><Edit2 size={14}/></button>
+                                                          <button onClick={() => confirmDelete(item)} className="p-1.5 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600 hover:text-white"><Trash2 size={14}/></button>
+                                                      </div>
+                                                  </div>
                                               ))}
                                           </div>
                                       </div>
-
-                                      <div className="flex items-center gap-4">
-                                          <div className="relative w-20 h-20 bg-slate-950 rounded-xl border border-slate-700 flex items-center justify-center overflow-hidden shrink-0 group">
-                                              {editingItem.image ? (
-                                                  <>
-                                                      <img src={editingItem.image} alt="Preview" className="w-full h-full object-cover" />
-                                                      <button 
-                                                          onClick={(e) => { e.stopPropagation(); setEditingItem(prev => ({ ...prev, image: undefined })); }}
-                                                          className="absolute top-1 right-1 bg-red-600 text-white p-1 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity z-20"
-                                                          title="Rimuovi Foto"
-                                                      >
-                                                          <X size={12}/>
-                                                      </button>
-                                                  </>
-                                              ) : (
-                                                  <ImageIcon className="text-slate-600" size={24} />
-                                              )}
-                                              <input type="file" ref={fileInputRef} onChange={handleImageUpload} className="hidden" accept="image/*" />
-                                              <div onClick={() => fileInputRef.current?.click()} className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity z-10"><Upload className="text-white" size={20}/></div>
-                                          </div>
-                                          <div className="flex-1">
-                                              <p className="text-xs text-slate-500 mb-2">Carica foto del piatto (max 2MB). Formato quadrato consigliato.</p>
-                                          </div>
-                                      </div>
-                                  </div>
-                              </div>
-                              
-                              <div className="mt-8 pt-6 border-t border-slate-800 flex justify-end gap-3 relative z-10">
-                                  <button onClick={() => { setEditingItem({}); setIsEditingItem(false); }} className="px-6 py-3 rounded-xl font-bold text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">Annulla</button>
-                                  <button onClick={handleSaveItem} disabled={!editingItem.name || !editingItem.price} className="px-8 py-3 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl font-bold shadow-lg shadow-orange-600/20 transition-all active:scale-95 flex items-center gap-2">
-                                      <Save size={18}/> {isEditingItem ? 'Aggiorna Piatto' : 'Salva Piatto'}
-                                  </button>
-                              </div>
-                          </div>
-
-                          {/* MENU LIST */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                              {menuItems.map(item => (
-                                  <div key={item.id} className="bg-slate-900 rounded-2xl border border-slate-800 p-5 hover:border-slate-600 transition-all group relative overflow-hidden">
-                                      <div className="flex justify-between items-start mb-3">
-                                          <div className="flex gap-3">
-                                              {item.image && <div className="w-12 h-12 rounded-lg bg-slate-800 overflow-hidden shrink-0"><img src={item.image} className="w-full h-full object-cover"/></div>}
-                                              <div>
-                                                  <h3 className="font-bold text-white text-lg leading-tight">{item.name}</h3>
-                                                  <p className="text-orange-400 font-mono font-bold">€ {item.price.toFixed(2)}</p>
-                                              </div>
-                                          </div>
-                                          <span className="text-[10px] font-bold uppercase bg-slate-800 text-slate-400 px-2 py-1 rounded border border-slate-700">{item.category}</span>
-                                      </div>
-                                      <div className="flex justify-end gap-2 mt-4 opacity-0 group-hover:opacity-100 transition-opacity">
-                                          <button onClick={() => { setEditingItem(item); setIsEditingItem(true); window.scrollTo({top:0, behavior:'smooth'}); }} className="p-2 bg-blue-600/20 text-blue-400 rounded-lg hover:bg-blue-600 hover:text-white transition-colors"><Edit2 size={16}/></button>
-                                          <button onClick={() => confirmDelete(item)} className="p-2 bg-red-600/20 text-red-400 rounded-lg hover:bg-red-600 hover:text-white transition-colors"><Trash2 size={16}/></button>
-                                      </div>
-                                  </div>
-                              ))}
+                                  )
+                              })}
                           </div>
                       </div>
                   )}
                   
-                  {/* --- TAB: PROFILE --- */}
+                  {/* --- TAB: NOTIFICHE & REPARTI (RESTORED) --- */}
+                  {adminTab === 'notif' && (
+                      <div className="max-w-2xl mx-auto space-y-8 animate-fade-in pb-20">
+                          <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><ArrowRightLeft className="text-purple-500"/> Smistamento Reparti</h3>
+                              <p className="text-slate-400 text-sm mb-6">Decidi in quale monitor inviare gli ordini per ogni categoria.</p>
+                              <div className="space-y-4">
+                                  {ADMIN_CATEGORY_ORDER.map(cat => (
+                                      <div key={cat} className="flex items-center justify-between p-3 bg-slate-950 rounded-xl border border-slate-800">
+                                          <span className="font-bold text-sm text-slate-300">{cat}</span>
+                                          <div className="relative">
+                                              <select value={tempDestinations[cat] || 'Cucina'} onChange={(e) => { const newDest = { ...tempDestinations, [cat]: e.target.value as Department }; setTempDestinations(newDest); setHasUnsavedDestinations(true); }} className="appearance-none bg-slate-800 text-white text-xs font-bold py-2 pl-3 pr-8 rounded-lg border border-slate-700 outline-none focus:border-purple-500">
+                                                  <option value="Cucina">Cucina</option>
+                                                  <option value="Pizzeria">Pizzeria</option>
+                                                  <option value="Pub">Pub / Bar</option>
+                                                  <option value="Sala">Sala (Auto)</option>
+                                              </select>
+                                              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" size={12}/>
+                                          </div>
+                                      </div>
+                                  ))}
+                              </div>
+                          </div>
+                          <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                              <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Printer className="text-blue-500"/> Stampa Scontrini (Beta)</h3>
+                              <div className="space-y-3">
+                                  {Object.keys(tempPrintSettings).map(key => (
+                                      <div key={key} className="flex items-center justify-between p-3 bg-slate-950 rounded-xl border border-slate-800">
+                                          <span className="font-bold text-sm text-slate-300">Stampa in {key}</span>
+                                          <button onClick={() => { const newSettings = { ...tempPrintSettings, [key]: !tempPrintSettings[key] }; setTempPrintSettings(newSettings); setHasUnsavedDestinations(true); }} className={`w-12 h-6 rounded-full p-1 transition-colors ${tempPrintSettings[key] ? 'bg-green-600' : 'bg-slate-700'}`}>
+                                              <div className={`w-4 h-4 rounded-full bg-white transition-transform ${tempPrintSettings[key] ? 'translate-x-6' : ''}`}></div>
+                                          </button>
+                                      </div>
+                                  ))}
+                              </div>
+                          </div>
+                          {hasUnsavedDestinations && (<div className="sticky bottom-6"><button onClick={saveDestinations} className="w-full bg-purple-600 hover:bg-purple-500 text-white font-bold py-4 rounded-xl shadow-lg animate-bounce flex items-center justify-center gap-2"><Save size={20}/> SALVA MODIFICHE</button></div>)}
+                      </div>
+                  )}
+
+                  {/* --- TAB: SHARE / QR (RESTORED) --- */}
+                  {adminTab === 'share' && (
+                      <div className="flex flex-col xl:flex-row gap-8 pb-20 animate-fade-in">
+                          <div className="flex-1 space-y-8">
+                              <div><h3 className="text-2xl font-black text-white mb-2">Menu Digitale</h3><p className="text-slate-400 text-sm">Fai scansionare questo QR Code ai clienti.</p></div>
+                              <div className="bg-white p-6 rounded-3xl shadow-2xl inline-block mx-auto xl:mx-0">
+                                  {qrCodeUrl ? <img src={qrCodeUrl} alt="Menu QR" className="w-64 h-64 mix-blend-multiply"/> : <div className="w-64 h-64 flex items-center justify-center bg-slate-100 text-slate-400 text-xs">QR non disponibile</div>}
+                              </div>
+                              <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 text-left space-y-4">
+                                  <div><label className="text-xs font-bold text-slate-500 uppercase mb-1 block">Link Pubblico</label><div className="flex gap-2"><input type="text" value={digitalMenuLink} readOnly className="flex-1 bg-slate-950 border border-slate-700 rounded-xl p-3 text-slate-400 text-xs font-mono"/><button onClick={copyToClipboard} className="p-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl border border-slate-700"><Copy size={16}/></button></div></div>
+                                  <button onClick={() => window.open(digitalMenuLink, '_blank')} className="w-full py-4 bg-cyan-600 hover:bg-cyan-500 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2"><ExternalLink size={20}/> APRI MENU DIGITALE</button>
+                              </div>
+                          </div>
+                          <div className="flex-shrink-0 flex justify-center xl:justify-start">
+                              <div className="relative border-[8px] border-slate-800 bg-slate-900 rounded-[3rem] h-[650px] w-[320px] shadow-2xl overflow-hidden ring-4 ring-slate-900/50">
+                                  <div className="absolute top-0 left-1/2 transform -translate-x-1/2 w-32 h-6 bg-slate-800 rounded-b-xl z-30"></div>
+                                  <div className="h-full w-full bg-slate-50 overflow-hidden">
+                                      <DigitalMenu restaurantId={session.user.id} isPreview={true} activeMenuData={menuItems} activeRestaurantName={restaurantName} />
+                                  </div>
+                              </div>
+                          </div>
+                      </div>
+                  )}
+
+                  {/* --- TAB: AI INTELLIGENCE (RESTORED) --- */}
+                  {adminTab === 'ai' && (
+                      <div className="max-w-xl mx-auto space-y-8 pb-20 animate-fade-in text-center">
+                          <div className="w-20 h-20 bg-pink-500/20 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse"><Sparkles size={40} className="text-pink-500"/></div>
+                          <h3 className="text-2xl font-black text-white">Gemini AI Intelligence</h3>
+                          <p className="text-slate-400">Inserisci la tua API Key di Google Gemini per abilitare:<br/>- Generazione descrizioni piatti<br/>- Analisi incassi giornaliera<br/>- Chat Assistant per i camerieri</p>
+                          <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 text-left">
+                              <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Google Gemini API Key</label>
+                              <div className="flex gap-2">
+                                  <div className="relative flex-1">
+                                      <Key className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18}/>
+                                      <input type="password" value={apiKeyInput} onChange={e => setApiKeyInput(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-10 pr-4 text-white font-mono" placeholder="AIza..."/>
+                                  </div>
+                                  <button onClick={handleSaveApiKey} className="bg-pink-600 hover:bg-pink-500 text-white px-6 rounded-xl font-bold shadow-lg">Salva</button>
+                              </div>
+                              <p className="text-[10px] text-slate-500 mt-4">La chiave viene salvata nel database sicuro di RistoSync. Non condividerla con nessuno.</p>
+                          </div>
+                      </div>
+                  )}
+
+                  {/* --- TAB: ANALYTICS (RESTORED) --- */}
+                  {adminTab === 'analytics' && (
+                      <div className="space-y-6 pb-20 animate-fade-in">
+                          <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                              <div><h3 className="text-xl font-bold text-white">Report Giornaliero</h3><p className="text-slate-400 text-sm">Analisi incassi e performance.</p></div>
+                              <div className="flex items-center bg-slate-950 rounded-xl p-1 border border-slate-700">
+                                  <button onClick={() => setSelectedDate(d => { const n = new Date(d); n.setDate(n.getDate()-1); return n; })} className="p-3 hover:bg-slate-800 rounded-lg"><ChevronLeft/></button>
+                                  <div className="px-6 font-bold text-white flex items-center gap-2"><Calendar size={18} className="text-emerald-500"/> {selectedDate.toLocaleDateString()}</div>
+                                  <button onClick={() => setSelectedDate(d => { const n = new Date(d); n.setDate(n.getDate()+1); return n; })} className="p-3 hover:bg-slate-800 rounded-lg"><ChevronRight/></button>
+                              </div>
+                          </div>
+                          {(() => {
+                              const dailyOrders = ordersForAnalytics.filter(o => {
+                                  const d = new Date(o.createdAt || o.timestamp);
+                                  return d.getDate() === selectedDate.getDate() && d.getMonth() === selectedDate.getMonth() && d.getFullYear() === selectedDate.getFullYear() && o.status === OrderStatus.DELIVERED;
+                              });
+                              const revenue = dailyOrders.reduce((acc, o) => acc + o.items.reduce((sum, i) => sum + (i.menuItem.price * i.quantity), 0), 0);
+                              const totalDishes = dailyOrders.reduce((acc, o) => acc + o.items.reduce((sum, i) => sum + i.quantity, 0), 0);
+                              const avgOrder = dailyOrders.length ? (revenue / dailyOrders.length) : 0;
+                              return (
+                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                      <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 relative overflow-hidden"><div className="absolute top-0 right-0 p-4 opacity-10"><DollarSign size={80} className="text-emerald-500"/></div><p className="text-slate-400 text-xs font-bold uppercase mb-2">Incasso Totale</p><p className="text-4xl font-black text-white">€ {revenue.toFixed(2)}</p></div>
+                                      <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 relative overflow-hidden"><div className="absolute top-0 right-0 p-4 opacity-10"><Receipt size={80} className="text-blue-500"/></div><p className="text-slate-400 text-xs font-bold uppercase mb-2">Scontrini Emessi</p><p className="text-4xl font-black text-white">{dailyOrders.length}</p></div>
+                                      <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800 relative overflow-hidden"><div className="absolute top-0 right-0 p-4 opacity-10"><TrendingUp size={80} className="text-purple-500"/></div><p className="text-slate-400 text-xs font-bold uppercase mb-2">Scontrino Medio</p><p className="text-4xl font-black text-white">€ {avgOrder.toFixed(2)}</p></div>
+                                      <div className="col-span-full bg-slate-900 p-6 rounded-2xl border border-slate-800">
+                                          <div className="flex justify-between items-center mb-4"><h4 className="font-bold flex items-center gap-2"><Sparkles className="text-pink-500"/> Analisi AI Manager</h4><button onClick={handleGenerateAnalysis} className="px-4 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-lg text-xs font-bold shadow-lg flex items-center gap-2">{isAnalyzing ? <Loader className="animate-spin" size={14}/> : <Bot size={14}/>} Genera Analisi</button></div>
+                                          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 text-sm leading-relaxed text-slate-300 min-h-[80px]">{aiAnalysisResult || 'Clicca su "Genera Analisi" per ricevere consigli dal tuo AI Manager.'}</div>
+                                      </div>
+                                  </div>
+                              );
+                          })()}
+                      </div>
+                  )}
+                  
+                  {/* --- TAB: PROFILE (RESTORED) --- */}
                   {adminTab === 'profile' && (
                       <div className="max-w-4xl mx-auto animate-fade-in">
                           <h2 className="text-3xl font-black text-white mb-8">Profilo Ristorante</h2>
