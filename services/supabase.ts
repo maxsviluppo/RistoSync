@@ -50,8 +50,14 @@ export const resetSupabaseConfig = () => {
 
 // Funzioni Auth Helper
 export const signOut = async () => {
-    if (!supabase) return;
-    await supabase.auth.signOut();
-    localStorage.clear(); // Pulisce anche la cache locale
+    // Immediate cleanup to prevent UI hanging
+    localStorage.clear(); 
+    
+    if (supabase) {
+        // Fire and forget logout, don't await if network is slow
+        supabase.auth.signOut().catch(console.error);
+    }
+    
+    // Force reload to reset application state
     window.location.reload();
 };

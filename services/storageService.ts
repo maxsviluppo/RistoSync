@@ -1,4 +1,3 @@
-
 import { Order, OrderStatus, OrderItem, MenuItem, AppSettings, Category, Department, NotificationSettings } from '../types';
 import { supabase } from './supabase';
 
@@ -63,18 +62,17 @@ export const initSupabaseSync = async () => {
     await ensureUserId();
     
     if (currentUserId) {
-        // 1. Initial Sync
-        await Promise.all([
+        // 1. Initial Sync - FIRE AND FORGET (Non-Blocking)
+        Promise.all([
             fetchFromCloud(),
             fetchFromCloudMenu(),
             fetchSettingsFromCloud()
-        ]);
+        ]).catch(e => console.error("Initial Sync Failed (Non-fatal)", e));
         
         // 2. Sync Profile Settings (API KEY)
-        const { data: profile } = await supabase.from('profiles').select('google_api_key').eq('id', currentUserId).single();
-        if (profile?.google_api_key) {
-            safeLocalStorageSave(GOOGLE_API_KEY_STORAGE, profile.google_api_key);
-        }
+        supabase.from('profiles').select('google_api_key').eq('id', currentUserId).single().then(({data}) => {
+             if (data?.google_api_key) safeLocalStorageSave(GOOGLE_API_KEY_STORAGE, data.google_api_key);
+        });
 
         // 3. Realtime Subscription (Robust Mode)
         supabase.getChannels().forEach(channel => {
