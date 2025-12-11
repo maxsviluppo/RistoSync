@@ -184,10 +184,10 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [waiterName, setWaiterName] = useState<string>('');
   const [menuItems, setMenuItems] = useState<MenuItem[]>([]);
-  const [sheetHeight, setSheetHeight] = useState(80);
-  const [isDraggingSheet, setIsDraggingSheet] = useState(false);
-  const dragStartY = useRef(0);
-  const startHeight = useRef(0);
+  
+  // NEW: State for Cart Visibility (replacing draggable sheet height)
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editQty, setEditQty] = useState(1);
   const [editNotes, setEditNotes] = useState('');
@@ -218,6 +218,13 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   const prevItemReadyStateRef = useRef<Record<string, boolean>>({});
   const seenReadyComboPartsRef = useRef<Set<string>>(new Set()); 
   const isFirstLoad = useRef(true);
+
+  // --- HELPER FOR COMBO ITEMS ---
+  const getSubItemsForCombo = (item: OrderItem): MenuItem[] => {
+      if (item.menuItem.category !== Category.MENU_COMPLETO || !item.menuItem.comboItems) return [];
+      // Resolve IDs to full items using menuItems state
+      return menuItems.filter(m => item.menuItem.comboItems?.includes(m.id));
+  };
 
   const loadData = () => {
       const allOrders = getOrders();
@@ -406,10 +413,8 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
 
   const sortedCart = [...cart].sort((a, b) => CATEGORY_ORDER.indexOf(a.menuItem.category) - CATEGORY_ORDER.indexOf(b.menuItem.category));
 
-  const handleSheetTouchStart = (e: React.TouchEvent) => { setIsDraggingSheet(true); dragStartY.current = e.touches[0].clientX; startHeight.current = sheetHeight; };
-  const handleSheetTouchMove = (e: React.TouchEvent) => { if (!isDraggingSheet) return; const diff = dragStartY.current - e.touches[0].clientY; setSheetHeight(Math.max(80, Math.min(window.innerHeight * 0.9, startHeight.current + diff))); };
-  const handleSheetTouchEnd = () => { setIsDraggingSheet(false); setSheetHeight(sheetHeight > window.innerHeight * 0.4 ? window.innerHeight * 0.85 : 80); };
-  const toggleSheet = () => setSheetHeight(sheetHeight > 200 ? 80 : window.innerHeight * 0.85);
+  // REMOVED DRAGGABLE SHEET LOGIC - REPLACED WITH FIXED TOGGLE
+  const toggleCart = () => setIsCartOpen(!isCartOpen);
 
   const handleSelectTable = (tId: string) => {
       if (table === tId) { setTable(''); setCart([]); setEditingOrderId(null); return; }
@@ -434,8 +439,8 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   };
 
   const requestDelete = (index: number) => setDeleteConfirmIndex(index);
-  const confirmDelete = () => { if (deleteConfirmIndex !== null) { const itemToRemove = sortedCart[deleteConfirmIndex]; setCart(prev => prev.filter(i => i !== itemToRemove)); setDeleteConfirmIndex(null); if (cart.length <= 1) setSheetHeight(80); } };
-  const editCartItem = (index: number) => { const itemToEdit = sortedCart[index]; setCart(prev => prev.filter(i => i !== itemToEdit)); setSelectedCategory(itemToEdit.menuItem.category); setEditingItemId(itemToEdit.menuItem.id); setEditQty(itemToEdit.quantity); setEditNotes(itemToEdit.notes || ''); setSheetHeight(80); };
+  const confirmDelete = () => { if (deleteConfirmIndex !== null) { const itemToRemove = sortedCart[deleteConfirmIndex]; setCart(prev => prev.filter(i => i !== itemToRemove)); setDeleteConfirmIndex(null); } };
+  const editCartItem = (index: number) => { const itemToEdit = sortedCart[index]; setCart(prev => prev.filter(i => i !== itemToEdit)); setSelectedCategory(itemToEdit.menuItem.category); setEditingItemId(itemToEdit.menuItem.id); setEditQty(itemToEdit.quantity); setEditNotes(itemToEdit.notes || ''); setIsCartOpen(false); };
 
   const requestSendOrder = () => { if (!table || cart.length === 0) return; setSendConfirmOpen(true); };
   
@@ -458,7 +463,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
     // NOTE: Department Printing is now handled by the Kitchen Display terminals automatically when they receive the order.
     // Cassa Printing is handled in handleFreeTable (End of Meal).
     
-    setTimeout(() => { setCart([]); setIsSending(false); setSheetHeight(80); setEditingOrderId(null); loadData(); setTable(''); }, 500);
+    setTimeout(() => { setCart([]); setIsSending(false); setIsCartOpen(false); setEditingOrderId(null); loadData(); setTable(''); }, 500);
   };
 
   const handleFreeTable = () => {
@@ -564,12 +569,6 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
   // Late Flash Logic for Header Icon
   const shouldFlashLate = lateTables.length > 0 && !latesAcknowledged && !tableManagerOpen;
 
-  // Helper to find sub items for combo display
-  const getSubItemsForCombo = (item: OrderItem): MenuItem[] => {
-      if (item.menuItem.category !== Category.MENU_COMPLETO || !item.menuItem.comboItems) return [];
-      return menuItems.filter(m => item.menuItem.comboItems?.includes(m.id));
-  };
-
   return (
     <div className="flex flex-col h-screen bg-slate-900 text-slate-100 max-w-md mx-auto shadow-2xl overflow-hidden relative border-x border-slate-800 font-sans selection:bg-orange-500 selection:text-white">
       <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden flex items-center justify-center"><ChefHat size={400} className="text-white opacity-[0.03] transform -rotate-12 translate-x-20 translate-y-10" /></div>
@@ -635,7 +634,7 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
             </div>
           </div>
 
-          <div className="px-3 pt-1 grid grid-cols-2 gap-3 pb-6">
+          <div className="px-3 pt-1 grid grid-cols-2 gap-3 pb-32">
               {menuItems.filter(i => i.category === selectedCategory).map(item => {
                   const isPopping = justAddedId === item.id;
                   return (
@@ -648,48 +647,57 @@ const WaiterPad: React.FC<WaiterPadProps> = ({ onExit }) => {
                   );
               })}
           </div>
-        <button onClick={() => openAiFor(null)} className={`fixed right-5 w-12 h-12 bg-indigo-600 border border-indigo-400 text-white rounded-full shadow-[0_8px_30px_rgba(79,70,229,0.4)] flex items-center justify-center z-20 transition-all duration-500 hover:scale-110 hover:shadow-indigo-500/60`} style={{ bottom: sheetHeight + 20 }}><Bot size={24} /></button>
+        <button onClick={() => openAiFor(null)} className={`fixed right-5 w-12 h-12 bg-indigo-600 border border-indigo-400 text-white rounded-full shadow-[0_8px_30px_rgba(79,70,229,0.4)] flex items-center justify-center z-20 transition-all duration-500 hover:scale-110 hover:shadow-indigo-500/60`} style={{ bottom: isCartOpen ? '90vh' : '100px' }}><Bot size={24} /></button>
       </div>
 
-      {/* --- BOTTOM SHEET CART --- */}
-      <div className="absolute bottom-0 left-0 right-0 z-40 bg-slate-800 rounded-t-[2.5rem] shadow-[0_-10px_40px_-10px_rgba(0,0,0,0.5)] border-t border-white/10 flex flex-col will-change-transform" style={{ height: `${sheetHeight}px`, transition: isDraggingSheet ? 'none' : 'height 0.4s cubic-bezier(0.17, 0.67, 0.22, 1.26)' }}>
-        <div onTouchStart={handleSheetTouchStart} onTouchMove={handleSheetTouchMove} onTouchEnd={handleSheetTouchEnd} className={`flex-shrink-0 h-20 px-6 flex items-center justify-between relative rounded-t-[2.5rem] cursor-grab active:cursor-grabbing border-b border-white/5 touch-none ${editingOrderId ? 'bg-gradient-to-r from-blue-900/40 to-slate-800' : 'bg-gradient-to-b from-slate-800 to-slate-800/90'}`}>
-            <div className="absolute top-3 left-1/2 transform -translate-x-1/2 w-12 h-1.5 bg-slate-600/50 rounded-full" />
-            <div className="flex items-center gap-3 mt-1" onClick={(e) => e.stopPropagation()}>
-                <div className={`transition-all duration-300 ${sheetHeight > 100 ? 'scale-0 w-0' : 'scale-100 w-12'}`}>
-                     <div className={`w-10 h-10 bg-slate-700 rounded-full flex items-center justify-center text-white font-bold relative transition-transform ${cartBump ? 'scale-125 bg-orange-500 text-white ring-2 ring-orange-300' : ''}`}>
-                        <ShoppingBag size={18} />
-                        {totalItems > 0 && <span className="absolute -top-1 -right-1 bg-orange-500 text-[10px] w-5 h-5 rounded-full flex items-center justify-center border border-slate-900">{totalItems}</span>}
-                     </div>
-                </div>
-                <div className="flex flex-col">
-                    <div className="flex items-center gap-2"><span className="text-[10px] uppercase text-slate-400 font-bold tracking-wider leading-none">Nuovo Ordine</span>{editingOrderId && <span className="text-[8px] bg-blue-500 text-white px-1.5 py-0.5 rounded font-bold uppercase">Modifica</span>}</div>
-                    <div className="flex items-baseline gap-1"><span className="font-bold text-white text-lg leading-none">TAVOLO</span><span className="font-black text-orange-500 text-xl leading-none">{table || '?'}</span></div>
-                </div>
-            </div>
-            <div className="flex items-center gap-3" onClick={(e) => e.stopPropagation()}>
-                 <button onClick={requestSendOrder} disabled={!table || cart.length === 0 || isSending} className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg transition-all transform ${(!table || cart.length === 0 || isSending) ? 'bg-slate-700/50 text-slate-600 cursor-not-allowed shadow-none' : editingOrderId ? 'bg-blue-600 text-white hover:bg-blue-500' : 'bg-orange-500 text-white hover:bg-orange-600 hover:scale-110 shadow-orange-500/40'}`}>{isSending ? <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div> : <Send size={20} className="ml-0.5 mt-0.5" />}</button>
-                <button onClick={toggleSheet} className="w-12 h-12 rounded-full bg-slate-700/50 text-slate-300 flex items-center justify-center hover:bg-slate-700 transition-colors">{sheetHeight > 200 ? <ChevronDown size={24}/> : <ChevronUp size={24}/>}</button>
-            </div>
-        </div>
-        <div className="flex-1 overflow-hidden flex flex-col relative bg-slate-900">
-             <div className="flex-1 overflow-y-auto p-4 space-y-2 pb-4 overscroll-contain">
-                {cart.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-full text-slate-600 gap-2"><ShoppingBag size={48} className="opacity-20" /><p>Il carrello è vuoto</p>{editingOrderId && <p className="text-xs text-blue-400 text-center px-6">Stai modificando un ordine esistente. Aggiungi piatti o rimuovi quelli presenti.</p>}</div>
-                ) : (
-                    <>
-                        <p className="text-xs text-center text-slate-500 mb-4 animate-pulse uppercase tracking-wider">← Scorri per Eliminare • Scorri per Modificare →</p>
-                        {sortedCart.map((item, index) => <SwipeableCartItem key={index} index={index} item={item} onEdit={() => editCartItem(index)} onDelete={() => requestDelete(index)} isFirst={index === 0} appSettings={appSettings} isAddition={!!editingOrderId} />)}
-                    </>
-                )}
-             </div>
-             <div className="p-4 border-t border-slate-800 bg-slate-900 pb-8">
-                 <button onClick={requestSendOrder} disabled={!table || isSending || cart.length === 0} className={`w-full py-4 rounded-2xl font-bold text-lg tracking-wide flex items-center justify-center gap-3 shadow-xl transition-all relative overflow-hidden ${(!table || isSending || cart.length === 0) ? 'bg-slate-800 text-slate-600 cursor-not-allowed shadow-none border border-slate-700' : editingOrderId ? 'bg-blue-600 text-white hover:bg-blue-500 hover:scale-[1.01] shadow-blue-500/20' : 'bg-orange-500 text-white hover:bg-orange-600 hover:scale-[1.01] shadow-orange-500/20'}`}>
-                    {isSending ? <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div> : <><Send size={20}/> {editingOrderId ? 'AGGIORNA COMANDA' : 'INVIA ORDINE'}</>}
-                    {!table && !isSending && <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-xs text-red-400 font-bold uppercase backdrop-blur-sm border-2 border-red-500/20 rounded-2xl">SELEZIONA TAVOLO</div>}
-                </button>
-             </div>
-        </div>
+      {/* --- FIXED BOTTOM DOCK & FULL CART --- */}
+      <div className={`fixed bottom-0 left-0 right-0 z-40 bg-slate-800 border-t border-slate-700 transition-all duration-300 ease-out shadow-[0_-10px_40px_-10px_rgba(0,0,0,0.5)] ${isCartOpen ? 'h-[95vh] rounded-t-3xl border-t-white/10' : 'h-[90px]'}`}>
+          
+          {/* HEADER / TOGGLE BAR */}
+          <div onClick={toggleCart} className={`h-[90px] flex items-center justify-between px-6 cursor-pointer active:bg-slate-700/50 transition-colors ${isCartOpen ? 'border-b border-white/5' : ''}`}>
+              <div className="flex items-center gap-4">
+                  <div className={`w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center text-white font-bold relative transition-transform duration-300 ${cartBump ? 'scale-125 bg-orange-500 text-white ring-2 ring-orange-300' : ''}`}>
+                      <ShoppingBag size={22} />
+                      {totalItems > 0 && <span className="absolute -top-1 -right-1 bg-orange-500 text-[10px] w-5 h-5 rounded-full flex items-center justify-center border-2 border-slate-800">{totalItems}</span>}
+                  </div>
+                  <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">{editingOrderId ? 'MODIFICA ORDINE' : 'NUOVO ORDINE'}</p>
+                      <div className="flex items-center gap-1">
+                          <span className="text-xl font-black text-white">TAVOLO</span>
+                          <span className="text-2xl font-black text-orange-500">{table || '?'}</span>
+                      </div>
+                  </div>
+              </div>
+              <div className="bg-slate-700 p-2 rounded-full text-slate-300">
+                  {isCartOpen ? <ChevronDown size={24}/> : <ChevronUp size={24}/>}
+              </div>
+          </div>
+
+          {/* EXPANDED CONTENT */}
+          {isCartOpen && (
+              <div className="flex flex-col h-[calc(100%-90px)]">
+                  <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-4">
+                        {cart.length === 0 ? (
+                            <div className="flex flex-col items-center justify-center h-full text-slate-600 gap-4">
+                                <ShoppingBag size={64} className="opacity-20" />
+                                <p className="font-bold text-lg">Il carrello è vuoto</p>
+                                <button onClick={() => setIsCartOpen(false)} className="bg-slate-700 text-white px-6 py-2 rounded-xl text-sm font-bold">Aggiungi Piatti</button>
+                            </div>
+                        ) : (
+                            <>
+                                <p className="text-xs text-center text-slate-500 mb-2 uppercase tracking-wider">← Scorri per Eliminare • Modificare →</p>
+                                {sortedCart.map((item, index) => <SwipeableCartItem key={index} index={index} item={item} onEdit={() => editCartItem(index)} onDelete={() => requestDelete(index)} isFirst={index === 0} appSettings={appSettings} isAddition={!!editingOrderId} />)}
+                            </>
+                        )}
+                  </div>
+                  <div className="p-4 bg-slate-800 border-t border-slate-700 pb-8">
+                       <button onClick={requestSendOrder} disabled={!table || isSending || cart.length === 0} className={`w-full py-5 rounded-2xl font-black text-xl tracking-wide flex items-center justify-center gap-3 shadow-xl transition-all relative overflow-hidden ${(!table || isSending || cart.length === 0) ? 'bg-slate-700 text-slate-500 cursor-not-allowed shadow-none border border-slate-600' : editingOrderId ? 'bg-blue-600 text-white hover:bg-blue-500 hover:scale-[1.01] shadow-blue-500/20' : 'bg-orange-500 text-white hover:bg-orange-600 hover:scale-[1.01] shadow-orange-500/20'}`}>
+                            {isSending ? <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div> : <><Send size={24}/> {editingOrderId ? 'AGGIORNA COMANDA' : 'INVIA IN CUCINA'}</>}
+                            {!table && !isSending && <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-sm text-red-400 font-bold uppercase backdrop-blur-sm border-2 border-red-500/20 rounded-2xl">SELEZIONA PRIMA UN TAVOLO</div>}
+                       </button>
+                  </div>
+              </div>
+          )}
       </div>
 
       {tableManagerOpen && (
