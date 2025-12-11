@@ -179,6 +179,12 @@ export default function App() {
           return;
       }
 
+      // If Supabase not configured, stop loading immediately to show AuthScreen/Error
+      if (!supabase) {
+          setLoadingSession(false);
+          return;
+      }
+
       const timer = setTimeout(() => {
           setLoadingSession((prev) => {
               if (prev) return false;
@@ -411,6 +417,7 @@ export default function App() {
   const handleImportDemo = async () => {
       if(confirm("Vuoi importare il menu demo completo?\nAggiungerà 25 piatti con descrizioni e allergeni.")) {
           await importDemoMenu();
+          setMenuItems(getMenuItems()); // Update UI immediately
       }
   };
 
@@ -877,10 +884,19 @@ Grazie.`);
                                 <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2"><Bot className="text-indigo-500"/> AI Configuration</h3>
                                 <div className="bg-slate-900 p-6 rounded-2xl border border-indigo-500/30 shadow-lg shadow-indigo-500/10">
                                     <div className="mb-4">
-                                        <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">API Key (Google Gemini)</label>
-                                        <input type="password" value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-4 pr-4 text-white focus:border-indigo-500 outline-none font-mono" placeholder="AIzaSy..."/>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <label className="text-xs font-bold text-slate-500 uppercase">API Key (Google Gemini)</label>
+                                            <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener noreferrer" className="text-[10px] font-bold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition-colors bg-indigo-500/10 px-2 py-1 rounded-lg border border-indigo-500/20">
+                                                Ottieni Key Gratis <ExternalLink size={10}/>
+                                            </a>
+                                        </div>
+                                        <input type="password" value={apiKeyInput} onChange={(e) => setApiKeyInput(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded-xl py-3 pl-4 pr-4 text-white focus:border-indigo-500 outline-none font-mono transition-colors" placeholder="AIzaSy..."/>
+                                        <p className="text-[10px] text-slate-500 mt-2 leading-relaxed">
+                                            L'Intelligenza Artificiale (Chef AI) genera descrizioni accattivanti per i piatti, suggerisce abbinamenti e aiuta i camerieri a rispondere alle domande dei clienti.<br/>
+                                            La chiave API è gratuita e viene salvata in modo sicuro nel tuo profilo.
+                                        </p>
                                     </div>
-                                    <button onClick={handleSaveApiKey} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20"><Save size={18}/> SALVA CHIAVE</button>
+                                    <button onClick={handleSaveApiKey} className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 active:scale-95 transition-all"><Save size={18}/> SALVA CHIAVE</button>
                                 </div>
                             </div>
                         )}
