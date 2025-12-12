@@ -37,24 +37,34 @@ export const askChefAI = async (query: string, currentItem: MenuItem | null): Pr
   }
 };
 
-export const generateRestaurantAnalysis = async (stats: any, date: string): Promise<string> => {
+export const generateRestaurantAnalysis = async (stats: any, date: string, location: string, topIngredients: string[]): Promise<string> => {
     try {
         const apiKey = getGoogleApiKey() || process.env.API_KEY;
-        if (!apiKey) return "⚠️ Chiave API mancante.";
+        if (!apiKey) return "⚠️ Chiave API mancante. Configurala nelle impostazioni.";
 
         const ai = new GoogleGenAI({ apiKey });
 
         const prompt = `
-            Sei un Consulente Ristorazione. Analizza i dati del ${date}:
+            Sei un Senior Restaurant Consultant specializzato in Efficienza Operativa e Supply Chain.
+            
+            DATI DEL RISTORANTE (Data: ${date}):
+            - Località: ${location || "Italia (Generico)"}
             - Incasso: € ${stats.totalRevenue.toFixed(2)}
-            - Piatti: ${stats.totalItems}
-            - Attesa Media: ${stats.avgWait} min
-            - Top Piatti: ${JSON.stringify(stats.topDishes)}
+            - Scontrino Medio: € ${stats.avgOrder.toFixed(2)}
+            - Tavoli Serviti: ${stats.totalTablesServed}
+            - Tempo Medio Attesa (Creazione -> Servizio): ${stats.avgWaitTime} minuti
+            - Materie Prime Più Usate: ${topIngredients.join(', ')}
+            
+            OBIETTIVO:
+            Fornisci una consulenza strategica focalizzata su Efficienza e Food Cost (Max 250 parole).
+            
+            STRUTTURA RISPOSTA:
+            1. ⚡ **Efficienza & Struttura**: Analizza il "Tempo Medio Attesa" (${stats.avgWaitTime} min) in relazione ai "Tavoli Serviti" (${stats.totalTablesServed}). La cucina è veloce o lenta? Se lenta (>30min), suggerisci come migliorare il pass o la linea.
+            2. 📉 **Analisi Food Cost**: Commenta la redditività basandoti sui consumi.
+            3. 🚚 **Sourcing Locale**: Dato che il locale è a "${location}", consiglia fornitori specifici per gli ingredienti top (es. ${topIngredients.slice(0,2).join(', ')}).
+            4. 💡 **Action Item**: Un consiglio pratico immediato per lo staff.
 
-            Fornisci un report breve (max 100 parole) con:
-            1. Valutazione performance.
-            2. Consiglio per migliorare incasso o efficienza domani.
-            Usa emoji.
+            Usa emoji professionali. Sii diretto e costruttivo.
         `;
 
         const response = await ai.models.generateContent({
@@ -66,7 +76,7 @@ export const generateRestaurantAnalysis = async (stats: any, date: string): Prom
 
     } catch (error) {
         console.error("Gemini Analysis Error:", error);
-        return "Errore analisi AI.";
+        return "Errore analisi AI. Verifica la connessione.";
     }
 };
 

@@ -3,12 +3,11 @@ import { Order, OrderStatus, OrderItem, MenuItem, AppSettings, Category, Departm
 import { supabase } from './supabase';
 
 const STORAGE_KEY = 'ristosync_orders';
-const TABLES_COUNT_KEY = 'ristosync_table_count';
-const WAITER_KEY = 'ristosync_waiter_name';
 const MENU_KEY = 'ristosync_menu_items';
 const SETTINGS_NOTIFICATIONS_KEY = 'ristosync_settings_notifications';
-const APP_SETTINGS_KEY = 'ristosync_app_settings';
+const APP_SETTINGS_KEY = 'ristosync_app_settings'; 
 const GOOGLE_API_KEY_STORAGE = 'ristosync_google_api_key';
+const WAITER_KEY = 'ristosync_waiter_name';
 
 // --- DEMO DATASET ---
 const DEMO_MENU_ITEMS: MenuItem[] = [
@@ -26,504 +25,258 @@ const DEMO_MENU_ITEMS: MenuItem[] = [
 // --- SYNC ENGINE STATE ---
 let currentUserId: string | null = null;
 let pollingInterval: any = null;
+let isSyncing = false; 
+let realtimeChannel: any = null;
+let isConnected = false;
 
 // HELPER: SAFE STORAGE SAVE
-// Handles "QuotaExceededError" silently by cleaning up old data. 
-// We do NOT alert the user because data is safe in Cloud.
 const safeLocalStorageSave = (key: string, value: string) => {
     try {
         localStorage.setItem(key, value);
     } catch (e: any) {
-        // Intercept QuotaExceededError
-        if (e.name === 'QuotaExceededError' || e.message?.toLowerCase().includes('quota')) {
-            console.warn("⚠️ STORAGE FULL: Operating in Cloud-Only mode.");
-
-            // Strategy: Try to clean up Local Cache (Remove Delivered Orders)
-            if (key === STORAGE_KEY) {
-                try {
-                    const orders = JSON.parse(value) as Order[];
-                    // Aggressive Clean: Keep only active orders
-                    const streamlined = orders.filter(o => o.status !== OrderStatus.DELIVERED);
-
-                    if (streamlined.length < orders.length) {
-                        try {
-                            localStorage.setItem(key, JSON.stringify(streamlined));
-                            console.log(`✅ Cache cleaned: Removed ${orders.length - streamlined.length} delivered orders.`);
-                            return;
-                        } catch (retryError) {
-                            // Even streamlined is too big, ignore local save
-                        }
-                    }
-                } catch (cleanError) {
-                    console.error("Cleanup failed:", cleanError);
-                }
-            }
-            // Notify User via Event
-            window.dispatchEvent(new Event('storage-quota-exceeded'));
-        }
+        console.error("Storage Save Error:", e);
     }
 };
 
-// Initialize Realtime Subscription
-export const initSupabaseSync = async () => {
-    if (!supabase) return;
-
-    // Get Current User
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session?.user) {
-        currentUserId = session.user.id;
-
-        // 1. Initial Sync
-        await fetchFromCloud();
-        await fetchFromCloudMenu();
-        await fetchSettingsFromCloud();
-
-        // 2. Sync Profile Settings (API KEY)
-        const { data: profile } = await supabase.from('profiles').select('google_api_key').eq('id', currentUserId).single();
-        if (profile?.google_api_key) {
-            safeLocalStorageSave(GOOGLE_API_KEY_STORAGE, profile.google_api_key);
-        }
-
-        // 3. Realtime Subscription (Robust Mode)
-        const channel = supabase.channel(`room:${currentUserId}`);
-
-        channel
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'orders',
-                filter: `user_id=eq.${currentUserId}`
-            }, () => {
-                fetchFromCloud();
-            })
-            .on('postgres_changes', {
-                event: '*',
-                schema: 'public',
-                table: 'menu_items',
-                filter: `user_id=eq.${currentUserId}`
-            }, () => {
-                fetchFromCloudMenu();
-            })
-            .on('postgres_changes', {
-                event: 'UPDATE',
-                schema: 'public',
-                table: 'profiles',
-                filter: `id=eq.${currentUserId}`
-            }, (payload) => {
-                if (payload.new.settings) {
-                    safeLocalStorageSave(APP_SETTINGS_KEY, JSON.stringify(payload.new.settings));
-                    window.dispatchEvent(new Event('local-settings-update'));
-                }
-            })
-            .subscribe();
-
-        // 4. Fallback Polling (Heartbeat)
-        if (pollingInterval) clearInterval(pollingInterval);
-        pollingInterval = setInterval(() => {
-            fetchFromCloud();
-            fetchSettingsFromCloud();
-        }, 15000);
-    }
+// --- API KEY HELPERS ---
+export const getGoogleApiKey = (): string | null => {
+    return localStorage.getItem(GOOGLE_API_KEY_STORAGE);
 };
 
-const handleSupabaseError = (error: any) => {
-    if (!error) return;
-    console.error("Supabase Error:", error);
-    return error;
-}
-
-const fetchFromCloud = async () => {
-    if (!supabase || !currentUserId) return;
-
-    // OPTIMIZATION: Only fetch Active orders OR items created in last 48 hours to save bandwidth/storage
-    const twoDaysAgo = new Date();
-    twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
-
-    const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('user_id', currentUserId)
-        .or(`status.neq.${OrderStatus.DELIVERED},created_at.gt.${twoDaysAgo.toISOString()}`);
-
-    if (error) {
-        handleSupabaseError(error);
-        return;
-    }
-
-    const appOrders: Order[] = data.map((row: any) => ({
-        id: row.id,
-        table_number: row.table_number,
-        tableNumber: row.table_number,
-        status: row.status as OrderStatus,
-        timestamp: parseInt(row.timestamp) || new Date(row.created_at).getTime(),
-        createdAt: new Date(row.created_at).getTime(),
-        items: row.items,
-        waiterName: row.waiter_name
-    }));
-
-    safeLocalStorageSave(STORAGE_KEY, JSON.stringify(appOrders));
-    window.dispatchEvent(new Event('local-storage-update'));
-};
-
-const fetchFromCloudMenu = async () => {
-    if (!supabase || !currentUserId) return;
-    const { data, error } = await supabase.from('menu_items').select('*').eq('user_id', currentUserId);
-
-    if (error) handleSupabaseError(error);
-
-    if (!error && data) {
-        const appMenuItems: MenuItem[] = data.map((row: any) => ({
-            id: row.id,
-            name: row.name,
-            price: row.price,
-            category: row.category,
-            description: row.description,
-            ingredients: row.ingredients,
-            allergens: row.allergens,
-            image: row.image,
-            isCombo: row.category === Category.MENU_COMPLETO,
-            comboItems: row.combo_items || [],
-            specificDepartment: row.specific_department
-        }));
-
-        safeLocalStorageSave(MENU_KEY, JSON.stringify(appMenuItems));
-        window.dispatchEvent(new Event('local-menu-update'));
-    }
-};
-
-const fetchSettingsFromCloud = async () => {
-    if (!supabase || !currentUserId) return;
-    const { data, error } = await supabase.from('profiles').select('settings').eq('id', currentUserId).single();
-    if (!error && data?.settings) {
-        safeLocalStorageSave(APP_SETTINGS_KEY, JSON.stringify(data.settings));
-        window.dispatchEvent(new Event('local-settings-update'));
-    }
+export const saveGoogleApiKey = (key: string) => {
+    safeLocalStorageSave(GOOGLE_API_KEY_STORAGE, key);
 };
 
 // --- ORDER MANAGEMENT ---
+
 export const getOrders = (): Order[] => {
     const data = localStorage.getItem(STORAGE_KEY);
     return data ? JSON.parse(data) : [];
 };
 
-const saveLocallyAndNotify = (orders: Order[]) => {
+export const saveOrders = (orders: Order[], skipSync = false) => {
     safeLocalStorageSave(STORAGE_KEY, JSON.stringify(orders));
     window.dispatchEvent(new Event('local-storage-update'));
-};
-
-const syncOrderToCloud = async (order: Order, isDelete = false) => {
-    if (!supabase || !currentUserId) return;
-    try {
-        if (isDelete) {
-            await supabase.from('orders').delete().eq('id', order.id);
-        } else {
-            const payload = {
-                id: order.id,
-                user_id: currentUserId,
-                table_number: order.tableNumber,
-                status: order.status,
-                items: order.items,
-                timestamp: order.timestamp,
-                waiter_name: order.waiterName
-            };
-            await supabase.from('orders').upsert(payload);
-        }
-    } catch (e) {
-        console.warn("Cloud sync warning:", e);
-    }
-};
-
-export const saveOrders = (orders: Order[]) => {
-    saveLocallyAndNotify(orders);
+    if (!skipSync) forceCloudSync();
 };
 
 export const addOrder = async (order: Order) => {
     const orders = getOrders();
-    const settings = getAppSettings();
-    const now = Date.now();
-
-    const cleanOrder: Order = {
-        ...order,
-        timestamp: now,
-        createdAt: now,
-        items: order.items.map(i => {
-            const dest = settings.categoryDestinations ? settings.categoryDestinations[i.menuItem.category] : 'Cucina';
-            const isSala = dest === 'Sala';
-
-            return {
-                ...i,
-                completed: isSala,
-                served: false,
-                isAddedLater: false,
-                comboCompletedParts: [],
-                comboServedParts: []
-            };
-        })
-    };
-    const newOrders = [...orders, cleanOrder];
-
-    saveLocallyAndNotify(newOrders);
-    syncOrderToCloud(cleanOrder);
+    // FORCE overwrite waiter name to ensure current user can access it immediately
+    order.waiterName = getWaiterName() || 'Staff';
+    orders.push(order);
+    saveOrders(orders);
 };
 
 export const updateOrderStatus = (orderId: string, status: OrderStatus) => {
     const orders = getOrders();
     const order = orders.find(o => o.id === orderId);
-    if (!order) return;
-
-    const updatedOrder = { ...order, status };
-    const newOrders = orders.map(o => o.id === orderId ? updatedOrder : o);
-
-    saveLocallyAndNotify(newOrders);
-    syncOrderToCloud(updatedOrder);
+    if (order) {
+        order.status = status;
+        order.timestamp = Date.now();
+        saveOrders(orders);
+    }
 };
 
 export const updateOrderItems = async (orderId: string, newItems: OrderItem[]) => {
     const orders = getOrders();
     const order = orders.find(o => o.id === orderId);
-    const settings = getAppSettings();
-    if (!order) return;
-
-    const mergedItems = [...order.items];
-
-    newItems.forEach(newItem => {
-        const existingIndex = mergedItems.findIndex(old =>
-            old.menuItem.id === newItem.menuItem.id &&
-            (old.notes || '') === (newItem.notes || '')
-        );
-
-        if (existingIndex >= 0) {
-            const existing = mergedItems[existingIndex];
-            mergedItems[existingIndex] = {
-                ...existing,
-                quantity: existing.quantity + newItem.quantity,
-                completed: false,
-                served: false,
-                isAddedLater: true,
-                comboCompletedParts: existing.comboCompletedParts || [],
-                comboServedParts: existing.comboServedParts || []
-            };
-        } else {
-            const dest = settings.categoryDestinations ? settings.categoryDestinations[newItem.menuItem.category] : 'Cucina';
-            const isSala = dest === 'Sala';
-
-            mergedItems.push({
-                ...newItem,
-                completed: isSala,
-                served: false,
-                isAddedLater: true,
-                comboCompletedParts: [],
-                comboServedParts: []
-            });
+    if (order) {
+        const existingItems = order.items || [];
+        const isLateAddition = order.status !== OrderStatus.PENDING;
+        
+        const itemsToAdd = newItems.map(i => ({
+            ...i,
+            isAddedLater: isLateAddition ? true : i.isAddedLater,
+            served: false,
+            completed: false
+        }));
+        
+        order.items = [...existingItems, ...itemsToAdd];
+        order.timestamp = Date.now();
+        
+        // CRITICAL FIX: Update waiter name to current user on edit
+        // This ensures if "Marco" opens it, and "Giulia" adds to it, "Giulia" effectively takes over or at least has access.
+        const currentWaiter = getWaiterName();
+        if (currentWaiter) {
+            order.waiterName = currentWaiter; 
         }
-    });
 
-    let newStatus = order.status;
-    if (order.status === OrderStatus.DELIVERED || order.status === OrderStatus.READY) {
-        newStatus = OrderStatus.PENDING;
+        // Reopen order if needed
+        if (order.status === OrderStatus.DELIVERED || order.status === OrderStatus.READY) {
+            order.status = OrderStatus.COOKING; 
+        }
+
+        saveOrders(orders);
     }
-
-    const updatedOrder = {
-        ...order,
-        items: mergedItems,
-        timestamp: Date.now(),
-        status: newStatus
-    };
-    const newOrders = orders.map(o => o.id === orderId ? updatedOrder : o);
-
-    saveLocallyAndNotify(newOrders);
-    syncOrderToCloud(updatedOrder);
 };
 
 export const toggleOrderItemCompletion = (orderId: string, itemIndex: number, subItemId?: string) => {
     const orders = getOrders();
     const order = orders.find(o => o.id === orderId);
-    if (!order) return;
+    if (!order || !order.items[itemIndex]) return;
 
-    const newItems = [...order.items];
-    const targetItem = newItems[itemIndex];
+    const item = order.items[itemIndex];
 
-    if (targetItem) {
-        if (subItemId && targetItem.menuItem.category === Category.MENU_COMPLETO && targetItem.menuItem.comboItems) {
-            const currentParts = targetItem.comboCompletedParts || [];
-            let newParts;
-            if (currentParts.includes(subItemId)) {
-                newParts = currentParts.filter(id => id !== subItemId);
-            } else {
-                newParts = [...currentParts, subItemId];
-            }
-            newItems[itemIndex] = { ...targetItem, comboCompletedParts: newParts };
-            const allPartsDone = targetItem.menuItem.comboItems.every(id => newParts.includes(id));
-            newItems[itemIndex].completed = allPartsDone;
+    if (subItemId) {
+        let completedParts = item.comboCompletedParts || [];
+        if (completedParts.includes(subItemId)) {
+            completedParts = completedParts.filter(id => id !== subItemId);
         } else {
-            newItems[itemIndex] = { ...targetItem, completed: !targetItem.completed };
+            completedParts.push(subItemId);
         }
+        item.comboCompletedParts = completedParts;
+    } else {
+        item.completed = !item.completed;
+    }
+    
+    const allItemsCompleted = order.items.every(i => i.completed);
+
+    if (allItemsCompleted && order.status === OrderStatus.COOKING) {
+        order.status = OrderStatus.READY;
+        order.timestamp = Date.now();
+    } else if (!allItemsCompleted && order.status === OrderStatus.READY) {
+        order.status = OrderStatus.COOKING;
+        order.timestamp = Date.now();
     }
 
-    const allCooked = newItems.every(i => i.completed);
-    const anyCooked = newItems.some(i => i.completed || (i.comboCompletedParts && i.comboCompletedParts.length > 0));
-
-    let newStatus = order.status;
-    if (order.status !== OrderStatus.DELIVERED) {
-        if (allCooked) newStatus = OrderStatus.READY;
-        else if (anyCooked) newStatus = OrderStatus.COOKING;
-        else if (!anyCooked) newStatus = OrderStatus.PENDING;
-    }
-
-    const updatedOrder = { ...order, items: newItems, status: newStatus };
-    const newOrders = orders.map(o => o.id === orderId ? updatedOrder : o);
-
-    saveLocallyAndNotify(newOrders);
-    syncOrderToCloud(updatedOrder);
+    saveOrders(orders);
 };
 
-export const serveItem = (orderId: string, itemIndex: number, subItemId?: string) => {
+export const serveItem = (orderId: string, itemIndex: number) => {
     const orders = getOrders();
     const order = orders.find(o => o.id === orderId);
-    if (!order) return;
+    if (!order || !order.items[itemIndex]) return;
 
-    const newItems = [...order.items];
-    const targetItem = newItems[itemIndex];
-
-    if (targetItem) {
-        if (subItemId && targetItem.menuItem.category === Category.MENU_COMPLETO && targetItem.menuItem.comboItems) {
-            const currentServed = targetItem.comboServedParts || [];
-            let newServed = currentServed;
-            if (!currentServed.includes(subItemId)) {
-                newServed = [...currentServed, subItemId];
-            }
-            newItems[itemIndex] = { ...targetItem, comboServedParts: newServed };
-            const allPartsServed = targetItem.menuItem.comboItems.every(id => newServed.includes(id));
-            if (allPartsServed) newItems[itemIndex].served = true;
-        } else {
-            newItems[itemIndex] = { ...targetItem, served: true };
-        }
+    order.items[itemIndex].served = true;
+    
+    const allServed = order.items.every(i => i.served);
+    if (allServed) {
+         order.status = OrderStatus.DELIVERED;
+         order.timestamp = Date.now(); 
     }
 
-    const allServed = newItems.every(i => i.served);
-    let newStatus = order.status;
-    if (allServed && (newStatus === OrderStatus.READY || newStatus === OrderStatus.COOKING)) {
-        newStatus = OrderStatus.PENDING;
-    }
-
-    const updatedOrder = { ...order, items: newItems, status: newStatus, timestamp: Date.now() };
-    const newOrders = orders.map(o => o.id === orderId ? updatedOrder : o);
-
-    saveLocallyAndNotify(newOrders);
-    syncOrderToCloud(updatedOrder);
+    saveOrders(orders);
 };
 
-export const clearHistory = async () => {
+export const deleteHistoryByDate = (date: Date) => {
     const orders = getOrders();
     const activeOrders = orders.filter(o => o.status !== OrderStatus.DELIVERED);
-    saveLocallyAndNotify(activeOrders);
-
-    if (supabase && currentUserId) {
-        await supabase.from('orders').delete().eq('user_id', currentUserId).eq('status', OrderStatus.DELIVERED);
-    }
+    saveOrders(activeOrders);
 };
 
-export const deleteHistoryByDate = async (targetDate: Date) => {
+export const freeTable = (tableNumber: string) => {
     const orders = getOrders();
-    const ordersToKeep = orders.filter(o => {
-        if (o.status !== OrderStatus.DELIVERED) return true;
-        const orderDate = new Date(o.createdAt || o.timestamp);
-        const isSameDay = orderDate.getDate() === targetDate.getDate() &&
-            orderDate.getMonth() === targetDate.getMonth() &&
-            orderDate.getFullYear() === targetDate.getFullYear();
-        return !isSameDay;
-    });
-
-    saveLocallyAndNotify(ordersToKeep);
-
-    if (supabase && currentUserId) {
-        const startOfDay = new Date(targetDate); startOfDay.setHours(0, 0, 0, 0);
-        const endOfDay = new Date(targetDate); endOfDay.setHours(23, 59, 59, 999);
-        const { error } = await supabase.from('orders')
-            .delete()
-            .eq('user_id', currentUserId)
-            .eq('status', OrderStatus.DELIVERED)
-            .gte('created_at', startOfDay.toISOString())
-            .lte('created_at', endOfDay.toISOString());
-        if (error) handleSupabaseError(error);
-    }
-};
-
-export const freeTable = async (tableNumber: string) => {
-    const orders = getOrders();
-    const tableOrders = orders.filter(o => o.tableNumber === tableNumber);
-    const otherOrders = orders.filter(o => o.tableNumber !== tableNumber);
-
-    const archivedOrders = tableOrders.map(o => ({
-        ...o,
-        status: OrderStatus.DELIVERED,
-        tableNumber: `${o.tableNumber}_HISTORY`,
-        timestamp: Date.now()
-    }));
-
-    const newOrders = [...otherOrders, ...archivedOrders];
-    saveLocallyAndNotify(newOrders);
-
-    if (supabase && currentUserId) {
-        for (const o of archivedOrders) {
-            await syncOrderToCloud(o);
+    
+    // AGGRESSIVE FIX: 
+    // Find ANY order for this table that is not DELIVERED and force it to DELIVERED.
+    // Ignores ownership, ignores status. Just closes it.
+    let modifications = 0;
+    orders.forEach(o => {
+        if (o.tableNumber === tableNumber && o.status !== OrderStatus.DELIVERED) {
+            o.status = OrderStatus.DELIVERED;
+            o.timestamp = Date.now();
+            modifications++;
         }
+    });
+    
+    if (modifications > 0) {
+        saveOrders(orders);
+    } else {
+        // Double check: if no order was found but UI shows it, it might be stale state.
+        // We force a save event anyway to refresh UI.
+        window.dispatchEvent(new Event('local-storage-update'));
     }
 };
 
-export const performFactoryReset = async () => {
-    safeLocalStorageSave(STORAGE_KEY, '[]');
-    safeLocalStorageSave(MENU_KEY, '[]');
-    window.dispatchEvent(new Event('local-storage-update'));
-    window.dispatchEvent(new Event('local-menu-update'));
+// --- MENU MANAGEMENT ---
 
-    if (supabase && currentUserId) {
-        await supabase.from('orders').delete().eq('user_id', currentUserId);
-        await supabase.from('menu_items').delete().eq('user_id', currentUserId);
+export const getMenuItems = (): MenuItem[] => {
+    const data = localStorage.getItem(MENU_KEY);
+    return data ? JSON.parse(data) : [];
+};
+
+export const saveMenuItems = (items: MenuItem[], skipSync = false) => {
+    safeLocalStorageSave(MENU_KEY, JSON.stringify(items));
+    window.dispatchEvent(new Event('local-menu-update'));
+    if (!skipSync) forceCloudSync();
+};
+
+export const addMenuItem = (item: MenuItem) => {
+    const items = getMenuItems();
+    items.push(item);
+    saveMenuItems(items);
+};
+
+export const updateMenuItem = (item: MenuItem) => {
+    const items = getMenuItems();
+    const index = items.findIndex(i => i.id === item.id);
+    if (index !== -1) {
+        items[index] = item;
+        saveMenuItems(items);
     }
 };
 
-export const deleteAllMenuItems = async () => {
-    safeLocalStorageSave(MENU_KEY, '[]');
-    window.dispatchEvent(new Event('local-menu-update'));
+export const deleteMenuItem = (id: string) => {
+    const items = getMenuItems();
+    const filtered = items.filter(i => i.id !== id);
+    saveMenuItems(filtered);
+};
 
-    if (supabase && currentUserId) {
-        const { error } = await supabase.from('menu_items').delete().eq('user_id', currentUserId);
-        if (error) handleSupabaseError(error);
-    }
+export const deleteAllMenuItems = () => {
+    saveMenuItems([]);
 };
 
 export const importDemoMenu = async () => {
-    if (!currentUserId || !supabase) return;
+    saveMenuItems(DEMO_MENU_ITEMS);
+};
 
-    const demoItemsWithUserId = DEMO_MENU_ITEMS.map(item => ({
-        id: item.id,
-        user_id: currentUserId,
-        name: item.name,
-        price: item.price,
-        category: item.category,
-        description: item.description,
-        ingredients: item.ingredients,
-        allergens: item.allergens,
-        image: item.image,
-        combo_items: item.comboItems,
-        specific_department: item.specificDepartment
-    }));
+// --- APP SETTINGS ---
 
-    const { error } = await supabase.from('menu_items').upsert(demoItemsWithUserId);
-    if (error) {
-        handleSupabaseError(error);
-        alert("Errore durante l'importazione demo.");
-        return;
+export const getAppSettings = (): AppSettings => {
+    const data = localStorage.getItem(APP_SETTINGS_KEY);
+    const defaultSettings: AppSettings = {
+        categoryDestinations: {
+            [Category.MENU_COMPLETO]: 'Cucina',
+            [Category.ANTIPASTI]: 'Cucina',
+            [Category.PRIMI]: 'Cucina',
+            [Category.SECONDI]: 'Cucina',
+            [Category.PIZZE]: 'Pizzeria',
+            [Category.PANINI]: 'Pub',
+            [Category.DOLCI]: 'Cucina',
+            [Category.BEVANDE]: 'Sala'
+        },
+        printEnabled: { 'Cucina': false, 'Pizzeria': false, 'Pub': false, 'Sala': false, 'Cassa': false },
+        restaurantProfile: {
+            tableCount: 12
+        }
+    };
+    return data ? { ...defaultSettings, ...JSON.parse(data) } : defaultSettings;
+};
+
+export const saveAppSettings = async (settings: AppSettings) => {
+    safeLocalStorageSave(APP_SETTINGS_KEY, JSON.stringify(settings));
+    window.dispatchEvent(new Event('local-settings-update'));
+    
+    if (settings.restaurantProfile && supabase) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+             const profileToSave = JSON.parse(JSON.stringify(settings.restaurantProfile));
+             const { data: currentProfile } = await supabase.from('profiles').select('settings').eq('id', user.id).single();
+             const currentSettings = currentProfile?.settings || {};
+             
+             await supabase.from('profiles').update({
+                 restaurant_name: profileToSave.name,
+                 settings: {
+                     ...currentSettings,
+                     restaurantProfile: {
+                         ...currentSettings.restaurantProfile,
+                         ...profileToSave
+                     }
+                 }
+             }).eq('id', user.id);
+        }
     }
-
-    const currentItems = getMenuItems();
-    const newIds = DEMO_MENU_ITEMS.map(d => d.id);
-    const existingFiltered = currentItems.filter(i => !newIds.includes(i.id));
-    const finalMenu = [...existingFiltered, ...DEMO_MENU_ITEMS];
-    safeLocalStorageSave(MENU_KEY, JSON.stringify(finalMenu));
-    window.dispatchEvent(new Event('local-menu-update'));
-    alert("Menu Demo importato con successo!");
 };
 
 export const getTableCount = (): number => {
@@ -531,154 +284,21 @@ export const getTableCount = (): number => {
     return settings.restaurantProfile?.tableCount || 12;
 };
 
-export const saveTableCount = (count: number) => {
-    safeLocalStorageSave(TABLES_COUNT_KEY, count.toString());
-    window.dispatchEvent(new Event('local-storage-update'));
-};
+// --- WAITER HELPERS ---
 
 export const getWaiterName = (): string | null => {
     return localStorage.getItem(WAITER_KEY);
 };
 
 export const saveWaiterName = (name: string) => {
-    safeLocalStorageSave(WAITER_KEY, name);
+    localStorage.setItem(WAITER_KEY, name);
 };
 
 export const logoutWaiter = () => {
     localStorage.removeItem(WAITER_KEY);
 };
 
-export const getMenuItems = (): MenuItem[] => {
-    const data = localStorage.getItem(MENU_KEY);
-    return data ? JSON.parse(data) : [];
-};
-
-const syncMenuToCloud = async (item: MenuItem, isDelete = false) => {
-    if (!supabase || !currentUserId) return;
-    try {
-        if (isDelete) {
-            await supabase.from('menu_items').delete().eq('id', item.id);
-        } else {
-            const payload = {
-                id: item.id,
-                user_id: currentUserId,
-                name: item.name,
-                price: item.price,
-                category: item.category,
-                description: item.description,
-                ingredients: item.ingredients,
-                allergens: item.allergens,
-                image: item.image,
-                combo_items: item.comboItems,
-                specific_department: item.specificDepartment
-            };
-            await supabase.from('menu_items').upsert(payload);
-        }
-    } catch (e) { console.warn("Menu sync failed", e); }
-};
-
-export const saveMenuItems = (items: MenuItem[]) => {
-    safeLocalStorageSave(MENU_KEY, JSON.stringify(items));
-    window.dispatchEvent(new Event('local-menu-update'));
-};
-
-export const addMenuItem = (item: MenuItem) => {
-    const items = getMenuItems();
-    items.push(item);
-    saveMenuItems(items);
-    syncMenuToCloud(item);
-};
-
-export const updateMenuItem = (updatedItem: MenuItem) => {
-    const items = getMenuItems();
-    const newItems = items.map(i => i.id === updatedItem.id ? updatedItem : i);
-    saveMenuItems(newItems);
-    syncMenuToCloud(updatedItem);
-};
-
-export const deleteMenuItem = (id: string) => {
-    const items = getMenuItems();
-    const itemToDelete = items.find(i => i.id === id);
-    const newItems = items.filter(i => i.id !== id);
-    saveMenuItems(newItems);
-    if (itemToDelete) syncMenuToCloud(itemToDelete, true);
-};
-
-export const getGoogleApiKey = (): string | null => {
-    return localStorage.getItem(GOOGLE_API_KEY_STORAGE);
-};
-
-export const saveGoogleApiKey = async (apiKey: string) => {
-    safeLocalStorageSave(GOOGLE_API_KEY_STORAGE, apiKey);
-    if (supabase && currentUserId) {
-        const { error } = await supabase
-            .from('profiles')
-            .update({ google_api_key: apiKey })
-            .eq('id', currentUserId);
-        if (error) console.error("Failed to save API Key to cloud", error);
-    }
-};
-
-const DEFAULT_SETTINGS: AppSettings = {
-    categoryDestinations: {
-        [Category.MENU_COMPLETO]: 'Cucina',
-        [Category.ANTIPASTI]: 'Cucina',
-        [Category.PANINI]: 'Pub',
-        [Category.PIZZE]: 'Pizzeria',
-        [Category.PRIMI]: 'Cucina',
-        [Category.SECONDI]: 'Cucina',
-        [Category.DOLCI]: 'Cucina',
-        [Category.BEVANDE]: 'Sala'
-    },
-    printEnabled: {
-        'Cucina': false,
-        'Pizzeria': false,
-        'Pub': false,
-        'Sala': false,
-        'Cassa': false
-    },
-    restaurantProfile: {
-        tableCount: 12
-    }
-};
-
-export const getAppSettings = (): AppSettings => {
-    const data = localStorage.getItem(APP_SETTINGS_KEY);
-    if (!data) return DEFAULT_SETTINGS;
-    try {
-        const parsed = JSON.parse(data);
-        return {
-            ...DEFAULT_SETTINGS,
-            ...parsed,
-            categoryDestinations: {
-                ...DEFAULT_SETTINGS.categoryDestinations,
-                ...(parsed.categoryDestinations || {})
-            },
-            printEnabled: {
-                ...DEFAULT_SETTINGS.printEnabled,
-                ...(parsed.printEnabled || {})
-            },
-            restaurantProfile: {
-                ...DEFAULT_SETTINGS.restaurantProfile,
-                ...(parsed.restaurantProfile || {})
-            }
-        };
-    } catch (e) {
-        return DEFAULT_SETTINGS;
-    }
-};
-
-export const saveAppSettings = async (settings: AppSettings) => {
-    safeLocalStorageSave(APP_SETTINGS_KEY, JSON.stringify(settings));
-    window.dispatchEvent(new Event('local-settings-update'));
-    window.dispatchEvent(new Event('local-storage-update'));
-
-    if (supabase && currentUserId) {
-        try {
-            await supabase.from('profiles').update({ settings: settings }).eq('id', currentUserId);
-        } catch (e) { console.warn("Settings sync failed", e); }
-    }
-};
+// --- NOTIFICATIONS ---
 
 export const getNotificationSettings = (): NotificationSettings => {
     const data = localStorage.getItem(SETTINGS_NOTIFICATIONS_KEY);
@@ -687,4 +307,177 @@ export const getNotificationSettings = (): NotificationSettings => {
 
 export const saveNotificationSettings = (settings: NotificationSettings) => {
     safeLocalStorageSave(SETTINGS_NOTIFICATIONS_KEY, JSON.stringify(settings));
+};
+
+export const performFactoryReset = () => {
+    localStorage.clear();
+    window.location.reload();
+};
+
+// --- CLOUD SYNC ENGINE (SUPABASE) ---
+
+export const getConnectionStatus = () => isConnected;
+
+const updateConnectionStatus = (status: boolean) => {
+    isConnected = status;
+    window.dispatchEvent(new CustomEvent('connection-status-change', { detail: { connected: status } }));
+};
+
+export const initSupabaseSync = async () => {
+    if (!supabase) {
+        updateConnectionStatus(false);
+        return;
+    }
+
+    try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) {
+            updateConnectionStatus(false);
+            return;
+        }
+
+        currentUserId = session.user.id;
+        updateConnectionStatus(true);
+
+        await forceCloudSync();
+
+        if (!realtimeChannel) {
+            realtimeChannel = supabase
+                .channel('public:data_changes')
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `user_id=eq.${currentUserId}` }, handleRealtimeOrder)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_items', filter: `user_id=eq.${currentUserId}` }, handleRealtimeMenu)
+                .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${currentUserId}` }, handleRealtimeProfile)
+                .subscribe((status) => {
+                     if (status === 'SUBSCRIBED') {
+                         console.log("Realtime Connected");
+                         updateConnectionStatus(true);
+                     } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+                         console.log("Realtime Disconnected");
+                         updateConnectionStatus(false);
+                     }
+                });
+        }
+
+        if (pollingInterval) clearInterval(pollingInterval);
+        pollingInterval = setInterval(forceCloudSync, 30000);
+
+    } catch (e) {
+        console.error("Sync Init Error", e);
+        updateConnectionStatus(false);
+    }
+};
+
+const handleRealtimeOrder = (payload: any) => {
+    if (isSyncing) return;
+    const { eventType, new: newRow, old: oldRow } = payload;
+    const localOrders = getOrders();
+
+    if (eventType === 'INSERT' || eventType === 'UPDATE') {
+        const newOrder: Order = {
+            id: newRow.id,
+            tableNumber: newRow.table_number,
+            status: newRow.status as OrderStatus,
+            items: typeof newRow.items === 'string' ? JSON.parse(newRow.items) : newRow.items,
+            timestamp: newRow.timestamp,
+            createdAt: new Date(newRow.created_at).getTime(),
+            waiterName: newRow.waiter_name
+        };
+        
+        const idx = localOrders.findIndex(o => o.id === newOrder.id);
+        if (idx >= 0) {
+            localOrders[idx] = newOrder;
+        } else {
+            localOrders.push(newOrder);
+        }
+        safeLocalStorageSave(STORAGE_KEY, JSON.stringify(localOrders));
+        window.dispatchEvent(new Event('local-storage-update'));
+    } else if (eventType === 'DELETE') {
+        const filtered = localOrders.filter(o => o.id !== oldRow.id);
+        safeLocalStorageSave(STORAGE_KEY, JSON.stringify(filtered));
+        window.dispatchEvent(new Event('local-storage-update'));
+    }
+};
+
+const handleRealtimeMenu = (payload: any) => {
+    if (isSyncing) return;
+    forceCloudSync();
+};
+
+const handleRealtimeProfile = (payload: any) => {
+    if (isSyncing) return;
+    const { new: newProfile } = payload;
+    if (newProfile && newProfile.settings) {
+         const currentLocal = getAppSettings();
+         const newSettings = {
+             ...currentLocal,
+             ...newProfile.settings, 
+             restaurantProfile: {
+                 ...currentLocal.restaurantProfile,
+                 ...newProfile.settings.restaurantProfile
+             }
+         };
+         safeLocalStorageSave(APP_SETTINGS_KEY, JSON.stringify(newSettings));
+         window.dispatchEvent(new Event('local-settings-update'));
+    }
+};
+
+export const forceCloudSync = async () => {
+    if (!supabase || !currentUserId || isSyncing) return;
+    isSyncing = true;
+
+    try {
+        const { data: cloudOrders, error: ordersError } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('user_id', currentUserId);
+        
+        if (cloudOrders && !ordersError) {
+            // MERGE STRATEGY: Cloud prevails, but we don't want to lose local work if cloud is empty/slow.
+            // For now, we overwrite local with cloud to ensure sync consistency.
+            const parsedCloudOrders: Order[] = cloudOrders.map(r => ({
+                id: r.id,
+                tableNumber: r.table_number,
+                status: r.status as OrderStatus,
+                items: typeof r.items === 'string' ? JSON.parse(r.items) : r.items,
+                timestamp: r.timestamp,
+                createdAt: new Date(r.created_at).getTime(),
+                waiterName: r.waiter_name
+            }));
+            
+            // Only update if we actually got data, to avoid wiping local state on a glitch
+            if (parsedCloudOrders.length > 0 || getOrders().length === 0) {
+                 safeLocalStorageSave(STORAGE_KEY, JSON.stringify(parsedCloudOrders));
+                 window.dispatchEvent(new Event('local-storage-update'));
+            }
+        }
+
+        const { data: cloudMenu, error: menuError } = await supabase
+            .from('menu_items')
+            .select('*')
+            .eq('user_id', currentUserId);
+
+        if (cloudMenu && !menuError) {
+             const parsedMenu: MenuItem[] = cloudMenu.map(r => ({
+                id: r.id,
+                name: r.name,
+                price: r.price,
+                category: r.category,
+                description: r.description,
+                ingredients: r.ingredients,
+                allergens: typeof r.allergens === 'string' ? JSON.parse(r.allergens) : r.allergens,
+                image: r.image,
+                isCombo: r.category === Category.MENU_COMPLETO,
+                comboItems: typeof r.combo_items === 'string' ? JSON.parse(r.combo_items) : r.combo_items,
+                specificDepartment: r.specific_department
+             }));
+             safeLocalStorageSave(MENU_KEY, JSON.stringify(parsedMenu));
+             window.dispatchEvent(new Event('local-menu-update'));
+        }
+        updateConnectionStatus(true);
+    } catch (e) {
+        console.error("Sync Error", e);
+        updateConnectionStatus(false);
+    } finally {
+        isSyncing = false;
+    }
 };
